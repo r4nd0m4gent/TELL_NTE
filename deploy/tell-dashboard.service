@@ -1,0 +1,19 @@
+[Unit]
+Description=TELL – Textile Ecosystem Dashboard
+After=network.target
+
+[Service]
+User=tell
+Group=www-data
+WorkingDirectory=/home/tell/app
+Environment="TEXTILE_DATA_PATH=/home/tell/data/KvK_textile.xlsx"
+ExecStart=/home/tell/app/venv/bin/gunicorn \
+    --workers 2 \
+    --bind 127.0.0.1:8050 \
+    --timeout 120 \
+    textile_companies_NL:server
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,3 +1,4 @@
+import os
 import dash
 from dash import dcc, html, Input, Output, State, dash_table, ctx
 import plotly.express as px
@@ -6,11 +7,14 @@ import pgeocode
 import warnings
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
-# Load data from Excel – first sheet only
-data = pd.read_excel(
+# Data path – override with TEXTILE_DATA_PATH env variable on the server
+_DATA_PATH = os.environ.get(
+    'TEXTILE_DATA_PATH',
     r'C:\Users\fsollit\Desktop\Data\Supply chain\Modint KvK\KvK textile.xlsx',
-    sheet_name=0
 )
+
+# Load data from Excel – first sheet only
+data = pd.read_excel(_DATA_PATH, sheet_name=0)
 
 data = data.rename(columns={
     'visiting address_city': 'city',
@@ -23,8 +27,10 @@ data['category'] = data['category'].fillna('Unknown')
 data['value'] = pd.to_numeric(data['value'], errors='coerce').fillna(0)
 
 # Colors
-nte_violet = '#832394'
-nte_dark_violet = '#533a74'
+nte_violet = '#513773'
+nte_darkblue = '#54639E'
+nte_lightblue = '#88C0E0'
+nte_pink = '#FF4EF0'
 
 # Geocode cities via Dutch postcode (offline, no API key needed)
 _nomi = pgeocode.Nominatim('nl')
@@ -36,7 +42,10 @@ data['_pc4'] = _pc4.values
 data = data.merge(_geo.rename(columns={'postal_code': '_pc4'}), on='_pc4', how='left')
 data = data.drop(columns=['_pc4'])
 
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, external_stylesheets=[
+    'https://fonts.googleapis.com/css2?family=Inter&display=swap'
+])
+server = app.server  # expose WSGI app for gunicorn
 
 _card_style = {
     'flex': '1', 'backgroundColor': 'white', 'borderRadius': '8px',
@@ -94,7 +103,7 @@ app.layout = html.Div([
         ], style={'flex': '2', 'minWidth': 0}),
         html.Div([
             dcc.Graph(id='region-chart'),
-        ], style={'flex': '1', 'minWidth': 0, 'color': nte_violet}),
+        ], style={'flex': '1', 'minWidth': 0, 'color': nte_lightblue}),
     ], style={'display': 'flex', 'gap': '16px', 'alignItems': 'stretch'}),
 
     dash_table.DataTable(
@@ -110,7 +119,7 @@ app.layout = html.Div([
         sort_action='native',
         filter_action='none',
         style_table={'overflowX': 'auto', 'marginTop': '20px'},
-        style_header={'backgroundColor': nte_dark_violet, 'color': 'white', 'fontWeight': 'bold'},
+        style_header={'backgroundColor': nte_darkblue, 'color': 'white', 'fontWeight': 'bold'},
         style_cell={'padding': '8px', 'textAlign': 'left', 'fontSize': '13px',
                     'overflow': 'hidden', 'textOverflow': 'ellipsis', 'maxWidth': '250px'},
         style_data_conditional=[{'if': {'row_index': 'odd'}, 'backgroundColor': '#f9f9f9'}],
@@ -121,9 +130,29 @@ app.layout = html.Div([
 
     dcc.Graph(id='pie-chart'),
 
+    # ── Contribution form link ─────────────────────────────────────────────────
+    html.Div(
+        html.A(
+            '✏️  Contribute to the Textile Ecosystem Mapping',
+            href='/contribute/',
+            style={
+                'display': 'inline-block',
+                'marginTop': '32px',
+                'padding': '10px 24px',
+                'backgroundColor': '#513773',
+                'color': 'white',
+                'borderRadius': '6px',
+                'textDecoration': 'none',
+                'fontSize': '14px',
+                'fontWeight': '600',
+            },
+        ),
+        style={'textAlign': 'center', 'paddingBottom': '32px'},
+    ),
+
     dcc.Store(id='selected-city', data=None),
 
-], style={'fontFamily': 'Arial, sans-serif', 'padding': '20px', 'maxWidth': '1400px', 'margin': 'auto'})
+], style={'fontFamily': 'Inter, sans-serif', 'padding': '20px', 'maxWidth': '1400px', 'margin': 'auto'})
 
 
 def filter_data(regions, companies):
@@ -224,7 +253,7 @@ def update_dashboard(selected_regions, selected_companies, selected_city):
         title='Companies per Region', height=500,
         orientation='h',
         labels={'region': 'Region', 'count': 'Number of Companies'},
-        color_discrete_sequence=[nte_dark_violet]
+        color_discrete_sequence=[nte_darkblue]
     )
     region_fig.update_layout(margin={'l': 120, 'r': 20, 't': 40, 'b': 20})
 
