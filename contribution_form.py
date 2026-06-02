@@ -1,22 +1,11 @@
 import os
 import dash
 from dash import dcc, html, Input, Output, State
-import pandas as pd
+from db.connection import get_company_names, save_contribution
 
-# Data path – override with TEXTILE_DATA_PATH env variable on the server
-_DATA_PATH = os.environ.get(
-    'TEXTILE_DATA_PATH',
-    r'C:\Users\fsollit\Desktop\Data\Supply chain\Modint KvK\KvK textile.xlsx',
-)
-
-# ── Load dataset (same source as textile_companies_NL.py) ──────────────────────
+# ── Load company dropdown options from DB ───────────────────────────────
 try:
-    _data = pd.read_excel(_DATA_PATH, sheet_name=0)
-    _company_options = sorted(
-        [{'label': str(n), 'value': str(n)}
-         for n in _data['trade name'].dropna().unique()],
-        key=lambda x: x['label'],
-    )
+    _company_options = get_company_names()
 except Exception:
     _company_options = []
 
@@ -282,6 +271,29 @@ def on_submit(n_clicks, choice, add_name, add_city, add_tiers, add_category,
         return (
             f'Please fill in the required field(s): {", ".join(missing)}.',
             {**_style_base, 'color': '#c0392b'},
+        )
+
+    # Persist to DB
+    try:
+        if choice == 'add':
+            payload = {
+                'trade_name': add_name,
+                'city':       add_city,
+                'tiers':      add_tiers,
+                'tags':       add_category,
+            }
+            save_contribution('add', payload)
+        else:
+            payload = {
+                'trade_name':  edit_name,
+                'what_change': edit_change,
+                'correction':  edit_correction,
+            }
+            save_contribution('edit', payload)
+    except Exception as exc:
+        return (
+            f'Submission saved locally but DB write failed: {exc}',
+            {**_style_base, 'color': '#e67e22'},
         )
 
     label = 'new company info' if choice == 'add' else 'an edit suggestion'

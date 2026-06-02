@@ -1,30 +1,11 @@
 import os
 import dash
-from dash import dcc, html, Input, Output, State, dash_table, ctx
+from dash import dcc, html, Input, Output, State, dash_table, ctx, ALL
+from dash.exceptions import PreventUpdate
 import plotly.express as px
 import pandas as pd
-import pgeocode
-import warnings
-warnings.filterwarnings('ignore', category=DeprecationWarning)
-
-# Data path – override with TEXTILE_DATA_PATH env variable on the server
-_DATA_PATH = os.environ.get(
-    'TEXTILE_DATA_PATH',
-    r'C:\Users\fsollit\Desktop\Data\Supply chain\Modint KvK\KvK textile.xlsx',
-)
-
-# Load data from Excel – first sheet only
-data = pd.read_excel(_DATA_PATH, sheet_name=0)
-
-data = data.rename(columns={
-    'visiting address_city': 'city',
-    'new main': 'derived_category',
-    'tag_category': 'category',
-    'number_employees': 'value'
-})
-data = data.dropna(subset=['city', 'region'])
-data['category'] = data['category'].fillna('Unknown')
-data['value'] = pd.to_numeric(data['value'], errors='coerce').fillna(0)
+import classification
+from db.connection import load_companies
 
 # Colors
 nte_violet = '#513773'
@@ -32,19 +13,12 @@ nte_darkblue = '#54639E'
 nte_lightblue = '#88C0E0'
 nte_pink = '#FF4EF0'
 
-# Geocode cities via Dutch postcode (offline, no API key needed)
-_nomi = pgeocode.Nominatim('nl')
-_pc4 = data['visiting address_postcode'].str.extract(r'^(\d{4})').iloc[:, 0]
-_unique_pc4 = _pc4.dropna().unique().tolist()
-_geo = _nomi.query_postal_code(_unique_pc4)[['postal_code', 'latitude', 'longitude']]
-_geo['postal_code'] = _geo['postal_code'].astype(str)
-data['_pc4'] = _pc4.values
-data = data.merge(_geo.rename(columns={'postal_code': '_pc4'}), on='_pc4', how='left')
-data = data.drop(columns=['_pc4'])
+# Load company data from PostgreSQL
+data = load_companies()
 
 app = dash.Dash(__name__, external_stylesheets=[
     'https://fonts.googleapis.com/css2?family=Inter&display=swap'
-])
+], suppress_callback_exceptions=True)
 server = app.server  # expose WSGI app for gunicorn
 
 _card_style = {
@@ -54,20 +28,7 @@ _card_style = {
 }
 
 app.layout = html.Div([
-    html.H1("Textile Companies – Netherlands", style={'textAlign': 'center', 'color': '#2c3e50'}),
-
     html.Div([
-        html.Div([
-            html.Label("Filter by Region:"),
-            dcc.Dropdown(
-                id='region-dropdown',
-                options=sorted([{'label': str(r), 'value': str(r)} for r in data['region'].dropna().unique()], key=lambda x: x['label']),
-                value=None,
-                placeholder="Select a region...",
-                multi=True
-            )
-        ], style={'width': '48%', 'display': 'inline-block', 'padding': '10px'}),
-
         html.Div([
             html.Label("Filter by Company:"),
             dcc.Dropdown(
@@ -75,6 +36,17 @@ app.layout = html.Div([
                 options=sorted([{'label': str(c), 'value': str(c)} for c in data['trade name'].dropna().unique()], key=lambda x: x['label']),
                 value=None,
                 placeholder="Search a company...",
+                multi=True
+            )
+        ], style={'width': '48%', 'display': 'inline-block', 'padding': '10px'}),
+
+        html.Div([
+            html.Label("Filter by Region:"),
+            dcc.Dropdown(
+                id='region-dropdown',
+                options=sorted([{'label': str(r), 'value': str(r)} for r in data['region'].dropna().unique()], key=lambda x: x['label']),
+                value=None,
+                placeholder="Select a region...",
                 multi=True
             )
         ], style={'width': '48%', 'display': 'inline-block', 'padding': '10px'})
@@ -100,10 +72,10 @@ app.layout = html.Div([
     html.Div([
         html.Div([
             dcc.Graph(id='map-graph', config={'scrollZoom': True}),
-        ], style={'flex': '2', 'minWidth': 0}),
+        ], style={'flex': '1.5', 'minWidth': 0}),
         html.Div([
             dcc.Graph(id='region-chart'),
-        ], style={'flex': '1', 'minWidth': 0, 'color': nte_lightblue}),
+        ], style={'flex': '1.5', 'minWidth': 0, 'color': nte_lightblue}),
     ], style={'display': 'flex', 'gap': '16px', 'alignItems': 'stretch'}),
 
     dash_table.DataTable(
@@ -115,10 +87,10 @@ app.layout = html.Div([
             {'name': 'Tags', 'id': 'tags'},
             {'name': '# Employees', 'id': 'value'},
         ],
-        page_size=20,
+        page_size=10,
         sort_action='native',
         filter_action='none',
-        style_table={'overflowX': 'auto', 'marginTop': '20px'},
+        style_table={'overflowX': 'auto', 'overflowY': 'auto', 'maxHeight': '380px', 'marginTop': '20px'},
         style_header={'backgroundColor': nte_darkblue, 'color': 'white', 'fontWeight': 'bold'},
         style_cell={'padding': '8px', 'textAlign': 'left', 'fontSize': '13px',
                     'overflow': 'hidden', 'textOverflow': 'ellipsis', 'maxWidth': '250px'},
@@ -128,18 +100,20 @@ app.layout = html.Div([
         tooltip_data=[],
         tooltip_duration=None),
 
-    dcc.Graph(id='pie-chart'),
+    html.Div([
+        dcc.Graph(id='pie-category', style={'flex': '1', 'minWidth': 0}),
+        dcc.Graph(id='pie-tier',     style={'flex': '1', 'minWidth': 0}),
+    ], style={'display': 'flex', 'gap': '16px', 'marginTop': '20px'}),
 
-    # ── Contribution form link ─────────────────────────────────────────────────
-    html.Div(
+    # ── Action buttons ─────────────────────────────────────────────────────────
+    html.Div([
         html.A(
             '✏️  Contribute to the Textile Ecosystem Mapping',
             href='/contribute/',
             style={
                 'display': 'inline-block',
-                'marginTop': '32px',
                 'padding': '10px 24px',
-                'backgroundColor': '#513773',
+                'backgroundColor': nte_violet,
                 'color': 'white',
                 'borderRadius': '6px',
                 'textDecoration': 'none',
@@ -147,9 +121,13 @@ app.layout = html.Div([
                 'fontWeight': '600',
             },
         ),
-        style={'textAlign': 'center', 'paddingBottom': '32px'},
-    ),
+        classification.get_button(),
+    ], style={'display': 'flex', 'gap': '12px', 'justifyContent': 'center',
+              'marginTop': '32px', 'paddingBottom': '32px'}),
 
+    # ── Classification modal (layout defined in classification.py) ─────────────
+    classification.get_modal(),
+    *classification.get_stores(),
     dcc.Store(id='selected-city', data=None),
 
 ], style={'fontFamily': 'Inter, sans-serif', 'padding': '20px', 'maxWidth': '1400px', 'margin': 'auto'})
@@ -196,7 +174,8 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
     Output('kpi-web', 'children'),
     Output('map-graph', 'figure'),
     Output('region-chart', 'figure'),
-    Output('pie-chart', 'figure'),
+    Output('pie-category', 'figure'),
+    Output('pie-tier', 'figure'),
     Output('company-table', 'data'),
     Output('company-table', 'tooltip_data'),
     Output('city-filter-label', 'children'),
@@ -252,16 +231,31 @@ def update_dashboard(selected_regions, selected_companies, selected_city):
         region_counts, x='count', y='region',
         title='Companies per Region', height=500,
         orientation='h',
-        labels={'region': 'Region', 'count': 'Number of Companies'},
+        # labels={'region': 'Region', 'count': 'Number of Companies'},
         color_discrete_sequence=[nte_darkblue]
     )
     region_fig.update_layout(margin={'l': 120, 'r': 20, 't': 40, 'b': 20})
 
-    """Pie chart: distribution by category"""
-    pie_fig = px.pie(
-        filtered, names='derived_category', values='value',
-        title='Distribution by Category'
+    """Pie charts: product category and lifecycle stage"""
+    _cat_counts = filtered['Predicted_Category'].fillna('Unknown').value_counts().reset_index()
+    _cat_counts.columns = ['Predicted_Category', 'count']
+    pie_category = px.pie(
+        _cat_counts, names='Predicted_Category', values='count',
+        title='Product Category',
+        color_discrete_sequence=px.colors.sequential.Purples_r
     )
+    pie_category.update_traces(textposition='inside', textinfo='percent+label')
+    pie_category.update_layout(showlegend=False, margin={'t': 50, 'b': 10, 'l': 10, 'r': 10})
+
+    _tier_counts = filtered['Predicted_Tier'].fillna('Unknown').value_counts().reset_index()
+    _tier_counts.columns = ['Predicted_Tier', 'count']
+    pie_tier = px.pie(
+        _tier_counts, names='Predicted_Tier', values='count',
+        title='Lifecycle Stage',
+        color_discrete_sequence=px.colors.sequential.Blues_r
+    )
+    pie_tier.update_traces(textposition='inside', textinfo='percent+label')
+    pie_tier.update_layout(showlegend=False, margin={'t': 50, 'b': 10, 'l': 10, 'r': 10})
 
     """ Companies table"""
     table_cols = ['trade name', 'Predicted_Category', 'Predicted_Tier', 'tags', 'value']
@@ -274,9 +268,13 @@ def update_dashboard(selected_regions, selected_companies, selected_city):
     ]
 
     city_label = f"City filter: {selected_city}  —  click the same bubble again to clear" if selected_city else ""
-    return kpi_total, kpi_active, kpi_web, map_fig, region_fig, pie_fig, table_records, tooltip_data, city_label
+    return kpi_total, kpi_active, kpi_web, map_fig, region_fig, pie_category, pie_tier, table_records, tooltip_data, city_label
+
+
+# ── Register classification callbacks (defined in classification.py) ──────────
+classification.register_callbacks(app, filter_data)
 
 
 if __name__ == '__main__':
     app.run(debug=True)
-    
+
