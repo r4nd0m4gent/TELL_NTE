@@ -1,4 +1,5 @@
 import os
+
 import dash
 from dash import dcc, html, Input, Output, State, dash_table, ctx, ALL
 from dash.exceptions import PreventUpdate
@@ -8,10 +9,10 @@ import classification
 from db.connection import load_companies
 
 # Colors
-nte_violet = '#513773'
-nte_darkblue = '#54639E'
+nte_violet    = '#513773'
+nte_darkblue  = '#54639E'
 nte_lightblue = '#88C0E0'
-nte_pink = '#FF4EF0'
+nte_pink      = '#FF4EF0'
 
 # Load company data from PostgreSQL
 data = load_companies()
@@ -19,6 +20,7 @@ data = load_companies()
 app = dash.Dash(__name__, external_stylesheets=[
     'https://fonts.googleapis.com/css2?family=Inter&display=swap'
 ], suppress_callback_exceptions=True)
+
 server = app.server  # expose WSGI app for gunicorn
 
 _card_style = {
@@ -39,7 +41,6 @@ app.layout = html.Div([
                 multi=True
             )
         ], style={'width': '48%', 'display': 'inline-block', 'padding': '10px'}),
-
         html.Div([
             html.Label("Filter by Region:"),
             dcc.Dropdown(
@@ -81,11 +82,11 @@ app.layout = html.Div([
     dash_table.DataTable(
         id='company-table',
         columns=[
-            {'name': 'Company', 'id': 'trade name'},
+            {'name': 'Company',            'id': 'trade name'},
             {'name': 'Predicted Category', 'id': 'Predicted_Category'},
-            {'name': 'Predicted Tier', 'id': 'Predicted_Tier'},
-            {'name': 'Tags', 'id': 'tags'},
-            {'name': '# Employees', 'id': 'value'},
+            {'name': 'Predicted Tier',     'id': 'Predicted_Tier'},
+            {'name': 'Tags',               'id': 'tags'},
+            {'name': '# Employees',        'id': 'value'},
         ],
         page_size=10,
         sort_action='native',
@@ -108,7 +109,7 @@ app.layout = html.Div([
     # ── Action buttons ─────────────────────────────────────────────────────────
     html.Div([
         html.A(
-            '✏️  Contribute to the Textile Ecosystem Mapping',
+            '✏️ Contribute to the Textile Ecosystem Mapping',
             href='/contribute/',
             style={
                 'display': 'inline-block',
@@ -169,49 +170,50 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
 
 
 @app.callback(
-    Output('kpi-total', 'children'),
-    Output('kpi-active', 'children'),
-    Output('kpi-web', 'children'),
-    Output('map-graph', 'figure'),
-    Output('region-chart', 'figure'),
-    Output('pie-category', 'figure'),
-    Output('pie-tier', 'figure'),
-    Output('company-table', 'data'),
-    Output('company-table', 'tooltip_data'),
-    Output('city-filter-label', 'children'),
-    Input('region-dropdown', 'value'),
-    Input('company-dropdown', 'value'),
-    Input('selected-city', 'data'),
+    Output('kpi-total',        'children'),
+    Output('kpi-active',       'children'),
+    Output('kpi-web',          'children'),
+    Output('map-graph',        'figure'),
+    Output('region-chart',     'figure'),
+    Output('pie-category',     'figure'),
+    Output('pie-tier',         'figure'),
+    Output('company-table',    'data'),
+    Output('company-table',    'tooltip_data'),
+    Output('city-filter-label','children'),
+    Input('region-dropdown',   'value'),
+    Input('company-dropdown',  'value'),
+    Input('selected-city',     'data'),
 )
 def update_dashboard(selected_regions, selected_companies, selected_city):
     filtered = filter_data(selected_regions, selected_companies)
     if selected_city:
         filtered = filtered[filtered['city'] == selected_city]
 
-    kpi_total = f"{len(filtered):,}"
+    kpi_total  = f"{len(filtered):,}"
     kpi_active = f"{(filtered['status'].str.lower() == 'active').sum():,}"
-    kpi_web = f"{filtered['website'].notna().sum():,}"
+    kpi_web    = f"{filtered['website'].notna().sum():,}"
 
-    """Bubble map: companies per city"""
-    _valid = filtered.dropna(subset=['latitude', 'longitude'])
+    _valid   = filtered.dropna(subset=['latitude', 'longitude'])
     city_geo = (
         _valid.groupby('city')
         .agg(count=('latitude', 'count'), lat=('latitude', 'median'), lon=('longitude', 'median'))
         .reset_index()
     )
-    # Square-root scale so small cities stay visible; enforce a minimum display size
+
     if not city_geo.empty:
-        _sqrt_max = city_geo['count'].apply(lambda x: x ** 0.5).max()
+        _sqrt_max    = city_geo['count'].apply(lambda x: x ** 0.5).max()
         _min_display = max(_sqrt_max * 0.04, 1)
         city_geo['display_size'] = city_geo['count'].apply(lambda x: max(x ** 0.5, _min_display))
     else:
         city_geo['display_size'] = city_geo['count']
+
     if selected_city:
-        city_geo['_sel'] = city_geo['city'].apply(lambda c: 'selected' if c == selected_city else 'default')
+        city_geo['_sel']  = city_geo['city'].apply(lambda c: 'selected' if c == selected_city else 'default')
         _color_map = {'selected': 'rgba(220, 80, 0, 0.85)', 'default': 'rgba(138, 43, 226, 0.25)'}
     else:
-        city_geo['_sel'] = 'all'
+        city_geo['_sel']  = 'all'
         _color_map = {'all': 'rgba(138, 43, 226, 0.45)'}
+
     map_fig = px.scatter_mapbox(
         city_geo, lat='lat', lon='lon', size='display_size',
         color='_sel', color_discrete_map=_color_map,
@@ -224,19 +226,16 @@ def update_dashboard(selected_regions, selected_companies, selected_city):
     )
     map_fig.update_layout(margin={'r': 0, 't': 40, 'l': 0, 'b': 0}, showlegend=False)
 
-    """Bar plot: companies per region"""
     region_counts = filtered.groupby('region', as_index=False).size().rename(columns={'size': 'count'})
     region_counts = region_counts.sort_values('count', ascending=True)
     region_fig = px.bar(
         region_counts, x='count', y='region',
         title='Companies per Region', height=500,
         orientation='h',
-        # labels={'region': 'Region', 'count': 'Number of Companies'},
         color_discrete_sequence=[nte_darkblue]
     )
     region_fig.update_layout(margin={'l': 120, 'r': 20, 't': 40, 'b': 20})
 
-    """Pie charts: product category and lifecycle stage"""
     _cat_counts = filtered['Predicted_Category'].fillna('Unknown').value_counts().reset_index()
     _cat_counts.columns = ['Predicted_Category', 'count']
     pie_category = px.pie(
@@ -257,24 +256,33 @@ def update_dashboard(selected_regions, selected_companies, selected_city):
     pie_tier.update_traces(textposition='inside', textinfo='percent+label')
     pie_tier.update_layout(showlegend=False, margin={'t': 50, 'b': 10, 'l': 10, 'r': 10})
 
-    """ Companies table"""
-    table_cols = ['trade name', 'Predicted_Category', 'Predicted_Tier', 'tags', 'value']
-    table_df = filtered[table_cols].copy()
+    table_cols    = ['trade name', 'Predicted_Category', 'Predicted_Tier', 'tags', 'value']
+    table_df      = filtered[table_cols].copy()
     table_df['value'] = table_df['value'].astype(int)
     table_records = table_df.to_dict('records')
-    tooltip_data = [
+    tooltip_data  = [
         {'tags': {'value': str(row.get('tags', '') or ''), 'type': 'markdown'}}
         for row in table_records
     ]
 
-    city_label = f"City filter: {selected_city}  —  click the same bubble again to clear" if selected_city else ""
+    city_label = f"City filter: {selected_city} — click the same bubble again to clear" if selected_city else ""
     return kpi_total, kpi_active, kpi_web, map_fig, region_fig, pie_category, pie_tier, table_records, tooltip_data, city_label
 
 
-# ── Register classification callbacks (defined in classification.py) ──────────
+# ── Register classification callbacks ────────────────────────────────────────
 classification.register_callbacks(app, filter_data)
 
-
+# ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Read SSL cert paths from environment (set in your .env or systemd unit)
+    ssl_certfile = os.environ.get('SSL_CERTFILE', '/etc/ssl/tell/fullchain.pem')
+    ssl_keyfile  = os.environ.get('SSL_KEYFILE',  '/etc/ssl/tell/privkey.pem')
 
+    use_ssl = os.path.isfile(ssl_certfile) and os.path.isfile(ssl_keyfile)
+
+    app.run(
+        host='0.0.0.0',
+        port=443 if use_ssl else 8050,
+        debug=False,
+        ssl_context=(ssl_certfile, ssl_keyfile) if use_ssl else None,
+    )

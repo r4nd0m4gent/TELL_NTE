@@ -1,83 +1,81 @@
 ﻿-- =============================================================================
--- TELL – Textile Ecosystem Living Lab  |  PostgreSQL schema
+-- TELL – Textile Ecosystem Living Lab  |  MySQL 8.0+ schema
 -- =============================================================================
-DROP TABLE IF EXISTS contributions CASCADE;
-DROP TABLE IF EXISTS keywords      CASCADE;
-DROP TABLE IF EXISTS organizations CASCADE;
-DROP TABLE IF EXISTS geographies   CASCADE;
+SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS contributions;
+DROP TABLE IF EXISTS keywords;
+DROP TABLE IF EXISTS organizations;
+DROP TABLE IF EXISTS geographies;
+SET FOREIGN_KEY_CHECKS = 1;
 
 -- 1. geographies  ─  reference table keyed by Dutch 4-digit postcode
 CREATE TABLE geographies (
-    postcode    CHAR(4)      PRIMARY KEY,
-    country     VARCHAR(4)   NOT NULL DEFAULT 'NL',
+    postcode    CHAR(4)       NOT NULL,
+    country     VARCHAR(4)    NOT NULL DEFAULT 'NL',
     region      VARCHAR(128),
     province    VARCHAR(128),
     city        VARCHAR(128),
-    latitude    NUMERIC(9,6),
-    longitude   NUMERIC(9,6)
+    latitude    DECIMAL(9,6),
+    longitude   DECIMAL(9,6),
+    PRIMARY KEY (postcode)
 );
 
 -- 2. organizations
 CREATE TABLE organizations (
-    organization_id  SERIAL        PRIMARY KEY,
+    organization_id  INT           NOT NULL AUTO_INCREMENT,
     trade_name       VARCHAR(255)  NOT NULL,
     legal_name       VARCHAR(255),
     website          VARCHAR(512),
-    postcode         CHAR(4)       REFERENCES geographies(postcode),
+    postcode         CHAR(4),
     status           VARCHAR(64),
-    number_employees INTEGER,
-    created_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    updated_at       TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    number_employees INT,
+    created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                            ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (organization_id),
+    FOREIGN KEY (postcode) REFERENCES geographies(postcode)
 );
 
 CREATE INDEX idx_org_postcode   ON organizations(postcode);
 CREATE INDEX idx_org_trade_name ON organizations(trade_name);
 
--- 3. keywords  ─  stable tags + dynamic NLP results via JSONB
+-- 3. keywords  ─  stable tags + dynamic NLP results via JSON
 --
---   To store a new NLP run, add a key to nlp_analyses – no ALTER TABLE needed:
+--   To store a new NLP run, merge a key into nlp_analyses – no ALTER TABLE needed:
 --   UPDATE keywords
---   SET nlp_analyses = nlp_analyses || '{"my_model_v2":{"value":"Tier 1"}}'::jsonb
+--   SET nlp_analyses = JSON_MERGE_PATCH(nlp_analyses, '{"my_model_v2":{"value":"Tier 1"}}')
 --   WHERE organization_id = <id>;
 CREATE TABLE keywords (
-    keyword_id            SERIAL       PRIMARY KEY,
-    organization_id       INTEGER      NOT NULL
-                              REFERENCES organizations(organization_id)
-                              ON DELETE CASCADE,
+    keyword_id            INT          NOT NULL AUTO_INCREMENT,
+    organization_id       INT          NOT NULL,
     main_activity         VARCHAR(255),
     secondary_activity_1  VARCHAR(255),
     secondary_activity_2  VARCHAR(255),
     tag_category          VARCHAR(255),
     tags                  TEXT,
-    nlp_analyses          JSONB        NOT NULL DEFAULT '{}'::JSONB,
-    updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    nlp_analyses          JSON         NOT NULL DEFAULT (JSON_OBJECT()),
+    updated_at            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                                ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (keyword_id),
+    UNIQUE KEY idx_kw_org (organization_id),
+    FOREIGN KEY (organization_id) REFERENCES organizations(organization_id)
+        ON DELETE CASCADE
 );
-
-CREATE UNIQUE INDEX idx_kw_org ON keywords(organization_id);
-CREATE INDEX idx_kw_nlp ON keywords USING GIN (nlp_analyses);
 
 -- 4. contributions  ─  form submissions awaiting review
 CREATE TABLE contributions (
-    contribution_id  SERIAL        PRIMARY KEY,
-    type             VARCHAR(16)   NOT NULL CHECK (type IN ('add','edit')),
-    organization_id  INTEGER       REFERENCES organizations(organization_id),
-    payload          JSONB         NOT NULL,
-    status           VARCHAR(16)   NOT NULL DEFAULT 'pending'
-                         CHECK (status IN ('pending','accepted','rejected')),
-    submitted_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-    reviewed_at      TIMESTAMPTZ
+    contribution_id  INT           NOT NULL AUTO_INCREMENT,
+    type             VARCHAR(16)   NOT NULL,
+    organization_id  INT,
+    payload          JSON          NOT NULL,
+    status           VARCHAR(16)   NOT NULL DEFAULT 'pending',
+    submitted_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at      DATETIME,
+    PRIMARY KEY (contribution_id),
+    FOREIGN KEY (organization_id) REFERENCES organizations(organization_id),
+    CONSTRAINT chk_type   CHECK (type   IN ('add', 'edit')),
+    CONSTRAINT chk_status CHECK (status IN ('pending', 'accepted', 'rejected'))
 );
-
--- Auto-update updated_at
-CREATE OR REPLACE FUNCTION set_updated_at()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
-BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
-$$;
-
-CREATE TRIGGER trg_org_updated BEFORE UPDATE ON organizations
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_kw_updated  BEFORE UPDATE ON keywords
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- Flat view used by the dashboard
 CREATE OR REPLACE VIEW v_companies AS
@@ -100,8 +98,8 @@ SELECT
     k.tag_category,
     k.tags,
     k.nlp_analyses,
-    k.nlp_analyses -> 'predicted_category_v1' ->> 'value'  AS "Predicted_Category",
-    k.nlp_analyses -> 'predicted_tier_v1'     ->> 'value'  AS "Predicted_Tier"
+    k.nlp_analyses->>'$.predicted_category_v1.value'  AS Predicted_Category,
+    k.nlp_analyses->>'$.predicted_tier_v1.value'      AS Predicted_Tier
 FROM organizations o
 LEFT JOIN geographies g ON g.postcode = o.postcode
 LEFT JOIN keywords    k ON k.organization_id = o.organization_id;

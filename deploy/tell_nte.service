@@ -1,0 +1,35 @@
+# /etc/systemd/system/tell_nte.service
+# Deploys both Dash apps (main dashboard + contribution form) under one Gunicorn
+# process using a DispatcherMiddleware WSGI entry point (wsgi.py).
+
+[Unit]
+Description=TELL NTE – Textile Ecosystem Mapping (tell.newtexeco.nl)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=root                          # needed to bind :443; change if using authbind
+WorkingDirectory=/opt/tell_nte
+
+# ── Environment ───────────────────────────────────────────────────────────────
+EnvironmentFile=/opt/tell_nte/.env
+
+# ── SSL cert paths (override in .env if different) ────────────────────────────
+Environment="SSL_CERTFILE=/etc/ssl/tell/fullchain.pem"
+Environment="SSL_KEYFILE=/etc/ssl/tell/privkey.pem"
+
+# ── Command ───────────────────────────────────────────────────────────────────
+ExecStart=/opt/tell_nte/venv/bin/gunicorn \
+    --config /opt/tell_nte/deploy/gunicorn_conf.py \
+    wsgi:application
+
+Restart=on-failure
+RestartSec=5
+
+# ── Logging (also goes to gunicorn log files defined in gunicorn_conf.py) ─────
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

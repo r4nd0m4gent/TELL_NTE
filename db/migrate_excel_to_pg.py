@@ -1,12 +1,12 @@
 ﻿#!/usr/bin/env python3
 """
-db/migrate_excel_to_pg.py
-──────────────────────────
-One-time migration: reads the KvK Excel file and seeds the PostgreSQL
+db/migrate_excel_to_mysql.py
+─────────────────────────────
+One-time migration: reads the KvK Excel file and seeds the MySQL
 database (geographies, organizations, keywords tables).
 
 Usage (after creating the DB and running schema.sql):
-    export DATABASE_URL=postgresql://tell:password@localhost/tell
+    set DATABASE_URL=mysql+pymysql://tell:password@localhost/tell
     python db/migrate_excel_to_pg.py [path/to/KvK_textile.xlsx]
 
 The script is idempotent — run it again after updating the Excel and it
@@ -15,12 +15,14 @@ will INSERT new rows; existing postcodes / companies are skipped.
 
 import os
 import sys
+import json
 import warnings
 
 import pandas as pd
 import pgeocode
-import psycopg2
-import psycopg2.extras
+import pymysql
+
+from urllib.parse import urlparse
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -30,7 +32,19 @@ DEFAULT_EXCEL = os.environ.get(
     "TEXTILE_DATA_PATH",
     r"C:\Users\fsollit\Desktop\Data\Supply chain\Modint KvK\KvK textile.xlsx",
 )
-DSN = os.environ.get("DATABASE_URL", "postgresql://tell:tell@localhost/tell")
+DSN = os.environ.get("DATABASE_URL", "mysql+pymysql://tell:tell@localhost/tell")
+
+
+def _conn_params() -> dict:
+    url = urlparse(DSN)
+    return {
+        "host":     url.hostname or "localhost",
+        "port":     url.port or 3306,
+        "user":     url.username,
+        "password": url.password or "",
+        "database": url.path.lstrip("/"),
+        "charset":  "utf8mb4",
+    }
 
 # ── Load & clean Excel ────────────────────────────────────────────────────────
 
@@ -81,9 +95,9 @@ def upsert_geographies(cur, geo: pd.DataFrame, df: pd.DataFrame):
             continue
         cur.execute(
             """
-            INSERT INTO geographies (postcode, region, province, city, latitude, longitude)
+            INSERT IGNORE INTO geographies
+                (postcode, region, province, city, latitude, longitude)
             VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (postcode) DO NOTHING
             """,
             (
                 pc4,
@@ -125,7 +139,6 @@ def insert_organizations_and_keywords(cur, df: pd.DataFrame):
             INSERT INTO organizations
                 (trade_name, legal_name, website, postcode, status, number_employees)
             VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING organization_id
             """,
             (
                 trade_name,
@@ -136,7 +149,7 @@ def insert_organizations_and_keywords(cur, df: pd.DataFrame):
                 int(row.get("number_employees", 0) or 0),
             ),
         )
-        org_id = cur.fetchone()[0]
+        org_id = cur.lastrowid
 
         # Seed JSONB with any existing Predicted_Category / Predicted_Tier from Excel
         nlp: dict = {}
@@ -158,7 +171,7 @@ def insert_organizations_and_keywords(cur, df: pd.DataFrame):
                 str(row.get("derived_category", "") or "").strip() or None,
                 str(row.get("tag_category", "") or "").strip() or None,
                 str(row.get("tags", "") or "").strip() or None,
-                psycopg2.extras.Json(nlp),
+                json.dumps(nlp),
             ),
         )
         added += 1
@@ -173,7 +186,7 @@ def main():
     geo = geocode_postcodes(df)
 
     print(f"Connecting: {DSN.split('@')[-1]}")
-    conn = psycopg2.connect(DSN)
+    conn = pymysql.connect(**_conn_params())
     try:
         with conn.cursor() as cur:
             upsert_geographies(cur, geo, df)

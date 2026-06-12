@@ -1,4 +1,5 @@
 import os
+
 import dash
 from dash import dcc, html, Input, Output, State
 from db.connection import get_company_names, save_contribution
@@ -14,6 +15,7 @@ app = dash.Dash(__name__,
     suppress_callback_exceptions=True,
     requests_pathname_prefix='/contribute/',
 )
+
 server = app.server  # expose WSGI app for gunicorn
 
 # ── Value chain tier options ───────────────────────────────────────────────────
@@ -30,47 +32,46 @@ _tier_options = [
     {'label': 'Other',                                            'value': 'other'},
 ]
 
-# ── Colour palette (matches textile_companies_NL.py) ──────────────────────────
-nte_violet    = '#513773'
-nte_darkblue  = '#54639E'
+# ── Colour palette ────────────────────────────────────────────────────────────
+nte_violet   = '#513773'
+nte_darkblue = '#54639E'
 nte_lightblue = '#88C0E0'
 
 _base_style = {
     'fontFamily': 'Inter, sans-serif',
-    'maxWidth': '640px',
-    'margin': '60px auto',
-    'padding': '40px',
+    'maxWidth':   '640px',
+    'margin':     '60px auto',
+    'padding':    '40px',
     'backgroundColor': 'white',
     'borderRadius': '12px',
-    'boxShadow': '0 2px 12px rgba(0,0,0,0.12)',
+    'boxShadow':  '0 2px 12px rgba(0,0,0,0.12)',
 }
 
 _label_style = {
-    'display': 'block',
-    'fontWeight': '600',
+    'display':      'block',
+    'fontWeight':   '600',
     'marginBottom': '12px',
-    'color': nte_violet,
-    'fontSize': '16px',
+    'color':        nte_violet,
+    'fontSize':     '16px',
 }
 
 _radio_style = {
-    'display': 'flex',
+    'display':       'flex',
     'flexDirection': 'column',
-    'gap': '10px',
+    'gap':           '10px',
 }
 
 _btn_style = {
-    'marginTop': '28px',
-    'padding': '10px 28px',
+    'marginTop':      '28px',
+    'padding':        '10px 28px',
     'backgroundColor': nte_violet,
-    'color': 'white',
-    'border': 'none',
-    'borderRadius': '6px',
-    'fontSize': '15px',
-    'cursor': 'pointer',
+    'color':          'white',
+    'border':         'none',
+    'borderRadius':   '6px',
+    'fontSize':       '15px',
+    'cursor':         'pointer',
 }
 
-# ── Shared field styles (used in static layout below) ─────────────────────────
 _input_style = {
     'width': '100%', 'padding': '8px 10px', 'borderRadius': '6px',
     'border': '1px solid #ccc', 'fontSize': '14px', 'boxSizing': 'border-box',
@@ -78,35 +79,27 @@ _input_style = {
 _field_wrap = {'marginBottom': '20px'}
 _sub_label  = {**_label_style, 'fontWeight': '500', 'fontSize': '14px'}
 
-
 def _lbl(text):
     return html.Label(text, style=_sub_label)
-
 
 def _inp(field_id, placeholder='', input_type='text'):
     return dcc.Input(id=field_id, type=input_type, placeholder=placeholder,
                      debounce=True, style=_input_style)
-
 
 def _field(label, field_id, placeholder='', input_type='text'):
     return html.Div(style=_field_wrap, children=[
         _lbl(label), _inp(field_id, placeholder, input_type),
     ])
 
-
 # ── Layout ─────────────────────────────────────────────────────────────────────
-# Both form sections are always present; visibility is toggled via callbacks.
-# This ensures every component ID always exists, avoiding nonexistent-State errors.
 app.layout = html.Div(style={'backgroundColor': '#f4f3f8', 'minHeight': '100vh'}, children=[
     html.Div(style=_base_style, children=[
 
-        # Header
         html.H2(
             'Textile Ecosystem Mapping — Contribution Form',
             style={'color': nte_violet, 'marginBottom': '32px', 'fontSize': '22px'},
         ),
 
-        # ── Question 1: contribution type ──────────────────────────────────────
         html.Label(
             'What kind of contribution would you like to bring the Textile Ecosystem Mapping?',
             style=_label_style,
@@ -115,7 +108,7 @@ app.layout = html.Div(style={'backgroundColor': '#f4f3f8', 'minHeight': '100vh'}
             id='contribution-type',
             options=[
                 {'label': 'Add new company info', 'value': 'add'},
-                {'label': 'Suggest edit',          'value': 'edit'},
+                {'label': 'Suggest edit',         'value': 'edit'},
             ],
             value=None,
             labelStyle={'display': 'flex', 'alignItems': 'center', 'gap': '8px',
@@ -123,15 +116,15 @@ app.layout = html.Div(style={'backgroundColor': '#f4f3f8', 'minHeight': '100vh'}
             style=_radio_style,
         ),
 
-        # ── "Add new company" section (hidden until selected) ─────────────────
+        # ── "Add new company" section ─────────────────────────────────────────
         html.Div(id='add-section', style={'display': 'none', 'marginTop': '32px'}, children=[
             html.H3('New company information',
                     style={'color': nte_violet, 'marginBottom': '20px', 'fontSize': '17px'}),
-            _field('Company name *',     'add-name',      'e.g. Textile BV'),
-            _field('City *',             'add-city',      'e.g. Amsterdam'),
-            _field('Postcode',           'add-postcode',  'e.g. 1012 AB'),
-            _field('Website',            'add-website',   'https://'),
-            _field('Number of employees','add-employees', 'e.g. 25', 'number'),
+            _field('Company name *',      'add-name',      'e.g. Textile BV'),
+            _field('City *',              'add-city',      'e.g. Amsterdam'),
+            _field('Postcode',            'add-postcode',  'e.g. 1012 AB'),
+            _field('Website',             'add-website',   'https://'),
+            _field('Number of employees', 'add-employees', 'e.g. 25', 'number'),
             html.Div(style=_field_wrap, children=[
                 _lbl('Value chain tier(s) *'),
                 dcc.Dropdown(
@@ -157,7 +150,7 @@ app.layout = html.Div(style={'backgroundColor': '#f4f3f8', 'minHeight': '100vh'}
             ]),
         ]),
 
-        # ── "Suggest edit" section (hidden until selected) ────────────────────
+        # ── "Suggest edit" section ────────────────────────────────────────────
         html.Div(id='edit-section', style={'display': 'none', 'marginTop': '32px'}, children=[
             html.H3('Suggest an edit',
                     style={'color': nte_violet, 'marginBottom': '20px', 'fontSize': '17px'}),
@@ -192,7 +185,7 @@ app.layout = html.Div(style={'backgroundColor': '#f4f3f8', 'minHeight': '100vh'}
             ]),
         ]),
 
-        # ── Submit button (hidden until a choice is made) ─────────────────────
+        # ── Submit button ─────────────────────────────────────────────────────
         html.Div(id='submit-wrapper', style={'display': 'none'}, children=[
             html.Button('Submit contribution', id='submit-btn', n_clicks=0, style=_btn_style),
         ]),
@@ -203,9 +196,7 @@ app.layout = html.Div(style={'backgroundColor': '#f4f3f8', 'minHeight': '100vh'}
     ])
 ])
 
-
 # ── Callbacks ──────────────────────────────────────────────────────────────────
-
 @app.callback(
     Output('add-section',    'style'),
     Output('edit-section',   'style'),
@@ -237,15 +228,13 @@ def toggle_tier_other(tiers):
     Output('confirmation', 'style'),
     Input('submit-btn', 'n_clicks'),
     State('contribution-type', 'value'),
-    # ── add fields ────────────────────────────────────────────────────────────
-    State('add-name',     'value'),
-    State('add-city',     'value'),
-    State('add-tiers',    'value'),
-    State('add-category', 'value'),
-    # ── edit fields ───────────────────────────────────────────────────────────
-    State('edit-name',       'value'),
-    State('edit-change',     'value'),
-    State('edit-correction', 'value'),
+    State('add-name',       'value'),
+    State('add-city',       'value'),
+    State('add-tiers',      'value'),
+    State('add-category',   'value'),
+    State('edit-name',      'value'),
+    State('edit-change',    'value'),
+    State('edit-correction','value'),
     prevent_initial_call=True,
 )
 def on_submit(n_clicks, choice, add_name, add_city, add_tiers, add_category,
@@ -273,7 +262,6 @@ def on_submit(n_clicks, choice, add_name, add_city, add_tiers, add_category,
             {**_style_base, 'color': '#c0392b'},
         )
 
-    # Persist to DB
     try:
         if choice == 'add':
             payload = {
@@ -285,7 +273,7 @@ def on_submit(n_clicks, choice, add_name, add_city, add_tiers, add_category,
             save_contribution('add', payload)
         else:
             payload = {
-                'trade_name':  edit_name,
+                'trade_name': edit_name,
                 'what_change': edit_change,
                 'correction':  edit_correction,
             }

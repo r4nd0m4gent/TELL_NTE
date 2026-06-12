@@ -4,20 +4,45 @@ db/connection.py
 Shared database helpers for all TELL apps.
 
 Set DATABASE_URL in the environment (or systemd service):
-    postgresql://tell:password@localhost/tell
+    mysql+pymysql://tell:password@localhost/tell
 """
 import os
 import json
-import psycopg2
-import psycopg2.extras
-import pandas as pd
+from urllib.parse import urlparse
 
-_DSN = os.environ.get("DATABASE_URL", "postgresql://tell:tell@localhost/tell")
+import pymysql
+import pandas as pd
+from sqlalchemy import create_engine, text
+
+_DSN = os.environ.get("DATABASE_URL", "mysql+pymysql://tell:tell@localhost/tell")
+# SQLAlchemy engine for pd.read_sql (pandas 3.x requires this)
+_engine = None
+
+
+def get_engine():
+    global _engine
+    if _engine is None:
+        _engine = create_engine(_DSN)
+    return _engine
+
+
+def _conn_params() -> dict:
+    """Parse _DSN into keyword arguments for pymysql.connect()."""
+    url = urlparse(_DSN)
+    return {
+        "host":     url.hostname or "localhost",
+        "port":     url.port or 3306,
+        "user":     url.username,
+        "password": url.password or "",
+        "database": url.path.lstrip("/"),
+        "charset":  "utf8mb4",
+        "autocommit": False,
+    }
 
 
 def get_conn():
-    """Return a new psycopg2 connection."""
-    return psycopg2.connect(_DSN)
+    """Return a new PyMySQL connection."""
+    return pymysql.connect(**_conn_params())
 
 
 # ---------------------------------------------------------------------------
@@ -30,8 +55,8 @@ def load_companies() -> pd.DataFrame:
     what textile_companies_NL.py expects (same as the old Excel layout).
     """
     sql = "SELECT * FROM v_companies ORDER BY trade_name"
-    with get_conn() as conn:
-        df = pd.read_sql(sql, conn)
+    with get_engine().connect() as conn:
+        df = pd.read_sql(text(sql), conn)
 
     # Rename DB columns → legacy names used throughout the dashboard
     df = df.rename(columns={
@@ -47,10 +72,13 @@ def load_companies() -> pd.DataFrame:
 
 def get_company_names() -> list[dict]:
     """Return sorted list of {label, value} dicts for the company dropdown."""
-    with get_conn() as conn:
+    conn = get_conn()
+    try:
         with conn.cursor() as cur:
             cur.execute("SELECT trade_name FROM organizations ORDER BY trade_name")
             rows = cur.fetchall()
+    finally:
+        conn.close()
     return [{"label": r[0], "value": r[0]} for r in rows]
 
 
@@ -60,7 +88,8 @@ def get_company_names() -> list[dict]:
 
 def save_contribution(type_: str, payload: dict, organization_id: int | None = None):
     """Insert a contribution record for human review."""
-    with get_conn() as conn:
+    conn = get_conn()
+    try:
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -70,6 +99,11 @@ def save_contribution(type_: str, payload: dict, organization_id: int | None = N
                 (type_, organization_id, json.dumps(payload)),
             )
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +120,8 @@ def save_nlp_results(results: list[dict], analysis_name: str, run_date: str):
     analysis_name : key added to the JSONB, e.g. "predicted_category_v2"
     run_date : ISO date string, e.g. "2026-06-02"
     """
-    with get_conn() as conn:
+    conn = get_conn()
+    try:
         with conn.cursor() as cur:
             for row in results:
                 entry = json.dumps({
@@ -99,11 +134,15 @@ def save_nlp_results(results: list[dict], analysis_name: str, run_date: str):
                 cur.execute(
                     """
                     UPDATE keywords k
-                    SET nlp_analyses = nlp_analyses || %s::jsonb
-                    FROM organizations o
-                    WHERE k.organization_id = o.organization_id
-                      AND o.trade_name = %s
+                    JOIN organizations o ON k.organization_id = o.organization_id
+                    SET k.nlp_analyses = JSON_MERGE_PATCH(k.nlp_analyses, %s)
+                    WHERE o.trade_name = %s
                     """,
                     (entry, row["trade_name"]),
                 )
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
