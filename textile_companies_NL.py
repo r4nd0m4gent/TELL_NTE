@@ -1,22 +1,50 @@
 import os
 
 import dash
-from dash import dcc, html, Input, Output, State, dash_table, ctx, ALL
+from dash import dcc, html, Input, Output, State, dash_table, ctx
 from dash.exceptions import PreventUpdate
 import plotly.express as px
 import pandas as pd
+import pgeocode
 import classification
-from db.connection import load_companies
 
-# Colors
+# ── Colors ────────────────────────────────────────────────────────────────────
 nte_violet    = '#513773'
 nte_darkblue  = '#54639E'
 nte_lightblue = '#88C0E0'
 nte_pink      = '#FF4EF0'
 
-# Load company data from PostgreSQL
+# ── Load data from Excel ──────────────────────────────────────────────────────
+EXCEL_PATH = os.environ.get('EXCEL_PATH', os.path.join(os.path.dirname(__file__), 'data', 'companies.xlsx'))
+
+def load_companies():
+    df = pd.read_excel(EXCEL_PATH)
+
+    # Rename columns to match the rest of the app
+    df = df.rename(columns={
+        'visiting address_city':     'city',
+        'visiting address_postcode': 'postcode',
+        'number_employees':          'value',
+    })
+
+    # Fill missing employee counts with 0
+    df['value'] = pd.to_numeric(df['value'], errors='coerce').fillna(0).astype(int)
+
+    # ── Geocode postcodes → latitude / longitude ──────────────────────────────
+    # Uses the pgeocode library with the Dutch postcode database (no API key needed)
+    if 'latitude' not in df.columns or 'longitude' not in df.columns:
+        nomi = pgeocode.Nominatim('nl')
+        # Strip spaces from postcodes (e.g. "1012 AB" → "1012AB")
+        postcodes = df['postcode'].astype(str).str.replace(' ', '', regex=False)
+        geo = nomi.query_postal_code(postcodes.tolist())
+        df['latitude']  = geo['latitude'].values
+        df['longitude'] = geo['longitude'].values
+
+    return df
+
 data = load_companies()
 
+# ── App ───────────────────────────────────────────────────────────────────────
 app = dash.Dash(__name__, external_stylesheets=[
     'https://fonts.googleapis.com/css2?family=Inter&display=swap'
 ], suppress_callback_exceptions=True)
@@ -71,12 +99,10 @@ app.layout = html.Div([
     html.Div(id='city-filter-label', style={'minHeight': '22px', 'marginBottom': '4px', 'fontSize': '13px', 'color': '#832394', 'fontWeight': '600'}),
 
     html.Div([
-        html.Div([
-            dcc.Graph(id='map-graph', config={'scrollZoom': True}),
-        ], style={'flex': '1.5', 'minWidth': 0}),
-        html.Div([
-            dcc.Graph(id='region-chart'),
-        ], style={'flex': '1.5', 'minWidth': 0, 'color': nte_lightblue}),
+        html.Div([dcc.Graph(id='map-graph', config={'scrollZoom': True})],
+                 style={'flex': '1.5', 'minWidth': 0}),
+        html.Div([dcc.Graph(id='region-chart')],
+                 style={'flex': '1.5', 'minWidth': 0}),
     ], style={'display': 'flex', 'gap': '16px', 'alignItems': 'stretch'}),
 
     dash_table.DataTable(
@@ -106,27 +132,21 @@ app.layout = html.Div([
         dcc.Graph(id='pie-tier',     style={'flex': '1', 'minWidth': 0}),
     ], style={'display': 'flex', 'gap': '16px', 'marginTop': '20px'}),
 
-    # ── Action buttons ─────────────────────────────────────────────────────────
     html.Div([
         html.A(
             '✏️ Contribute to the Textile Ecosystem Mapping',
             href='/contribute/',
             style={
-                'display': 'inline-block',
-                'padding': '10px 24px',
-                'backgroundColor': nte_violet,
-                'color': 'white',
-                'borderRadius': '6px',
-                'textDecoration': 'none',
-                'fontSize': '14px',
-                'fontWeight': '600',
+                'display': 'inline-block', 'padding': '10px 24px',
+                'backgroundColor': nte_violet, 'color': 'white',
+                'borderRadius': '6px', 'textDecoration': 'none',
+                'fontSize': '14px', 'fontWeight': '600',
             },
         ),
         classification.get_button(),
     ], style={'display': 'flex', 'gap': '12px', 'justifyContent': 'center',
               'marginTop': '32px', 'paddingBottom': '32px'}),
 
-    # ── Classification modal (layout defined in classification.py) ─────────────
     classification.get_modal(),
     *classification.get_stores(),
     dcc.Store(id='selected-city', data=None),
@@ -170,19 +190,19 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
 
 
 @app.callback(
-    Output('kpi-total',        'children'),
-    Output('kpi-active',       'children'),
-    Output('kpi-web',          'children'),
-    Output('map-graph',        'figure'),
-    Output('region-chart',     'figure'),
-    Output('pie-category',     'figure'),
-    Output('pie-tier',         'figure'),
-    Output('company-table',    'data'),
-    Output('company-table',    'tooltip_data'),
-    Output('city-filter-label','children'),
-    Input('region-dropdown',   'value'),
-    Input('company-dropdown',  'value'),
-    Input('selected-city',     'data'),
+    Output('kpi-total',         'children'),
+    Output('kpi-active',        'children'),
+    Output('kpi-web',           'children'),
+    Output('map-graph',         'figure'),
+    Output('region-chart',      'figure'),
+    Output('pie-category',      'figure'),
+    Output('pie-tier',          'figure'),
+    Output('company-table',     'data'),
+    Output('company-table',     'tooltip_data'),
+    Output('city-filter-label', 'children'),
+    Input('region-dropdown',    'value'),
+    Input('company-dropdown',   'value'),
+    Input('selected-city',      'data'),
 )
 def update_dashboard(selected_regions, selected_companies, selected_city):
     filtered = filter_data(selected_regions, selected_companies)
@@ -208,10 +228,10 @@ def update_dashboard(selected_regions, selected_companies, selected_city):
         city_geo['display_size'] = city_geo['count']
 
     if selected_city:
-        city_geo['_sel']  = city_geo['city'].apply(lambda c: 'selected' if c == selected_city else 'default')
+        city_geo['_sel'] = city_geo['city'].apply(lambda c: 'selected' if c == selected_city else 'default')
         _color_map = {'selected': 'rgba(220, 80, 0, 0.85)', 'default': 'rgba(138, 43, 226, 0.25)'}
     else:
-        city_geo['_sel']  = 'all'
+        city_geo['_sel'] = 'all'
         _color_map = {'all': 'rgba(138, 43, 226, 0.45)'}
 
     map_fig = px.scatter_mapbox(
@@ -220,9 +240,7 @@ def update_dashboard(selected_regions, selected_companies, selected_city):
         hover_name='city', hover_data={'count': True, 'display_size': False, 'lat': False, 'lon': False, '_sel': False},
         mapbox_style='open-street-map', zoom=6,
         center={'lat': 52.3, 'lon': 5.3},
-        size_max=40,
-        title='Number of Companies per City',
-        height=500
+        size_max=40, title='Number of Companies per City', height=500
     )
     map_fig.update_layout(margin={'r': 0, 't': 40, 'l': 0, 'b': 0}, showlegend=False)
 
@@ -230,29 +248,24 @@ def update_dashboard(selected_regions, selected_companies, selected_city):
     region_counts = region_counts.sort_values('count', ascending=True)
     region_fig = px.bar(
         region_counts, x='count', y='region',
-        title='Companies per Region', height=500,
-        orientation='h',
+        title='Companies per Region', height=500, orientation='h',
         color_discrete_sequence=[nte_darkblue]
     )
     region_fig.update_layout(margin={'l': 120, 'r': 20, 't': 40, 'b': 20})
 
     _cat_counts = filtered['Predicted_Category'].fillna('Unknown').value_counts().reset_index()
     _cat_counts.columns = ['Predicted_Category', 'count']
-    pie_category = px.pie(
-        _cat_counts, names='Predicted_Category', values='count',
-        title='Product Category',
-        color_discrete_sequence=px.colors.sequential.Purples_r
-    )
+    pie_category = px.pie(_cat_counts, names='Predicted_Category', values='count',
+                          title='Product Category',
+                          color_discrete_sequence=px.colors.sequential.Purples_r)
     pie_category.update_traces(textposition='inside', textinfo='percent+label')
     pie_category.update_layout(showlegend=False, margin={'t': 50, 'b': 10, 'l': 10, 'r': 10})
 
     _tier_counts = filtered['Predicted_Tier'].fillna('Unknown').value_counts().reset_index()
     _tier_counts.columns = ['Predicted_Tier', 'count']
-    pie_tier = px.pie(
-        _tier_counts, names='Predicted_Tier', values='count',
-        title='Lifecycle Stage',
-        color_discrete_sequence=px.colors.sequential.Blues_r
-    )
+    pie_tier = px.pie(_tier_counts, names='Predicted_Tier', values='count',
+                      title='Lifecycle Stage',
+                      color_discrete_sequence=px.colors.sequential.Blues_r)
     pie_tier.update_traces(textposition='inside', textinfo='percent+label')
     pie_tier.update_layout(showlegend=False, margin={'t': 50, 'b': 10, 'l': 10, 'r': 10})
 
@@ -274,12 +287,9 @@ classification.register_callbacks(app, filter_data)
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    # Read SSL cert paths from environment (set in your .env or systemd unit)
     ssl_certfile = os.environ.get('SSL_CERTFILE', '/etc/ssl/tell/fullchain.pem')
     ssl_keyfile  = os.environ.get('SSL_KEYFILE',  '/etc/ssl/tell/privkey.pem')
-
     use_ssl = os.path.isfile(ssl_certfile) and os.path.isfile(ssl_keyfile)
-
     app.run(
         host='0.0.0.0',
         port=443 if use_ssl else 8050,
