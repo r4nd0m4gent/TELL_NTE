@@ -141,7 +141,7 @@ app.layout = html.Div([
             html.Label("Filter by keywords/tags:"),
             dcc.Dropdown(
                 id='keywords-dropdown',
-                options=sorted([{'label': str(k), 'value': str(k)} for k in data['keywords'].dropna().unique()], key=lambda x: x['label']),
+                options=sorted([{'label': str(k), 'value': str(k)} for k in data['tags'].dropna().unique()], key=lambda x: x['label']),
                 value=None,
                 placeholder="Select keywords...",
                 multi=True
