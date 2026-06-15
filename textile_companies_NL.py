@@ -136,6 +136,16 @@ app.layout = html.Div([
                 placeholder="Select a region...",
                 multi=True
             )
+        ], style={'width': '48%', 'display': 'inline-block', 'padding': '10px'}),
+        html.Div([
+            html.Label("Filter by keywords/tags:"),
+            dcc.Dropdown(
+                id='keywords-dropdown',
+                options=sorted([{'label': str(k), 'value': str(k)} for k in data['keywords'].dropna().unique()], key=lambda x: x['label']),
+                value=None,
+                placeholder="Select keywords...",
+                multi=True
+            )
         ], style={'width': '48%', 'display': 'inline-block', 'padding': '10px'})
     ], style={'backgroundColor': '#ecf0f1', 'borderRadius': '8px', 'marginBottom': '20px'}),
 
