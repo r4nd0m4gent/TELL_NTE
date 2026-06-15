@@ -51,6 +51,64 @@ app = dash.Dash(__name__, external_stylesheets=[
 
 server = app.server  # expose WSGI app for gunicorn
 
+# ── Custom page shell (title, fonts, base background) ─────────────────────────
+app.index_string = '''
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        {%metas%}
+        <title>Textile Ecosystem Living Lab – NewTexEco</title>
+        {%favicon%}
+        {%css%}
+        <style>
+            body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: #2c2c2c; }
+            header.tell-header {
+                background: #513773; padding: 18px 40px;
+                display: flex; align-items: center; gap: 16px;
+            }
+            header.tell-header img { height: 44px; object-fit: contain; }
+            header.tell-header .site-label {
+                color: rgba(255,255,255,0.75); font-size: 12px; font-weight: 600;
+                letter-spacing: 1.5px; text-transform: uppercase;
+            }
+            .tell-intro { max-width: 860px; margin: 0 auto; padding: 52px 40px 36px; }
+            .tell-intro h1 { font-size: 2rem; font-weight: 700; color: #513773; line-height: 1.25; margin-bottom: 18px; }
+            .tell-intro p { font-size: 1rem; line-height: 1.75; color: #444; margin: 0; }
+            .tell-footer {
+                text-align: center; padding: 24px 40px; font-size: 12px;
+                color: #999; border-top: 1px solid #e5e5e5; margin-top: 40px;
+            }
+            .tell-footer a { color: #54639E; text-decoration: none; }
+            .tell-footer a:hover { text-decoration: underline; }
+        </style>
+    </head>
+    <body>
+        <header class="tell-header">
+            <img src="https://newtexeco.nl/wp-content/uploads/2023/12/logo_2x.png" alt="NewTexEco" />
+            <span class="site-label">NewTexEco</span>
+        </header>
+        <div class="tell-intro">
+            <h1>Textile Ecosystem Living Lab</h1>
+            <p>
+                The TCLF sector in the Netherlands includes more than 10,000 companies.
+                The Textile Ecosystem Living Lab gives visibility to all companies across
+                the value chain, from fibre producers to recyclers, showing their geographic
+                distribution and specializations through the use of tags/keywords.
+            </p>
+        </div>
+        {%app_entry%}
+        <footer class="tell-footer">
+            <a href="https://newtexeco.nl" target="_blank">newtexeco.nl</a>
+            &nbsp;·&nbsp;
+            Textile Ecosystem Living Lab &copy; 2026 NewTexEco
+        </footer>
+        {%config%}
+        {%scripts%}
+        {%renderer%}
+    </body>
+</html>
+'''
+
 _card_style = {
     'flex': '1', 'backgroundColor': 'white', 'borderRadius': '8px',
     'padding': '16px 20px', 'boxShadow': '0 1px 4px rgba(0,0,0,0.1)',
