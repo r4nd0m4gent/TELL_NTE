@@ -222,12 +222,15 @@ app.layout = html.Div([
 ], style={'fontFamily': 'Inter, sans-serif', 'padding': '20px', 'maxWidth': '1400px', 'margin': 'auto'})
 
 
-def filter_data(regions, companies):
+def filter_data(regions, companies, keywords=None):
     filtered = data.copy()
     if regions:
         filtered = filtered[filtered['region'].isin(regions)]
     if companies:
         filtered = filtered[filtered['trade name'].isin(companies)]
+    if keywords:
+        pattern = '|'.join([str(k) for k in keywords])
+        filtered = filtered[filtered['tags'].astype(str).str.contains(pattern, case=False, na=False)]
     return filtered
 
 
@@ -270,10 +273,11 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
     Output('city-filter-label', 'children'),
     Input('region-dropdown',    'value'),
     Input('company-dropdown',   'value'),
+    Input('keywords-dropdown',  'value'),
     Input('selected-city',      'data'),
 )
-def update_dashboard(selected_regions, selected_companies, selected_city):
-    filtered = filter_data(selected_regions, selected_companies)
+def update_dashboard(selected_regions, selected_companies, selected_keywords, selected_city):
+    filtered = filter_data(selected_regions, selected_companies, selected_keywords)
     if selected_city:
         filtered = filtered[filtered['city'] == selected_city]
 
