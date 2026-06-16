@@ -1,0 +1,20 @@
+body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: #2c2c2c; }
+
+.tell-header {
+    background: #513773; padding: 18px 40px;
+    display: flex; align-items: center; gap: 16px;
+}
+.tell-header img { height: 44px; object-fit: contain; }
+.tell-header .site-label {
+    color: rgba(255,255,255,0.75); font-size: 12px; font-weight: 600;
+    letter-spacing: 1.5px; text-transform: uppercase;
+}
+.tell-intro { max-width: 860px; margin: 0 auto; padding: 52px 40px 36px; }
+.tell-intro h1 { font-size: 2rem; font-weight: 700; color: #513773; line-height: 1.25; margin-bottom: 18px; }
+.tell-intro p { font-size: 1rem; line-height: 1.75; color: #444; margin: 0; }
+.tell-footer {
+    text-align: center; padding: 24px 40px; font-size: 12px;
+    color: #999; border-top: 1px solid #e5e5e5; margin-top: 40px;
+}
+.tell-footer a { color: #54639E; text-decoration: none; }
+.tell-footer a:hover { text-decoration: underline; }
