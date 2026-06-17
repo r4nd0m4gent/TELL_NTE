@@ -15,7 +15,7 @@ nte_lightblue = '#88C0E0'
 nte_pink      = '#FF4EF0'
 
 # ── Load data from Excel ──────────────────────────────────────────────────────
-EXCEL_PATH = os.environ.get('EXCEL_PATH', os.path.join(os.path.dirname(__file__), 'data', 'companies.xlsx'))
+EXCEL_PATH = os.environ.get('EXCEL_PATH', os.path.join(os.path.dirname(__file__), 'Data', 'TELL', 'companies.xlsx'))
 
 def load_companies():
     df = pd.read_excel(EXCEL_PATH)
@@ -255,6 +255,7 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords, se
             height=500
         )
     map_fig.update_layout(margin={'r': 0, 't': 40, 'l': 0, 'b': 0}, showlegend=False)
+    map_fig.layout.mapbox = None
     map_fig.update_layout(mapbox={'style': 'carto-positron', 'layers': []})
 
     region_counts = filtered.groupby('region', as_index=False).size().rename(columns={'size': 'count'})
