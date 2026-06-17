@@ -244,16 +244,16 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords, se
         city_geo['_sel']  = 'all'
         _color_map = {'all': 'rgba(138, 43, 226, 0.45)'}
 
-    map_fig = px.scatter_mapbox(
-        city_geo, lat='lat', lon='lon', size='display_size',
-        color='_sel', color_discrete_map=_color_map,
-        hover_name='city', hover_data={'count': True, 'display_size': False, 'lat': False, 'lon': False, '_sel': False},
-        mapbox_style='carto-positron', zoom=6,
-        center={'lat': 52.3, 'lon': 5.3},
-        size_max=40,
-        title='Number of Companies per City',
-        height=500
-    )
+    map_fig = px.scatter_map(
+            city_geo, lat='lat', lon='lon', size='display_size',
+            color='_sel', color_discrete_map=_color_map,
+            hover_name='city', hover_data={'count': True, 'display_size': False, 'lat': False, 'lon': False, '_sel': False},
+            map_style='carto-positron', zoom=6,
+            center={'lat': 52.3, 'lon': 5.3},
+            size_max=40,
+            title='Number of Companies per City',
+            height=500
+        )
     map_fig.update_layout(margin={'r': 0, 't': 40, 'l': 0, 'b': 0}, showlegend=False)
     map_fig.update_layout(mapbox={'style': 'carto-positron', 'layers': []})
 
