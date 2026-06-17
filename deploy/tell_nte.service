@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+User=tell
 WorkingDirectory=/home/tell/app
 
 EnvironmentFile=/home/tell/app/.env
