@@ -1,10 +1,10 @@
 # Deployment Guide — tell.newtexeco.nl
 
 ## Architecture
-- **Nginx** — terminates HTTPS on port 443, serves `tell.html` at `/`, proxies Dash at `/dashboard/`
+- **Nginx** — terminates HTTPS on port 443, serves `tell_embed.html` at `/`, proxies Dash at `/dashboard/`
 - **Gunicorn** — runs plain HTTP on `127.0.0.1:8050`, no SSL
 - **Dash app** — served at `https://tell.newtexeco.nl/dashboard/`
-- **tell.html** — standalone landing page with header/intro/footer, embeds dashboard in iframe
+- **tell_embed.html** — standalone landing page with header/intro/footer, embeds dashboard in iframe
 
 ## Data file
 Place `companies.xlsx` in the `data/` folder next to the script:
@@ -55,7 +55,7 @@ systemctl status tell_nte
 ```
 
 ### 7. Verify
-- `https://tell.newtexeco.nl` → shows tell.html with header/intro/footer
+- `https://tell.newtexeco.nl` → shows tell_embed.html with header/intro/footer
 - `https://tell.newtexeco.nl/dashboard/` → shows Dash app with working map
 - `https://tell.newtexeco.nl/contribute/` → shows contribution form
 
