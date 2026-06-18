@@ -1,12 +1,11 @@
 [Unit]
-Description=TELL NTE – Textile Ecosystem Mapping (tell.newtexeco.nl)
+Description=TELL NTE – Textile Ecosystem Mapping
 After=network.target
 
 [Service]
 Type=simple
 User=tell
 WorkingDirectory=/home/tell/app
-
 EnvironmentFile=/home/tell/app/.env
 
 ExecStart=/home/tell/app/venv/bin/gunicorn \
