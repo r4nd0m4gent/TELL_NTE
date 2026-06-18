@@ -45,7 +45,9 @@ def load_companies():
     df['value'] = pd.to_numeric(df['value'], errors='coerce').fillna(0).astype(int)
     if 'latitude' not in df.columns or 'longitude' not in df.columns:
         nomi      = pgeocode.Nominatim('nl')
-        postcodes = df['postcode'].astype(str).str.replace(' ', '', regex=False)
+        # Dutch postcodes look like "1011 AB"; pgeocode's NL dataset is keyed by
+        # the 4-digit numeric part only, so extract that before querying.
+        postcodes = df['postcode'].astype(str).str.extract(r'(\d{4})')[0]
         geo       = nomi.query_postal_code(postcodes.tolist())
         df['latitude']  = geo['latitude'].values
         df['longitude'] = geo['longitude'].values
