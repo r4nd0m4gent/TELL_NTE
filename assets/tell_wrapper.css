@@ -18,3 +18,32 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
 }
 .tell-footer a { color: #54639E; text-decoration: none; }
 .tell-footer a:hover { text-decoration: underline; }
+
+/* ── Responsive: dashboard on tablets ─────────────────────────────────── */
+@media (max-width: 1024px) {
+    /* Filters wrap to two-per-row instead of three */
+    .tell-filter-col { width: 48% !important; }
+}
+
+/* ── Responsive: dashboard on phones ──────────────────────────────────── */
+@media (max-width: 768px) {
+    /* Tighter outer padding to reclaim screen width */
+    .tell-app { padding: 12px !important; }
+
+    /* Filters: stack the dropdowns full width */
+    .tell-filter-col { width: 100% !important; display: block !important; }
+
+    /* Stack the flex rows vertically (override inline display:flex) */
+    .tell-kpis,
+    .tell-map-row,
+    .tell-pies,
+    .tell-buttons { flex-direction: column !important; }
+
+    /* Buttons go full width and easier to tap */
+    .tell-buttons > a,
+    .tell-buttons > button { width: 100% !important; text-align: center; }
+
+    /* Shorter graphs so the page isn't endlessly tall */
+    .tell-map-row .dash-graph,
+    .tell-map-row .js-plotly-plot { height: 360px !important; }
+}
