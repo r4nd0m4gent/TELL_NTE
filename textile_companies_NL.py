@@ -40,6 +40,7 @@ app = dash.Dash(
     __name__,
     external_stylesheets=['https://fonts.googleapis.com/css2?family=Inter&display=swap'],
     suppress_callback_exceptions=True,
+    url_base_pathname='/dashboard/',
 )
 server = app.server  # WSGI entry point for Gunicorn
 
