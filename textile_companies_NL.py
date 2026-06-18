@@ -10,6 +10,24 @@ import classification
 nte_violet   = '#513773'
 nte_darkblue = '#54639E'
 
+# ── Map basemap ───────────────────────────────────────────────────────────────
+# Plotly.js 3.x renders maps with MapLibre. The built-in "open-street-map"
+# preset resolves to HTTP tile URLs, which the browser blocks as mixed content
+# once the app is served over HTTPS — leaving only the empty gridded placeholder.
+# Defining the style explicitly with HTTPS tiles avoids the mixed-content block.
+OSM_HTTPS_STYLE = {
+    'version': 8,
+    'sources': {
+        'osm': {
+            'type': 'raster',
+            'tiles': ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            'tileSize': 256,
+            'attribution': '© OpenStreetMap contributors',
+        }
+    },
+    'layers': [{'id': 'osm', 'type': 'raster', 'source': 'osm'}],
+}
+
 # ── Data path — same on local machine and server ──────────────────────────────
 # Place companies.xlsx in a folder called "data" next to this script.
 # On local:  C:\Users\fsollit\Desktop\Data\TELL\data\companies.xlsx
@@ -231,17 +249,21 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords, se
         city_geo['_sel'] = 'all'
         cmap = {'all': 'rgba(138,43,226,0.45)'}
 
-    # px.scatter_map uses the new Plotly.js 3.x "map" layout key (not "mapbox")
+    # px.scatter_map uses the new Plotly.js 3.x "map" layout key (not "mapbox").
+    # Use an explicit HTTPS OSM raster style so tiles load over HTTPS.
     map_fig = px.scatter_map(
         city_geo, lat='lat', lon='lon', size='disp',
         color='_sel', color_discrete_map=cmap,
         hover_name='city',
         hover_data={'count': True, 'disp': False, 'lat': False, 'lon': False, '_sel': False},
-        map_style='open-street-map', zoom=6,
+        zoom=6,
         center={'lat': 52.3, 'lon': 5.3},
         size_max=40, title='Number of Companies per City', height=500,
     )
-    map_fig.update_layout(margin={'r': 0, 't': 40, 'l': 0, 'b': 0}, showlegend=False)
+    map_fig.update_layout(
+        map={'style': OSM_HTTPS_STYLE},
+        margin={'r': 0, 't': 40, 'l': 0, 'b': 0}, showlegend=False,
+    )
 
     region_counts = filtered.groupby('region', as_index=False).size().rename(columns={'size': 'count'})
     region_fig    = px.bar(
