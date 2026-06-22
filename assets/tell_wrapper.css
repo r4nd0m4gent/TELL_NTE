@@ -19,11 +19,8 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
 .tell-footer a { color: #54639E; text-decoration: none; }
 .tell-footer a:hover { text-decoration: underline; }
 
-/* ── Responsive: dashboard on tablets ─────────────────────────────────── */
-@media (max-width: 1024px) {
-    /* Filters wrap to two-per-row instead of three */
-    .tell-filter-col { width: 48% !important; }
-}
+/* Filters: keep the three dropdowns on one row */
+.tell-filters { display: flex; flex-wrap: nowrap; align-items: flex-end; }
 
 /* ── Responsive: dashboard on phones ──────────────────────────────────── */
 @media (max-width: 768px) {
@@ -31,7 +28,8 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
     .tell-app { padding: 12px !important; }
 
     /* Filters: stack the dropdowns full width */
-    .tell-filter-col { width: 100% !important; display: block !important; }
+    .tell-filters { flex-direction: column !important; }
+    .tell-filter-col { width: 100% !important; }
 
     /* Stack the flex rows vertically (override inline display:flex) */
     .tell-kpis,

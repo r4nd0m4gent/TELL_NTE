@@ -72,40 +72,28 @@ _card = {
     'textAlign': 'center',
 }
 
+
+def _options(values):
+    return sorted([{'label': str(v), 'value': str(v)} for v in pd.unique(values.dropna())],
+                  key=lambda o: o['label'].lower())
+
+
+def _filter_col(label, dd_id, placeholder, values):
+    return html.Div([
+        html.Label(label),
+        dcc.Dropdown(id=dd_id, options=_options(values), value=None,
+                     placeholder=placeholder, multi=True),
+    ], className='tell-filter-col',
+       style={'flex': '1', 'minWidth': '0', 'padding': '10px'})
+
+
 app.layout = html.Div([
 
-    # ── Filters ───────────────────────────────────────────────────────────────
+    # ── Filters: region / city / company (above the map) ──────────────────────
     html.Div([
-        html.Div([
-            html.Label("Filter by Company:"),
-            dcc.Dropdown(
-                id='company-dropdown',
-                options=sorted([{'label': str(c), 'value': str(c)}
-                                for c in data['trade name'].dropna().unique()],
-                               key=lambda x: x['label']),
-                value=None, placeholder="Search a company...", multi=True,
-            ),
-        ], className='tell-filter-col', style={'width': '32%', 'display': 'inline-block', 'padding': '10px'}),
-        html.Div([
-            html.Label("Filter by Region:"),
-            dcc.Dropdown(
-                id='region-dropdown',
-                options=sorted([{'label': str(r), 'value': str(r)}
-                                for r in data['region'].dropna().unique()],
-                               key=lambda x: x['label']),
-                value=None, placeholder="Select a region...", multi=True,
-            ),
-        ], className='tell-filter-col', style={'width': '32%', 'display': 'inline-block', 'padding': '10px'}),
-        html.Div([
-            html.Label("Filter by Keywords/Tags:"),
-            dcc.Dropdown(
-                id='keywords-dropdown',
-                options=sorted([{'label': str(k), 'value': str(k)}
-                                for k in data['tags'].dropna().unique()],
-                               key=lambda x: x['label']),
-                value=None, placeholder="Select keywords...", multi=True,
-            ),
-        ], className='tell-filter-col', style={'width': '32%', 'display': 'inline-block', 'padding': '10px'}),
+        _filter_col("Filter by Region:",  'region-dropdown',  "Select a region...",  data['region']),
+        _filter_col("Filter by City:",    'city-dropdown',    "Select a city...",    data['city']),
+        _filter_col("Filter by Company:", 'company-dropdown', "Search a company...", data['trade name']),
     ], className='tell-filters', style={'backgroundColor': '#ecf0f1', 'borderRadius': '8px', 'marginBottom': '20px'}),
 
     # ── KPI cards ─────────────────────────────────────────────────────────────
@@ -124,7 +112,12 @@ app.layout = html.Div([
         html.Div([dcc.Graph(id='region-chart', style={'height': '500px'})],
                  style={'flex': '1.5', 'minWidth': 0}),
     ], className='tell-map-row', style={'display': 'flex', 'gap': '16px', 'marginBottom': '20px'}),
-
+    # ── Filters: category / tier / keywords (between map and table) ─────────
+    html.Div([
+        _filter_col("Filter by Category:",       'category-dropdown', "Select a category...", data['Predicted_Category']),
+        _filter_col("Filter by Tier:",           'tier-dropdown',     "Select a tier...",     data['Predicted_Tier']),
+        _filter_col("Filter by Keywords/Tags:",  'keywords-dropdown', "Select keywords...",   data['tags']),
+    ], className='tell-filters', style={'backgroundColor': '#ecf0f1', 'borderRadius': '8px', 'marginBottom': '20px'}),
     # ── Data table ────────────────────────────────────────────────────────────
     dash_table.DataTable(
         id='company-table',
@@ -153,7 +146,7 @@ app.layout = html.Div([
 
     # ── Buttons ───────────────────────────────────────────────────────────────
     html.Div([
-        html.A('✏️ Contribute to the Textile Ecosystem Mapping', href='/contribute/',
+        html.A('✏️ Contribute (add/edit data)', href='/contribute/',
                style={'display': 'inline-block', 'padding': '10px 24px',
                       'backgroundColor': nte_violet, 'color': 'white',
                       'borderRadius': '6px', 'textDecoration': 'none',
@@ -170,21 +163,22 @@ app.layout = html.Div([
 
 
 # ── Filter helper ─────────────────────────────────────────────────────────────
-def filter_data(regions, companies, keywords=None):
+def filter_data(regions, companies, keywords=None, cities=None, categories=None, tiers=None):
     filtered = data.copy()
     if regions:
         filtered = filtered[filtered['region'].isin(regions)]
     if companies:
         filtered = filtered[filtered['trade name'].isin(companies)]
+    if cities:
+        filtered = filtered[filtered['city'].isin(cities)]
+    if categories:
+        filtered = filtered[filtered['Predicted_Category'].isin(categories)]
+    if tiers:
+        filtered = filtered[filtered['Predicted_Tier'].isin(tiers)]
     if keywords:
         pattern  = '|'.join([str(k) for k in keywords])
         filtered = filtered[filtered['tags'].astype(str).str.contains(pattern, case=False, na=False)]
     return filtered
-
-
-def _options(values):
-    return sorted([{'label': str(v), 'value': str(v)} for v in pd.unique(values.dropna())],
-                  key=lambda o: o['label'].lower())
 
 
 # ── Cascading filter options ──────────────────────────────────────────────────
@@ -192,18 +186,27 @@ def _options(values):
 # selections, so after picking one filter the others only show what's available.
 # A dropdown is not constrained by its own value, so the user can still broaden it.
 @app.callback(
-    Output('company-dropdown',  'options'),
     Output('region-dropdown',   'options'),
+    Output('city-dropdown',     'options'),
+    Output('company-dropdown',  'options'),
+    Output('category-dropdown', 'options'),
+    Output('tier-dropdown',     'options'),
     Output('keywords-dropdown', 'options'),
-    Input('company-dropdown',   'value'),
     Input('region-dropdown',    'value'),
+    Input('city-dropdown',      'value'),
+    Input('company-dropdown',   'value'),
+    Input('category-dropdown',  'value'),
+    Input('tier-dropdown',      'value'),
     Input('keywords-dropdown',  'value'),
 )
-def update_filter_options(sel_companies, sel_regions, sel_keywords):
-    company_opts = _options(filter_data(sel_regions, None, sel_keywords)['trade name'])
-    region_opts  = _options(filter_data(None, sel_companies, sel_keywords)['region'])
-    keyword_opts = _options(filter_data(sel_regions, sel_companies, None)['tags'])
-    return company_opts, region_opts, keyword_opts
+def update_filter_options(regions, cities, companies, categories, tiers, keywords):
+    region_opts   = _options(filter_data(None,    companies, keywords, cities, categories, tiers)['region'])
+    city_opts     = _options(filter_data(regions, companies, keywords, None,   categories, tiers)['city'])
+    company_opts  = _options(filter_data(regions, None,      keywords, cities, categories, tiers)['trade name'])
+    category_opts = _options(filter_data(regions, companies, keywords, cities, None,       tiers)['Predicted_Category'])
+    tier_opts     = _options(filter_data(regions, companies, keywords, cities, categories, None )['Predicted_Tier'])
+    keyword_opts  = _options(filter_data(regions, companies, None,     cities, categories, tiers)['tags'])
+    return region_opts, city_opts, company_opts, category_opts, tier_opts, keyword_opts
 
 
 # ── City click callback ───────────────────────────────────────────────────────
@@ -253,10 +256,15 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
     Input('region-dropdown',    'value'),
     Input('company-dropdown',   'value'),
     Input('keywords-dropdown',  'value'),
+    Input('city-dropdown',      'value'),
+    Input('category-dropdown',  'value'),
+    Input('tier-dropdown',      'value'),
     Input('selected-city',      'data'),
 )
-def update_dashboard(selected_regions, selected_companies, selected_keywords, selected_city):
-    filtered = filter_data(selected_regions, selected_companies, selected_keywords)
+def update_dashboard(selected_regions, selected_companies, selected_keywords,
+                     selected_cities, selected_categories, selected_tiers, selected_city):
+    filtered = filter_data(selected_regions, selected_companies, selected_keywords,
+                           selected_cities, selected_categories, selected_tiers)
     if selected_city:
         filtered = filtered[filtered['city'] == selected_city]
 
