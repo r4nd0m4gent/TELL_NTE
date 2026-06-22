@@ -28,12 +28,19 @@ OSM_HTTPS_STYLE = {
     'layers': [{'id': 'osm', 'type': 'raster', 'source': 'osm'}],
 }
 
-# ── Data path — same on local machine and server ──────────────────────────────
-# Place companies.xlsx in a folder called "data" next to this script.
-# On local:  C:\Users\fsollit\Desktop\Data\TELL\data\companies.xlsx
-# On server: /home/tell/app/data/companies.xlsx
-BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-EXCEL_PATH = os.path.join(BASE_DIR, 'data', 'companies.xlsx')
+# ── Data path — works on both the local machine and the server ────────────────
+# Resolution order (first existing path wins):
+#   1. COMPANIES_XLSX environment variable (explicit override)
+#   2. ./data/companies.xlsx next to this script (server / repo layout)
+#   3. local dev machine location
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_CANDIDATE_PATHS = [
+    os.environ.get('COMPANIES_XLSX'),
+    os.path.join(BASE_DIR, 'data', 'companies.xlsx'),          # server: /home/tell/app/data/companies.xlsx
+    r'C:\Users\fsollit\Desktop\Data\TELL\companies.xlsx',      # local dev machine
+]
+EXCEL_PATH = next((p for p in _CANDIDATE_PATHS if p and os.path.exists(p)),
+                  _CANDIDATE_PATHS[1])
 
 def load_companies():
     df = pd.read_excel(EXCEL_PATH)

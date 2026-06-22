@@ -124,7 +124,12 @@ def get_modal():
             }),
 
             # ── Results area ─────────────────────────────────────────────────
-            html.Div(id='classif-result-area', style={'marginTop': '14px'}),
+            dcc.Loading(
+                id='classif-loading',
+                type='dot',
+                color=NTE_VIOLET,
+                children=html.Div(id='classif-result-area', style={'marginTop': '14px'}),
+            ),
 
             # ── Run button ───────────────────────────────────────────────────
             html.Div([
@@ -308,6 +313,7 @@ def register_callbacks(app, filter_data_fn):
             counts[assigned] = counts.get(assigned, 0) + 1
             per_row_data.append({
                 'Company Name':    row.get('trade name', ''),
+                'Tags':            row.get('tags', ''),
                 'Predicted Class': assigned,
                 'Confidence':      round(result.score, 3),
             })
@@ -354,7 +360,7 @@ def register_callbacks(app, filter_data_fn):
         if not store_data:
             raise PreventUpdate
         df = pd.DataFrame(store_data,
-                          columns=['Company Name', 'Predicted Class', 'Confidence'])
+                          columns=['Company Name', 'Tags', 'Predicted Class', 'Confidence'])
         return dcc.send_data_frame(
             df.to_excel, 'classification_results.xlsx', index=False, sheet_name='Results'
         )
