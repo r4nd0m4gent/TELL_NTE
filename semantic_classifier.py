@@ -61,6 +61,7 @@ class SemanticClassifier:
         model_name: str = "all-MiniLM-L6-v2",
         confidence_threshold: float = 0.35,
         weights: dict[str, float] | None = None,
+        model: SentenceTransformer | None = None,
     ):
         """
         Args:
@@ -69,9 +70,15 @@ class SemanticClassifier:
                                    instead of "unknown".
             weights:               Per-signal-type weights for centroid averaging.
                                    Defaults: name=1.0, keyword=1.5, prototype=2.0
+            model:                 An already-loaded SentenceTransformer to reuse.
+                                   When given, *model_name* is ignored and no model
+                                   is loaded (avoids reloading on every request).
         """
-        print(f"Loading embedding model '{model_name}'...")
-        self.model = SentenceTransformer(model_name)
+        if model is not None:
+            self.model = model
+        else:
+            print(f"Loading embedding model '{model_name}'...")
+            self.model = SentenceTransformer(model_name)
         self.threshold = confidence_threshold
         self.weights = weights or {"name": 1.0, "keyword": 1.5, "prototype": 2.0}
 

@@ -22,7 +22,32 @@ import pandas as pd
 # ── Brand colours (keep in sync with textile_companies_NL.py) ─────────────────
 NTE_VIOLET   = '#513773'
 NTE_DARKBLUE = '#54639E'
+# ── Semantic model cache ──────────────────────────────────────────────────
+# The sentence-embedding model is expensive to load, so keep a single instance
+# for the lifetime of the process and only rebuild the (cheap) class centroids
+# on each run.
+_EMBED_MODEL = None
 
+
+def _build_semantic_classifier(classes):
+    """Return a ``SemanticClassifier`` for *classes* (list of ``(name, [keywords])``).
+
+    ``confidence_threshold=0`` makes every company fall into its closest class,
+    so the whole dataset is classified (no "unknown").
+    """
+    global _EMBED_MODEL
+    from semantic_classifier import SemanticClassifier, ClassDefinition
+
+    if _EMBED_MODEL is None:
+        clf = SemanticClassifier(confidence_threshold=0.0)
+        _EMBED_MODEL = clf.model
+    else:
+        clf = SemanticClassifier(confidence_threshold=0.0, model=_EMBED_MODEL)
+
+    clf.add_classes([ClassDefinition(name=name, keywords=keywords)
+                     for name, keywords in classes])
+    clf.build()
+    return clf
 # ── Modal style helpers ───────────────────────────────────────────────────────
 _MODAL_HIDDEN = {
     'display': 'none', 'position': 'fixed', 'inset': '0',
@@ -74,8 +99,9 @@ def get_modal():
                       'alignItems': 'center', 'marginBottom': '12px'}),
 
             html.P(
-                "Define classes and keywords (comma-separated). "
-                "Each company is matched against its trade name and tags.",
+                "Define classes with example keywords (comma-separated). "
+                "Every company is assigned to its closest class using semantic "
+                "(sentence-embedding) similarity on its trade name and tags.",
                 style={'color': '#7f8c8d', 'fontSize': '13px',
                        'marginBottom': '16px', 'marginTop': '0'},
             ),
@@ -254,35 +280,36 @@ def register_callbacks(app, filter_data_fn):
     )
     def run_classification(_, names, keywords_list, selected_regions, selected_companies):
         classes = [
-            (name, [kw.strip().lower() for kw in kws.split(',') if kw.strip()])
+            (name.strip(), [kw.strip() for kw in (kws or '').split(',') if kw.strip()])
             for name, kws in zip(names or [], keywords_list or [])
-            if name and kws
+            if name and name.strip()
         ]
         if not classes:
-            return (html.P("⚠ Define at least one class with keywords.",
+            return (html.P("⚠ Define at least one class (a name, plus optional keywords).",
                            style={'color': '#e67e22', 'fontSize': '13px'}), None)
 
         filtered = filter_data_fn(selected_regions, selected_companies)
-        counts = {name: 0 for name, _ in classes}
-        counts['Unclassified'] = 0
-        per_row_data = []
+        texts = [
+            f"{row.get('trade name', '') or ''} {row.get('tags', '') or ''}".strip()
+            for _, row in filtered.iterrows()
+        ]
 
-        for _, row in filtered.iterrows():
-            text = (f"{row.get('trade name', '') or ''} "
-                    f"{row.get('tags', '') or ''}").lower()
-            assigned = 'Unclassified'
-            matched_kws = ''
-            for class_name, kws in classes:
-                hitting = [kw for kw in kws if kw in text]
-                if hitting:
-                    assigned = class_name
-                    matched_kws = ', '.join(hitting)
-                    break
-            counts[assigned] += 1
+        try:
+            clf = _build_semantic_classifier(classes)
+            results = clf.classify_batch(texts) if texts else []
+        except Exception as exc:  # model download / embedding failure
+            return (html.P(f"⚠ Semantic model unavailable: {exc}",
+                           style={'color': '#c0392b', 'fontSize': '13px'}), None)
+
+        counts = {name: 0 for name, _ in classes}
+        per_row_data = []
+        for (_, row), result in zip(filtered.iterrows(), results):
+            assigned = result.label  # threshold 0 → always the closest class
+            counts[assigned] = counts.get(assigned, 0) + 1
             per_row_data.append({
                 'Company Name':    row.get('trade name', ''),
-                'Keywords Matched': matched_kws,
                 'Predicted Class': assigned,
+                'Confidence':      round(result.score, 3),
             })
 
         total = len(filtered)
@@ -327,7 +354,7 @@ def register_callbacks(app, filter_data_fn):
         if not store_data:
             raise PreventUpdate
         df = pd.DataFrame(store_data,
-                          columns=['Company Name', 'Keywords Matched', 'Predicted Class'])
+                          columns=['Company Name', 'Predicted Class', 'Confidence'])
         return dcc.send_data_frame(
             df.to_excel, 'classification_results.xlsx', index=False, sheet_name='Results'
         )

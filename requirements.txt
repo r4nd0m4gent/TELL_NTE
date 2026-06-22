@@ -8,3 +8,7 @@ Werkzeug==3.1.8
 numpy==2.4.6
 gunicorn==23.0.0
 psycopg2-binary==2.9.10
+
+# Semantic classification (semantic_classifier.py) — heavy: pulls in torch.
+scikit-learn
+sentence-transformers
