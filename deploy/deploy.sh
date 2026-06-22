@@ -37,14 +37,28 @@ sudo -u ${APP_USER} "${APP_DIR}/venv/bin/pip" install -r "${APP_DIR}/requirement
 mkdir -p "${DATA_DIR}"
 chown ${APP_USER}:${APP_USER} "${DATA_DIR}"
 
-# ── 6. systemd services ───────────────────────────────────────────────────────
-cp "${APP_DIR}/deploy/tell-dashboard.service" /etc/systemd/system/
-cp "${APP_DIR}/deploy/tell-form.service"      /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable  tell-dashboard tell-form
-systemctl restart tell-dashboard tell-form
+# ── 6. Swap (1GB droplets OOM-kill workers without it) ────────────────────────
+if ! swapon --show | grep -q '/swapfile'; then
+    dd if=/dev/zero of=/swapfile bs=1M count=2048
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
 
-# ── 7. nginx ──────────────────────────────────────────────────────────────────
+# ── 7. systemd services ───────────────────────────────────────────────────────
+# tell_nte.service runs the dashboard (gunicorn --config deploy/gunicorn_conf.py).
+cp "${APP_DIR}/deploy/tell_nte.service"  /etc/systemd/system/
+cp "${APP_DIR}/deploy/tell-form.service" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable  tell_nte tell-form
+systemctl restart tell_nte tell-form
+
+# ── 8. Landing page (Nginx serves it from ${APP_DIR}/tell_embed.html) ─────────
+cp "${APP_DIR}/deploy/tell_embed.html" "${APP_DIR}/tell_embed.html"
+chown ${APP_USER}:${APP_USER} "${APP_DIR}/tell_embed.html"
+
+# ── 9. nginx ──────────────────────────────────────────────────────────────────
 cp "${APP_DIR}/deploy/nginx_tell.conf" /etc/nginx/sites-available/tell
 ln -sf /etc/nginx/sites-available/tell /etc/nginx/sites-enabled/tell
 rm -f /etc/nginx/sites-enabled/default
