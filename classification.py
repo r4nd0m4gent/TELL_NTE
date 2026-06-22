@@ -27,7 +27,8 @@ NTE_DARKBLUE = '#54639E'
 _MODAL_HIDDEN = {
     'display': 'none', 'position': 'fixed', 'inset': '0',
     'backgroundColor': 'rgba(0,0,0,0.45)', 'zIndex': '1000',
-    'justifyContent': 'center', 'alignItems': 'center',
+    'justifyContent': 'center', 'alignItems': 'flex-start',
+    'paddingTop': '24px', 'overflowY': 'auto',
 }
 _MODAL_SHOWN = {**_MODAL_HIDDEN, 'display': 'flex'}
 
@@ -122,6 +123,8 @@ def get_stores():
         dcc.Store(id='classif-rows-store', data=[{'name': '', 'keywords': ''}]),
         dcc.Store(id='classif-result-store', data=None),
         dcc.Download(id='classif-download'),
+        # Dummy target for the clientside scroll callback (kept out of view).
+        html.Div(id='classif-scroll-anchor', style={'display': 'none'}),
     ]
 
 
@@ -148,6 +151,27 @@ def register_callbacks(app, filter_data_fn):
     )
     def toggle_classif_modal(open_n, close_n):
         return _MODAL_SHOWN if ctx.triggered_id == 'open-classif-btn' else _MODAL_HIDDEN
+
+    # ── Bring the modal into view when it opens ───────────────────────────────
+    # The dashboard is usually embedded in an iframe; a position:fixed modal
+    # lands at the centre of the tall iframe, which can be far from the button.
+    # Ask the host page to scroll the iframe into view, and scroll the overlay
+    # into view for the standalone (non-embedded) case.
+    app.clientside_callback(
+        """
+        function(openN) {
+            if (openN) {
+                try { window.parent.postMessage({tellFocus: true}, '*'); } catch (e) {}
+                var el = document.getElementById('classif-modal-overlay');
+                if (el) { el.scrollIntoView({behavior: 'smooth', block: 'start'}); }
+            }
+            return '';
+        }
+        """,
+        Output('classif-scroll-anchor', 'children'),
+        Input('open-classif-btn', 'n_clicks'),
+        prevent_initial_call=True,
+    )
 
     # ── Add a class row ───────────────────────────────────────────────────────
     @app.callback(

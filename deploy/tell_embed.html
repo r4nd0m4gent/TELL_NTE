@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Textile Ecosystem Living Lab – NewTexEco</title>
+  <title>Textile Ecosystem Living Lab (TELL) – NewTexEco</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -58,10 +58,11 @@
   <div class="intro">
     <h1>Textile Ecosystem Living Lab</h1>
     <p>
-      The TCLF sector in the Netherlands includes more than 10,000 companies.
-      The Textile Ecosystem Living Lab gives visibility to all companies across
-      the value chain, from fibre producers to recyclers, showing their geographic
-      distribution and specializations through the use of tags/keywords.
+The TELL aims to improve the visibility of the companies operating in the Textile, Clothing, 
+Leather, and Footwear (TCLF) sector by showing geographic distribution and market specializations
+through keywords (or tags). In this version, you can use the tool as a "search engine" to explore 
+the data we gathered for more than 11,000 active companies across the Netherlands using a dataset 
+from Modint-KvK (2021). 
     </p>
   </div>
 
@@ -79,6 +80,25 @@
     &nbsp;·&nbsp;
     Textile Ecosystem Living Lab &copy; 2026 NewTexEco
   </footer>
+
+  <script>
+    // Keep the embedded dashboard's pop-ups/navigation in view by scrolling the
+    // iframe into the parent viewport when it asks (modal) or navigates (Contribute).
+    (function () {
+      var f = document.querySelector('.dashboard-wrap iframe');
+      if (!f) return;
+      var firstLoad = true;
+      f.addEventListener('load', function () {
+        if (firstLoad) { firstLoad = false; return; }   // ignore the initial load
+        f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      window.addEventListener('message', function (e) {
+        if (e && e.data && e.data.tellFocus) {
+          f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    })();
+  </script>
 
 </body>
 </html>
