@@ -3,20 +3,81 @@ import json
 from datetime import datetime
 
 import dash
-from dash import dcc, html, Input, Output, State
+from dash import dcc, html, Input, Output, State, ALL
 import pandas as pd
 
-# ── Load company names from Excel for the dropdown ───────────────────────────
+# ── Data sources ─────────────────────────────────────────────────────────────
+# Company names are loaded from the MySQL database (primary). If the database
+# is unavailable, the app falls back to reading the local Excel file.
 EXCEL_PATH = os.environ.get('EXCEL_PATH', os.path.join(os.path.dirname(__file__), 'data', 'companies.xlsx'))
 CONTRIBUTIONS_PATH = os.path.join(os.path.dirname(__file__), 'data', 'contributions.json')
+ENV_PATH = os.path.join(os.path.dirname(__file__), 'db', 'mysql', '.env')
 
-def get_company_names():
+
+def _get_engine():
+    """Build a SQLAlchemy engine from the db/mysql/.env config.
+
+    Returns None if the configuration or required packages are unavailable.
+    """
+    try:
+        from sqlalchemy import create_engine
+        from dotenv import load_dotenv
+
+        load_dotenv(ENV_PATH)
+        user = os.getenv('DB_USER')
+        password = os.getenv('DB_PASSWORD')
+        host = os.getenv('DB_HOST')
+        name = os.getenv('DB_NAME')
+        port = os.getenv('DB_PORT', '25060')
+        ca_cert = os.getenv('DB_CA_CERT')
+        if not all([user, password, host, name]):
+            return None
+        connect_args = {'ssl': {'ca': ca_cert}} if ca_cert else {}
+        return create_engine(
+            f"mysql+pymysql://{user}:{password}@{host}:{port}/{name}",
+            connect_args=connect_args,
+            pool_pre_ping=True,
+        )
+    except Exception:
+        return None
+
+
+def get_company_names_db():
+    """Load distinct company names from the organizations table."""
+    from sqlalchemy import text
+
+    engine = _get_engine()
+    if engine is None:
+        return None
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT DISTINCT trade_name FROM organizations "
+                     "WHERE trade_name IS NOT NULL ORDER BY trade_name")
+            ).fetchall()
+        names = [r[0] for r in rows if r[0]]
+        return [{'label': n, 'value': n} for n in names] if names else None
+    except Exception:
+        return None
+
+
+def get_company_names_excel():
+    """Fallback: load company names from the local Excel file."""
     try:
         df = pd.read_excel(EXCEL_PATH)
-        names = sorted(df['trade name'].dropna().unique().tolist())
+        col = 'trade_name' if 'trade_name' in df.columns else 'trade name'
+        names = sorted(df[col].dropna().unique().tolist())
         return [{'label': n, 'value': n} for n in names]
     except Exception:
         return []
+
+
+def get_company_names():
+    """Company names from the database, falling back to Excel."""
+    names = get_company_names_db()
+    if names:
+        return names
+    return get_company_names_excel()
 
 def save_contribution(kind, payload):
     """Append contribution to a local JSON file."""
@@ -30,6 +91,129 @@ def save_contribution(kind, payload):
     with open(CONTRIBUTIONS_PATH, 'w') as f:
         json.dump(existing, f, indent=2)
 
+
+# ── Persistence: store submissions in the database ───────────────────────────
+# Fields the user can flag for editing in the "Suggest edit" flow.
+_editable_fields = [
+    {'label': 'Company name',         'value': 'trade_name'},
+    {'label': 'City',                 'value': 'city'},
+    {'label': 'Postcode',             'value': 'postcode'},
+    {'label': 'Region',               'value': 'region'},
+    {'label': 'Website',              'value': 'website'},
+    {'label': 'Number of employees',  'value': 'employees'},
+    {'label': 'Value chain tier(s)',  'value': 'tier'},
+    {'label': 'Category',             'value': 'category'},
+    {'label': 'Description / Tags',   'value': 'tags'},
+    {'label': 'Status (active/inactive)', 'value': 'status'},
+]
+
+_DDL = {
+    'additions': (
+        "CREATE TABLE IF NOT EXISTS additions ("
+        " id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,"
+        " trade_name VARCHAR(255),"
+        " city VARCHAR(255) NOT NULL,"
+        " postcode VARCHAR(45),"
+        " website VARCHAR(512),"
+        " employees VARCHAR(45),"
+        " value_tier TEXT NOT NULL,"
+        " given_tags TEXT NOT NULL,"
+        " add_notes TEXT"
+        ")"
+    ),
+    'edits': (
+        "CREATE TABLE IF NOT EXISTS edits ("
+        " id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,"
+        " trade_name VARCHAR(255) NOT NULL,"
+        " suggestion JSON NOT NULL"
+        ")"
+    ),
+}
+
+# Idempotent upgrades so pre-existing tables can hold the form's inputs
+# (auto-increment id + text columns wide enough for the free-text fields).
+_MIGRATIONS = [
+    "ALTER TABLE additions MODIFY id INT NOT NULL AUTO_INCREMENT",
+    "ALTER TABLE additions MODIFY website VARCHAR(512)",
+    "ALTER TABLE additions MODIFY value_tier TEXT NOT NULL",
+    "ALTER TABLE additions MODIFY given_tags TEXT NOT NULL",
+    "ALTER TABLE additions MODIFY add_notes TEXT",
+    "ALTER TABLE edits MODIFY id INT NOT NULL AUTO_INCREMENT",
+]
+
+_schema_ready = False
+
+
+def _ensure_schema(conn):
+    """Create the tables if missing and widen columns (runs once per process)."""
+    from sqlalchemy import text
+
+    global _schema_ready
+    if _schema_ready:
+        return
+    for ddl in _DDL.values():
+        conn.execute(text(ddl))
+    for stmt in _MIGRATIONS:
+        try:
+            conn.execute(text(stmt))
+        except Exception:
+            pass  # column already in the desired shape
+    _schema_ready = True
+
+
+def save_to_db(kind, payload):
+    """Persist a submission to the `additions` or `edits` table.
+
+    Returns True on success, False if the database is unavailable or the
+    write fails (callers should fall back to the local JSON file).
+    """
+    from sqlalchemy import text
+
+    engine = _get_engine()
+    if engine is None:
+        return False
+    try:
+        with engine.begin() as conn:
+            _ensure_schema(conn)
+            if kind == 'add':
+                conn.execute(
+                    text(
+                        "INSERT INTO additions"
+                        " (trade_name, city, postcode, website, employees, value_tier, given_tags, add_notes)"
+                        " VALUES (:trade_name, :city, :postcode, :website, :employees, :value_tier, :given_tags, :add_notes)"
+                    ),
+                    {
+                        'trade_name': payload.get('trade_name'),
+                        'city': payload.get('city'),
+                        'postcode': payload.get('postcode'),
+                        'website': payload.get('website'),
+                        'employees': str(payload['employees']) if payload.get('employees') is not None else None,
+                        'value_tier': json.dumps(payload.get('tiers') or []),
+                        'given_tags': payload.get('tags') or '',
+                        'add_notes': payload.get('notes'),
+                    },
+                )
+            else:
+                conn.execute(
+                    text(
+                        "INSERT INTO edits (trade_name, suggestion)"
+                        " VALUES (:trade_name, :suggestion)"
+                    ),
+                    {
+                        'trade_name': payload.get('trade_name'),
+                        'suggestion': json.dumps(payload.get('changes') or {}),
+                    },
+                )
+        return True
+    except Exception:
+        return False
+
+
+def persist_contribution(kind, payload):
+    """Store a submission in the DB, falling back to the local JSON file."""
+    if not save_to_db(kind, payload):
+        save_contribution(kind, payload)
+
 # ── App ───────────────────────────────────────────────────────────────────────
 _company_options = get_company_names()
 
@@ -42,6 +226,7 @@ app = dash.Dash(__name__,
 server = app.server
 
 _tier_options = [
+    {'label': 'Fiber producer', 'value': 'fibre_textile'},
     {'label': 'Yarn & Textile producer (semi-finished products)', 'value': 'yarn_textile'},
     {'label': 'Garment production (finished product)',            'value': 'garment'},
     {'label': 'Wholesale',                                        'value': 'wholesale'},
@@ -139,20 +324,12 @@ app.layout = html.Div(style={'backgroundColor': '#f4f3f8', 'minHeight': '100vh'}
                              searchable=True, clearable=True, style={'fontSize': '14px'}),
             ]),
             html.Div(style=_field_wrap, children=[
-                _lbl('What needs to be changed? *'),
-                dcc.Textarea(id='edit-change', placeholder='Describe the current incorrect information…',
-                             style={**_input_style, 'height': '80px', 'resize': 'vertical'}),
+                _lbl('Which field(s) need changing? *'),
+                dcc.Dropdown(id='edit-fields', options=_editable_fields, multi=True,
+                             placeholder='Select one or more fields…', searchable=True,
+                             style={'fontSize': '14px'}),
             ]),
-            html.Div(style=_field_wrap, children=[
-                _lbl('Suggested correction *'),
-                dcc.Textarea(id='edit-correction', placeholder='Provide the correct information…',
-                             style={**_input_style, 'height': '80px', 'resize': 'vertical'}),
-            ]),
-            html.Div(style=_field_wrap, children=[
-                _lbl('Source / reference (optional)'),
-                dcc.Input(id='edit-source', type='url', placeholder='https://source.example.com',
-                          debounce=True, style=_input_style),
-            ]),
+            html.Div(id='edit-fields-inputs'),
         ]),
         html.Div(id='submit-wrapper', style={'display': 'none'}, children=[
             html.Button('Submit contribution', id='submit-btn', n_clicks=0, style=_btn_style),
@@ -183,6 +360,28 @@ def toggle_tier_other(tiers):
         return {'display': 'block', 'marginTop': '10px'}
     return {'display': 'none'}
 
+
+@app.callback(
+    Output('edit-fields-inputs', 'children'),
+    Input('edit-fields', 'value'),
+)
+def render_edit_fields(selected_fields):
+    """Render one input per selected field for the suggested new value."""
+    if not selected_fields:
+        return []
+    label_map = {o['value']: o['label'] for o in _editable_fields}
+    children = []
+    for field in selected_fields:
+        children.append(html.Div(style=_field_wrap, children=[
+            _lbl(f"New value for “{label_map.get(field, field)}” *"),
+            dcc.Input(
+                id={'type': 'edit-field-input', 'field': field},
+                type='text', placeholder='Suggested value…',
+                debounce=True, style=_input_style,
+            ),
+        ]))
+    return children
+
 @app.callback(
     Output('confirmation', 'children'),
     Output('confirmation', 'style'),
@@ -190,33 +389,60 @@ def toggle_tier_other(tiers):
     State('contribution-type', 'value'),
     State('add-name',        'value'),
     State('add-city',        'value'),
+    State('add-postcode',    'value'),
+    State('add-website',     'value'),
+    State('add-employees',   'value'),
     State('add-tiers',       'value'),
+    State('add-tier-other',  'value'),
     State('add-category',    'value'),
+    State('add-notes',       'value'),
     State('edit-name',       'value'),
-    State('edit-change',     'value'),
-    State('edit-correction', 'value'),
+    State({'type': 'edit-field-input', 'field': ALL}, 'value'),
+    State({'type': 'edit-field-input', 'field': ALL}, 'id'),
     prevent_initial_call=True,
 )
-def on_submit(n_clicks, choice, add_name, add_city, add_tiers, add_category,
-              edit_name, edit_change, edit_correction):
+def on_submit(n_clicks, choice, add_name, add_city, add_postcode, add_website,
+              add_employees, add_tiers, add_tier_other, add_category, add_notes,
+              edit_name, edit_values, edit_ids):
     _style_base = {'marginTop': '20px', 'fontWeight': '600', 'fontSize': '14px'}
+
+    # Map each selected edit field to its suggested value (key = field).
+    changes = {}
+    for value, ident in zip(edit_values or [], edit_ids or []):
+        if value not in (None, ''):
+            changes[ident['field']] = value
+
     if choice == 'add':
         required = [(add_name, 'Company name'), (add_city, 'City'),
                     (add_tiers, 'Value chain tier(s)'), (add_category, 'Description / Tags')]
     else:
-        required = [(edit_name, 'Company name'), (edit_change, 'What needs to be changed?'),
-                    (edit_correction, 'Suggested correction')]
+        required = [(edit_name, 'Company name'),
+                    (changes, 'At least one field with a suggested value')]
     missing = [lbl for val, lbl in required if not val]
     if missing:
         return (f'Please fill in the required field(s): {", ".join(missing)}.',
                 {**_style_base, 'color': '#c0392b'})
+
     try:
         if choice == 'add':
-            save_contribution('add', {'trade_name': add_name, 'city': add_city,
-                                      'tiers': add_tiers, 'tags': add_category})
+            tiers = list(add_tiers or [])
+            if 'other' in tiers and add_tier_other:
+                tiers = [add_tier_other if t == 'other' else t for t in tiers]
+            persist_contribution('add', {
+                'trade_name': add_name,
+                'city': add_city,
+                'postcode': add_postcode,
+                'website': add_website,
+                'employees': int(add_employees) if add_employees not in (None, '') else None,
+                'tiers': tiers,
+                'tags': add_category,
+                'notes': add_notes,
+            })
         else:
-            save_contribution('edit', {'trade_name': edit_name, 'what_change': edit_change,
-                                       'correction': edit_correction})
+            persist_contribution('edit', {
+                'trade_name': edit_name,
+                'changes': changes,
+            })
     except Exception as exc:
         return (f'Submission failed: {exc}', {**_style_base, 'color': '#e67e22'})
     label = 'new company info' if choice == 'add' else 'an edit suggestion'

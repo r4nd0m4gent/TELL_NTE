@@ -1,0 +1,22 @@
+# Secrets & local credentials — never commit
+.env
+.env.*
+*.crt
+*.pem
+ca-certificate*
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+
+# Local data files
+data/
+*.xlsx
+*.xls
+
+# Local contribution fallback store
+contributions*.json
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db

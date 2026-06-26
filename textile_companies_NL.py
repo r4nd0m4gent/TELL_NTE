@@ -42,14 +42,89 @@ _CANDIDATE_PATHS = [
 EXCEL_PATH = next((p for p in _CANDIDATE_PATHS if p and os.path.exists(p)),
                   _CANDIDATE_PATHS[1])
 
-def load_companies():
+
+# ── Data query from DB ────────────────────────────────────────────────────────
+# Columns are aliased to match the names the dashboard expects (same as the
+# Excel layout): `trade_name`, `value`, `Predicted_Category`, `Predicted_Tier`.
+# Coordinates come from the geographies table (one point per city).
+ENV_PATH = os.path.join(BASE_DIR, 'db', 'mysql', '.env')
+
+query_org = """
+    SELECT
+        o.id,
+        o.trade_name,
+        o.city,
+        g.region,
+        g.latitude,
+        g.longitude,
+        o.status,
+        o.website,
+        o.employees,
+        o.surface,
+        o.year_start,
+        t.tags,
+        t.category    AS Predicted_Category,
+        t.tier        AS Predicted_Tier
+    FROM organizations AS o
+    JOIN (
+        SELECT city, MAX(region) AS region,
+               AVG(latitude) AS latitude, AVG(longitude) AS longitude
+        FROM geographies GROUP BY city
+    ) AS g ON g.city = o.city
+    JOIN tags AS t ON t.id = o.id
+    WHERE o.status = 'Active'
+"""
+
+
+def _get_engine():
+    """Build a SQLAlchemy engine from db/mysql/.env, or None if unavailable."""
+    try:
+        from sqlalchemy import create_engine
+        from dotenv import load_dotenv
+
+        load_dotenv(ENV_PATH)
+        user = os.getenv('DB_USER')
+        password = os.getenv('DB_PASSWORD')
+        host = os.getenv('DB_HOST')
+        name = os.getenv('DB_NAME')
+        port = os.getenv('DB_PORT', '25060')
+        ca_cert = os.getenv('DB_CA_CERT')
+        if not all([user, password, host, name]):
+            return None
+        connect_args = {'ssl': {'ca': ca_cert}} if ca_cert else {}
+        return create_engine(
+            f"mysql+pymysql://{user}:{password}@{host}:{port}/{name}",
+            connect_args=connect_args,
+            pool_pre_ping=True,
+        )
+    except Exception:
+        return None
+
+
+def load_companies_db():
+    """Primary source: load active companies from the MySQL database."""
+    engine = _get_engine()
+    if engine is None:
+        return None
+    try:
+        df = pd.read_sql(query_org, engine)
+        if df.empty:
+            return None
+        df['employees'] = pd.to_numeric(df['employees'], errors='coerce').fillna(0).astype(int)
+        return df
+    except Exception:
+        return None
+
+
+def load_companies_excel():
+    """Fallback source: load companies from the local Excel file."""
     df = pd.read_excel(EXCEL_PATH)
     df = df.rename(columns={
         'visiting address_city':     'city',
         'visiting address_postcode': 'postcode',
-        'number_employees':          'value',
+        'number_employees':          'employees',
     })
-    df['value'] = pd.to_numeric(df['value'], errors='coerce').fillna(0).astype(int)
+    df['employees'] = pd.to_numeric(df['employees'], errors='coerce').fillna(0).astype(int)
     if 'latitude' not in df.columns or 'longitude' not in df.columns:
         nomi      = pgeocode.Nominatim('nl')
         # Dutch postcodes look like "1011 AB"; pgeocode's NL dataset is keyed by
@@ -59,6 +134,14 @@ def load_companies():
         df['latitude']  = geo['latitude'].values
         df['longitude'] = geo['longitude'].values
     return df
+
+
+def load_companies():
+    """Load companies from the database, falling back to Excel."""
+    df = load_companies_db()
+    if df is not None:
+        return df
+    return load_companies_excel()
 
 data = load_companies()
 
@@ -100,7 +183,7 @@ app.layout = html.Div([
     html.Div([
         _filter_col("Filter by Region:",  'region-dropdown',  "Select a region...",  data['region']),
         _filter_col("Filter by City:",    'city-dropdown',    "Select a city...",    data['city']),
-        _filter_col("Filter by Company:", 'company-dropdown', "Search a company...", data['trade name']),
+        _filter_col("Filter by Company:", 'company-dropdown', "Search a company...", data['trade_name']),
     ], className='tell-filters', style={'backgroundColor': '#ecf0f1', 'borderRadius': '8px', 'marginBottom': '20px'}),
 
     # ── KPI cards ─────────────────────────────────────────────────────────────
@@ -129,11 +212,11 @@ app.layout = html.Div([
     dash_table.DataTable(
         id='company-table',
         columns=[
-            {'name': 'Company',            'id': 'trade name'},
+            {'name': 'Company',            'id': 'trade_name'},
             {'name': 'Predicted Category', 'id': 'Predicted_Category'},
             {'name': 'Predicted Tier',     'id': 'Predicted_Tier'},
             {'name': 'Tags',               'id': 'tags'},
-            {'name': '# Employees',        'id': 'value'},
+            {'name': '# Employees',        'id': 'employees'},
         ],
         page_size=10, sort_action='native', filter_action='none',
         style_table={'overflowX': 'auto', 'overflowY': 'auto', 'maxHeight': '380px', 'marginTop': '20px'},
@@ -175,7 +258,7 @@ def filter_data(regions, companies, keywords=None, cities=None, categories=None,
     if regions:
         filtered = filtered[filtered['region'].isin(regions)]
     if companies:
-        filtered = filtered[filtered['trade name'].isin(companies)]
+        filtered = filtered[filtered['trade_name'].isin(companies)]
     if cities:
         filtered = filtered[filtered['city'].isin(cities)]
     if categories:
@@ -209,7 +292,7 @@ def filter_data(regions, companies, keywords=None, cities=None, categories=None,
 def update_filter_options(regions, cities, companies, categories, tiers, keywords):
     region_opts   = _options(filter_data(None,    companies, keywords, cities, categories, tiers)['region'])
     city_opts     = _options(filter_data(regions, companies, keywords, None,   categories, tiers)['city'])
-    company_opts  = _options(filter_data(regions, None,      keywords, cities, categories, tiers)['trade name'])
+    company_opts  = _options(filter_data(regions, None,      keywords, cities, categories, tiers)['trade_name'])
     category_opts = _options(filter_data(regions, companies, keywords, cities, None,       tiers)['Predicted_Category'])
     tier_opts     = _options(filter_data(regions, companies, keywords, cities, categories, None )['Predicted_Tier'])
     keyword_opts  = _options(filter_data(regions, companies, None,     cities, categories, tiers)['tags'])
@@ -239,9 +322,9 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
         return None if clicked == current_city else clicked
     if triggered == 'company-table' and active_cell and table_data:
         row          = table_data[active_cell['row']]
-        company_name = row.get('trade name')
+        company_name = row.get('trade_name')
         if company_name:
-            match = data[data['trade name'] == company_name]
+            match = data[data['trade_name'] == company_name]
             if not match.empty:
                 city = match.iloc[0]['city']
                 return None if city == current_city else city
@@ -336,8 +419,8 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
     pie_tier.update_traces(textposition='inside', textinfo='percent+label')
     pie_tier.update_layout(showlegend=False, margin={'t': 50, 'b': 10, 'l': 10, 'r': 10})
 
-    table_df      = filtered[['trade name', 'Predicted_Category', 'Predicted_Tier', 'tags', 'value']].copy()
-    table_df['value'] = table_df['value'].astype(int)
+    table_df      = filtered[['trade_name', 'Predicted_Category', 'Predicted_Tier', 'tags', 'employees']].copy()
+    table_df['employees'] = table_df['employees'].astype(int)
     records       = table_df.to_dict('records')
     tooltip_data  = [{'tags': {'value': str(r.get('tags', '') or ''), 'type': 'markdown'}} for r in records]
 
