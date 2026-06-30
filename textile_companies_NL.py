@@ -1,4 +1,6 @@
 import os
+import json
+import threading
 import dash
 from dash import dcc, html, Input, Output, State, dash_table, ctx
 import plotly.express as px
@@ -145,6 +147,80 @@ def load_companies():
 
 data = load_companies()
 
+# ── Usage tracking ────────────────────────────────────────────────────────────
+# Session starts, click events, and filter changes are written to the
+# `tracking_events` table. Writes run on a background thread so they never block
+# the UI, and any failure is swallowed so tracking can't break the dashboard.
+_TRACK_DDL = (
+    "CREATE TABLE IF NOT EXISTS tracking_events ("
+    " id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,"
+    " session_id VARCHAR(64),"
+    " event_type VARCHAR(32) NOT NULL,"
+    " details JSON,"
+    " created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
+    ")"
+)
+
+_track_engine = None
+_track_schema_ready = False
+_track_lock = threading.Lock()
+
+
+def _get_track_engine():
+    """Reuse a single engine for tracking writes."""
+    global _track_engine
+    if _track_engine is None:
+        _track_engine = _get_engine()
+    return _track_engine
+
+
+def _write_event(session_id, event_type, details):
+    """Insert one tracking row. Runs on a worker thread; errors are ignored."""
+    global _track_schema_ready
+    try:
+        from sqlalchemy import text
+        engine = _get_track_engine()
+        if engine is None:
+            return
+        with engine.begin() as conn:
+            if not _track_schema_ready:
+                with _track_lock:
+                    if not _track_schema_ready:
+                        conn.execute(text(_TRACK_DDL))
+                        _track_schema_ready = True
+            conn.execute(
+                text("INSERT INTO tracking_events (session_id, event_type, details)"
+                     " VALUES (:sid, :etype, :details)"),
+                {'sid': session_id, 'etype': event_type,
+                 'details': json.dumps(details or {}, default=str)},
+            )
+    except Exception:
+        pass
+
+
+def log_event(session_id, event_type, details=None):
+    """Fire-and-forget tracking write (non-blocking)."""
+    threading.Thread(target=_write_event,
+                     args=(session_id, event_type, details or {}),
+                     daemon=True).start()
+
+
+def _request_meta():
+    """Collect request metadata (IP, user agent, language, referrer)."""
+    try:
+        from flask import request
+        xff = request.headers.get('X-Forwarded-For', '')
+        ip = xff.split(',')[0].strip() if xff else (
+            request.headers.get('X-Real-IP') or request.remote_addr)
+        return {
+            'ip': ip,
+            'user_agent': request.headers.get('User-Agent'),
+            'language': request.headers.get('Accept-Language'),
+            'referrer': request.headers.get('Referer'),
+        }
+    except Exception:
+        return {}
+
 # ── App ───────────────────────────────────────────────────────────────────────
 app = dash.Dash(
     __name__,
@@ -248,6 +324,13 @@ app.layout = html.Div([
     classification.get_modal(),
     *classification.get_stores(),
     dcc.Store(id='selected-city', data=None),
+
+    # ── Usage tracking plumbing (hidden) ──────────────────────────────────────
+    dcc.Store(id='session-id', storage_type='session'),
+    dcc.Interval(id='trk-init', interval=400, max_intervals=1),
+    dcc.Store(id='trk-session-sink'),
+    dcc.Store(id='trk-filter-sink'),
+    dcc.Store(id='trk-click-sink'),
 
 ], className='tell-app', style={'fontFamily': 'Inter, sans-serif', 'padding': '20px', 'maxWidth': '1400px', 'margin': 'auto'})
 
@@ -426,6 +509,89 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
 
     city_label = f"City filter: {selected_city} — click the same bubble again to clear" if selected_city else ""
     return kpi_total, kpi_active, kpi_web, map_fig, region_fig, pie_cat, pie_tier, records, tooltip_data, city_label
+
+# ── Usage tracking callbacks ──────────────────────────────────────────────────
+# Generate a stable per-browser-session id (kept in sessionStorage) on load.
+app.clientside_callback(
+    """
+    function(n) {
+        let sid = window.sessionStorage.getItem('tell_sid');
+        if (!sid) {
+            sid = (window.crypto && crypto.randomUUID)
+                ? crypto.randomUUID()
+                : 'sid-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+            window.sessionStorage.setItem('tell_sid', sid);
+        }
+        window.__sid = sid;
+        return sid;
+    }
+    """,
+    Output('session-id', 'data'),
+    Input('trk-init', 'n_intervals'),
+)
+
+
+@app.callback(
+    Output('trk-session-sink', 'data'),
+    Input('session-id', 'data'),
+    prevent_initial_call=True,
+)
+def track_session(session_id):
+    """Record a session start once the browser session id is set."""
+    if session_id:
+        log_event(session_id, 'session_start', _request_meta())
+    return dash.no_update
+
+
+@app.callback(
+    Output('trk-filter-sink', 'data'),
+    Input('region-dropdown',   'value'),
+    Input('city-dropdown',     'value'),
+    Input('company-dropdown',  'value'),
+    Input('category-dropdown', 'value'),
+    Input('tier-dropdown',     'value'),
+    Input('keywords-dropdown', 'value'),
+    State('session-id', 'data'),
+    prevent_initial_call=True,
+)
+def track_filters(regions, cities, companies, categories, tiers, keywords, session_id):
+    """Record every filter dropdown change."""
+    log_event(session_id, 'filter_change', {
+        'changed': ctx.triggered_id,
+        'filters': {
+            'region': regions, 'city': cities, 'company': companies,
+            'category': categories, 'tier': tiers, 'keywords': keywords,
+        },
+    })
+    return dash.no_update
+
+
+@app.callback(
+    Output('trk-click-sink', 'data'),
+    Input('map-graph', 'clickData'),
+    Input('company-table', 'active_cell'),
+    State('company-table', 'data'),
+    State('session-id', 'data'),
+    prevent_initial_call=True,
+)
+def track_clicks(click_data, active_cell, table_data, session_id):
+    """Record map bubble clicks and table cell clicks."""
+    trig = ctx.triggered_id
+    if trig == 'map-graph' and click_data:
+        pt = click_data['points'][0]
+        city = pt.get('hovertext')
+        if city is None:
+            cd = pt.get('customdata')
+            if isinstance(cd, list) and cd:
+                city = cd[-1]
+        log_event(session_id, 'map_click', {'city': city})
+    elif trig == 'company-table' and active_cell and table_data:
+        row = table_data[active_cell['row']]
+        log_event(session_id, 'table_click', {
+            'column': active_cell.get('column_id'),
+            'company': row.get('trade_name'),
+        })
+    return dash.no_update
 
 
 classification.register_callbacks(app, filter_data)

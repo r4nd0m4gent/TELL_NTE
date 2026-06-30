@@ -128,6 +128,13 @@ _DDL = {
         " suggestion JSON NOT NULL"
         ")"
     ),
+    'comments': (
+        "CREATE TABLE IF NOT EXISTS comments ("
+        " idcomments INT NOT NULL AUTO_INCREMENT PRIMARY KEY,"
+        " comment TEXT NOT NULL,"
+        " timestamp DATE NOT NULL"
+        ")"
+    ),
 }
 
 # Idempotent upgrades so pre-existing tables can hold the form's inputs
@@ -139,6 +146,8 @@ _MIGRATIONS = [
     "ALTER TABLE additions MODIFY given_tags TEXT NOT NULL",
     "ALTER TABLE additions MODIFY add_notes TEXT",
     "ALTER TABLE edits MODIFY id INT NOT NULL AUTO_INCREMENT",
+    "ALTER TABLE comments MODIFY idcomments INT NOT NULL AUTO_INCREMENT",
+    "ALTER TABLE comments MODIFY comment TEXT NOT NULL",
 ]
 
 _schema_ready = False
@@ -192,6 +201,11 @@ def save_to_db(kind, payload):
                         'given_tags': payload.get('tags') or '',
                         'add_notes': payload.get('notes'),
                     },
+                )
+            elif kind == 'comment':
+                conn.execute(
+                    text("INSERT INTO comments (comment, timestamp) VALUES (:comment, CURDATE())"),
+                    {'comment': payload.get('comment') or ''},
                 )
             else:
                 conn.execute(
@@ -281,6 +295,7 @@ app.layout = html.Div(style={'backgroundColor': '#f4f3f8', 'minHeight': '100vh'}
             options=[
                 {'label': 'Add new company info', 'value': 'add'},
                 {'label': 'Suggest edit',         'value': 'edit'},
+                {'label': 'Leave a comment about the tool', 'value': 'comment'},
             ],
             value=None,
             labelStyle={'display': 'flex', 'alignItems': 'center', 'gap': '8px',
@@ -331,6 +346,16 @@ app.layout = html.Div(style={'backgroundColor': '#f4f3f8', 'minHeight': '100vh'}
             ]),
             html.Div(id='edit-fields-inputs'),
         ]),
+        html.Div(id='comment-section', style={'display': 'none', 'marginTop': '32px'}, children=[
+            html.H3('Leave a comment',
+                    style={'color': nte_violet, 'marginBottom': '20px', 'fontSize': '17px'}),
+            html.Div(style=_field_wrap, children=[
+                _lbl('Your comment about the tool *'),
+                dcc.Textarea(id='comment-text',
+                             placeholder='Share feedback, suggestions, or issues about the tool…',
+                             style={**_input_style, 'height': '120px', 'resize': 'vertical'}),
+            ]),
+        ]),
         html.Div(id='submit-wrapper', style={'display': 'none'}, children=[
             html.Button('Submit contribution', id='submit-btn', n_clicks=0, style=_btn_style),
         ]),
@@ -339,17 +364,19 @@ app.layout = html.Div(style={'backgroundColor': '#f4f3f8', 'minHeight': '100vh'}
 ])
 
 @app.callback(
-    Output('add-section',    'style'),
-    Output('edit-section',   'style'),
-    Output('submit-wrapper', 'style'),
+    Output('add-section',     'style'),
+    Output('edit-section',    'style'),
+    Output('comment-section', 'style'),
+    Output('submit-wrapper',  'style'),
     Input('contribution-type', 'value'),
 )
 def toggle_sections(choice):
     show = {'display': 'block', 'marginTop': '32px'}
     hide = {'display': 'none',  'marginTop': '32px'}
-    if choice == 'add':  return show, hide, {'display': 'block'}
-    if choice == 'edit': return hide, show, {'display': 'block'}
-    return hide, hide, {'display': 'none'}
+    if choice == 'add':     return show, hide, hide, {'display': 'block'}
+    if choice == 'edit':    return hide, show, hide, {'display': 'block'}
+    if choice == 'comment': return hide, hide, show, {'display': 'block'}
+    return hide, hide, hide, {'display': 'none'}
 
 @app.callback(
     Output('add-tier-other-wrap', 'style'),
@@ -399,11 +426,12 @@ def render_edit_fields(selected_fields):
     State('edit-name',       'value'),
     State({'type': 'edit-field-input', 'field': ALL}, 'value'),
     State({'type': 'edit-field-input', 'field': ALL}, 'id'),
+    State('comment-text',    'value'),
     prevent_initial_call=True,
 )
 def on_submit(n_clicks, choice, add_name, add_city, add_postcode, add_website,
               add_employees, add_tiers, add_tier_other, add_category, add_notes,
-              edit_name, edit_values, edit_ids):
+              edit_name, edit_values, edit_ids, comment_text):
     _style_base = {'marginTop': '20px', 'fontWeight': '600', 'fontSize': '14px'}
 
     # Map each selected edit field to its suggested value (key = field).
@@ -415,6 +443,8 @@ def on_submit(n_clicks, choice, add_name, add_city, add_postcode, add_website,
     if choice == 'add':
         required = [(add_name, 'Company name'), (add_city, 'City'),
                     (add_tiers, 'Value chain tier(s)'), (add_category, 'Description / Tags')]
+    elif choice == 'comment':
+        required = [(comment_text, 'Comment')]
     else:
         required = [(edit_name, 'Company name'),
                     (changes, 'At least one field with a suggested value')]
@@ -438,6 +468,10 @@ def on_submit(n_clicks, choice, add_name, add_city, add_postcode, add_website,
                 'tags': add_category,
                 'notes': add_notes,
             })
+        elif choice == 'comment':
+            persist_contribution('comment', {
+                'comment': comment_text,
+            })
         else:
             persist_contribution('edit', {
                 'trade_name': edit_name,
@@ -445,7 +479,7 @@ def on_submit(n_clicks, choice, add_name, add_city, add_postcode, add_website,
             })
     except Exception as exc:
         return (f'Submission failed: {exc}', {**_style_base, 'color': '#e67e22'})
-    label = 'new company info' if choice == 'add' else 'an edit suggestion'
+    label = {'add': 'new company info', 'comment': 'comment'}.get(choice, 'an edit suggestion')
     return (f'Thank you! Your {label} has been received and will be reviewed.',
             {**_style_base, 'color': nte_violet})
 
