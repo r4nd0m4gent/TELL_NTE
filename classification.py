@@ -15,6 +15,11 @@ Usage in the main app
     #   classification.register_callbacks(app, filter_data)
 """
 
+import os
+import json
+import threading
+import datetime
+
 from dash import dcc, html, Input, Output, State, ctx, ALL
 from dash.exceptions import PreventUpdate
 import pandas as pd
@@ -22,6 +27,107 @@ import pandas as pd
 # ── Brand colours (keep in sync with textile_companies_NL.py) ─────────────────
 NTE_VIOLET   = '#513773'
 NTE_DARKBLUE = '#54639E'
+
+# ── Exported result files ──────────────────────────────────────────────────
+# Each run's results are written to disk here so they persist server-side; the
+# bare filename (which fits `classifications.file_path` VARCHAR(45)) is what we
+# store in the DB. Override the location with the CLASSIF_EXPORT_DIR env var.
+_EXPORT_DIR = os.environ.get(
+    'CLASSIF_EXPORT_DIR',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'classifications'),
+)
+
+
+def _save_export(df, filename):
+    """Write *df* to ``_EXPORT_DIR/filename`` and return the full path (or None)."""
+    try:
+        os.makedirs(_EXPORT_DIR, exist_ok=True)
+        path = os.path.join(_EXPORT_DIR, filename)
+        df.to_excel(path, index=False, sheet_name='Results')
+        return path
+    except Exception:
+        return None
+
+
+# ── Input tracking ─────────────────────────────────────────────────────────
+# Every "Run Classification" stores one row in the `classifications` table:
+# the classes + keywords the user defined (as JSON), the request date, and the
+# name of the Excel file offered for download. Writes run on a background thread
+# so they never block the UI, and any failure is swallowed so tracking can't
+# break the feature. The DB engine is supplied by the host app via
+# ``register_callbacks(..., engine_fn=...)``.
+_CLASSIF_DDL = (
+    "CREATE TABLE IF NOT EXISTS classifications ("
+    " id_class INT NOT NULL AUTO_INCREMENT PRIMARY KEY,"
+    " class_keywords JSON,"
+    " time_request DATE,"
+    " file_path VARCHAR(45)"
+    ")"
+)
+# The table may pre-exist with `id_class` not set to AUTO_INCREMENT; ensure it
+# is so inserts don't need to supply a primary key.
+_CLASSIF_MIGRATIONS = (
+    "ALTER TABLE classifications MODIFY id_class INT NOT NULL AUTO_INCREMENT",
+)
+
+_engine_fn = None
+_classif_engine = None
+_classif_schema_ready = False
+_classif_lock = threading.Lock()
+
+
+def _get_classif_engine():
+    """Reuse a single engine for classification-input writes."""
+    global _classif_engine
+    if _classif_engine is None and _engine_fn is not None:
+        _classif_engine = _engine_fn()
+    return _classif_engine
+
+
+def _ensure_classif_schema(engine):
+    """Create the table if missing and make sure id_class auto-increments."""
+    global _classif_schema_ready
+    if _classif_schema_ready:
+        return
+    with _classif_lock:
+        if _classif_schema_ready:
+            return
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            conn.execute(text(_CLASSIF_DDL))
+        for mig in _CLASSIF_MIGRATIONS:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(mig))
+            except Exception:
+                pass
+        _classif_schema_ready = True
+
+
+def _write_classification(class_keywords, file_path):
+    """Insert one run row. Runs on a worker thread; errors are ignored."""
+    try:
+        from sqlalchemy import text
+        engine = _get_classif_engine()
+        if engine is None:
+            return
+        _ensure_classif_schema(engine)
+        with engine.begin() as conn:
+            conn.execute(
+                text("INSERT INTO classifications (class_keywords, time_request, file_path)"
+                     " VALUES (:kw, CURDATE(), :fp)"),
+                {'kw': json.dumps(class_keywords, default=str), 'fp': file_path},
+            )
+    except Exception:
+        pass
+
+
+def log_classification(class_keywords, file_path):
+    """Fire-and-forget write of the user's class/keyword input (non-blocking)."""
+    threading.Thread(target=_write_classification,
+                     args=(class_keywords, file_path),
+                     daemon=True).start()
+
 # ── Semantic model cache ──────────────────────────────────────────────────
 # The sentence-embedding model is expensive to load, so keep a single instance
 # for the lifetime of the process and only rebuild the (cheap) class centroids
@@ -131,6 +237,18 @@ def get_modal():
                 children=html.Div(id='classif-result-area', style={'marginTop': '14px'}),
             ),
 
+            # ── Download (revealed after a successful run) ───────────────────
+            html.Div([
+                html.Button("⬇ Download Excel", id='download-classif-btn', n_clicks=0,
+                            style={
+                                'padding': '7px 18px',
+                                'backgroundColor': '#217346', 'color': 'white',
+                                'border': 'none', 'borderRadius': '6px',
+                                'cursor': 'pointer', 'fontSize': '13px', 'fontWeight': '600',
+                            }),
+            ], id='download-classif-wrap',
+               style={'display': 'none', 'justifyContent': 'flex-end', 'marginTop': '10px'}),
+
             # ── Run button ───────────────────────────────────────────────────
             html.Div([
                 html.Button("Run Classification", id='run-classif-btn', n_clicks=0, style={
@@ -161,7 +279,7 @@ def get_stores():
 
 # ── Callback registration ─────────────────────────────────────────────────────
 
-def register_callbacks(app, filter_data_fn):
+def register_callbacks(app, filter_data_fn, engine_fn=None):
     """
     Register all classification callbacks on *app*.
 
@@ -172,7 +290,13 @@ def register_callbacks(app, filter_data_fn):
     filter_data_fn : callable
         ``filter_data(regions, companies) -> pd.DataFrame``
         from the main module, used to apply the current dashboard filters.
+    engine_fn : callable, optional
+        ``() -> sqlalchemy.Engine | None`` used to persist the class/keyword
+        input a user runs to the ``classifications`` table. If omitted, no
+        input tracking is performed.
     """
+    global _engine_fn
+    _engine_fn = engine_fn
 
     @app.callback(
         Output('classif-modal-overlay', 'style'),
@@ -276,6 +400,7 @@ def register_callbacks(app, filter_data_fn):
     @app.callback(
         Output('classif-result-area', 'children'),
         Output('classif-result-store', 'data'),
+        Output('download-classif-wrap', 'style'),
         Input('run-classif-btn', 'n_clicks'),
         State({'type': 'class-name',     'index': ALL}, 'value'),
         State({'type': 'class-keywords', 'index': ALL}, 'value'),
@@ -284,6 +409,8 @@ def register_callbacks(app, filter_data_fn):
         prevent_initial_call=True,
     )
     def run_classification(_, names, keywords_list, selected_regions, selected_companies):
+        _hidden = {'display': 'none'}
+        _shown = {'display': 'flex', 'justifyContent': 'flex-end', 'marginTop': '10px'}
         classes = [
             (name.strip(), [kw.strip() for kw in (kws or '').split(',') if kw.strip()])
             for name, kws in zip(names or [], keywords_list or [])
@@ -291,11 +418,13 @@ def register_callbacks(app, filter_data_fn):
         ]
         if not classes:
             return (html.P("⚠ Define at least one class (a name, plus optional keywords).",
-                           style={'color': '#e67e22', 'fontSize': '13px'}), None)
+                           style={'color': '#e67e22', 'fontSize': '13px'}), None, _hidden)
 
         filtered = filter_data_fn(selected_regions, selected_companies)
+        # The DB-backed data uses `trade_name`; the Excel fallback uses `trade name`.
+        name_col = 'trade_name' if 'trade_name' in filtered.columns else 'trade name'
         texts = [
-            f"{row.get('trade name', '') or ''} {row.get('tags', '') or ''}".strip()
+            f"{row.get(name_col, '') or ''} {row.get('tags', '') or ''}".strip()
             for _, row in filtered.iterrows()
         ]
 
@@ -304,7 +433,7 @@ def register_callbacks(app, filter_data_fn):
             results = clf.classify_batch(texts) if texts else []
         except Exception as exc:  # model download / embedding failure
             return (html.P(f"⚠ Semantic model unavailable: {exc}",
-                           style={'color': '#c0392b', 'fontSize': '13px'}), None)
+                           style={'color': '#c0392b', 'fontSize': '13px'}), None, _hidden)
 
         counts = {name: 0 for name, _ in classes}
         per_row_data = []
@@ -312,7 +441,7 @@ def register_callbacks(app, filter_data_fn):
             assigned = result.label  # threshold 0 → always the closest class
             counts[assigned] = counts.get(assigned, 0) + 1
             per_row_data.append({
-                'Company Name':    row.get('trade name', ''),
+                'Company Name':    row.get(name_col, ''),
                 'Tags':            row.get('tags', ''),
                 'Predicted Class': assigned,
                 'Confidence':      round(result.score, 3),
@@ -335,19 +464,23 @@ def register_callbacks(app, filter_data_fn):
                    style={'fontWeight': '600', 'marginBottom': '8px',
                           'marginTop': '0', 'fontSize': '13px'}),
             *result_rows,
-            html.Div([
-                html.Button("⬇ Download Excel", id='download-classif-btn', n_clicks=0,
-                            style={
-                                'marginTop': '10px', 'padding': '7px 18px',
-                                'backgroundColor': '#217346', 'color': 'white',
-                                'border': 'none', 'borderRadius': '6px',
-                                'cursor': 'pointer', 'fontSize': '13px', 'fontWeight': '600',
-                            }),
-            ], style={'display': 'flex', 'justifyContent': 'flex-end'}),
         ], style={'backgroundColor': '#f8f9fa', 'borderRadius': '8px',
                   'padding': '12px', 'border': '1px solid #eee'})
 
-        return summary, per_row_data
+        # Unique filename per run; also stored in the DB as `file_path`.
+        filename = f"classification_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx"
+        # Save the results to disk (server-side) so they persist beyond the session.
+        export_df = pd.DataFrame(
+            per_row_data,
+            columns=['Company Name', 'Tags', 'Predicted Class', 'Confidence'],
+        )
+        saved_path = _save_export(export_df, filename)
+        # Persist the run (classes + keywords as JSON, date, filename) — best-effort.
+        class_keywords = [{'name': name, 'keywords': kws} for name, kws in classes]
+        log_classification(class_keywords, filename)
+
+        store = {'rows': per_row_data, 'filename': filename, 'path': saved_path}
+        return summary, store, _shown
 
     # ── Excel download ────────────────────────────────────────────────────────
     @app.callback(
@@ -359,8 +492,16 @@ def register_callbacks(app, filter_data_fn):
     def download_classification(_, store_data):
         if not store_data:
             raise PreventUpdate
-        df = pd.DataFrame(store_data,
+        filename = store_data.get('filename') or 'classification_results.xlsx'
+        # Prefer the file saved on disk; fall back to regenerating from the store.
+        path = store_data.get('path')
+        if path and os.path.exists(path):
+            return dcc.send_file(path, filename=filename)
+        rows = store_data.get('rows')
+        if not rows:
+            raise PreventUpdate
+        df = pd.DataFrame(rows,
                           columns=['Company Name', 'Tags', 'Predicted Class', 'Confidence'])
         return dcc.send_data_frame(
-            df.to_excel, 'classification_results.xlsx', index=False, sheet_name='Results'
+            df.to_excel, filename, index=False, sheet_name='Results'
         )

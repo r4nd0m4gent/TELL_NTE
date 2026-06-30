@@ -594,7 +594,7 @@ def track_clicks(click_data, active_cell, table_data, session_id):
     return dash.no_update
 
 
-classification.register_callbacks(app, filter_data)
+classification.register_callbacks(app, filter_data, engine_fn=_get_engine)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8050, debug=False)
