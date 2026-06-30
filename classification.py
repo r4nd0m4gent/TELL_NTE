@@ -239,13 +239,15 @@ def get_modal():
 
             # ── Download (revealed after a successful run) ───────────────────
             html.Div([
-                html.Button("⬇ Download Excel", id='download-classif-btn', n_clicks=0,
-                            style={
-                                'padding': '7px 18px',
-                                'backgroundColor': '#217346', 'color': 'white',
-                                'border': 'none', 'borderRadius': '6px',
-                                'cursor': 'pointer', 'fontSize': '13px', 'fontWeight': '600',
-                            }),
+                html.A("⬇ Download Excel", id='download-classif-link',
+                       href='', target='_blank',
+                       style={
+                           'padding': '7px 18px',
+                           'backgroundColor': '#217346', 'color': 'white',
+                           'border': 'none', 'borderRadius': '6px',
+                           'cursor': 'pointer', 'fontSize': '13px', 'fontWeight': '600',
+                           'textDecoration': 'none', 'display': 'inline-block',
+                       }),
             ], id='download-classif-wrap',
                style={'display': 'none', 'justifyContent': 'flex-end', 'marginTop': '10px'}),
 
@@ -267,11 +269,9 @@ def get_modal():
 
 
 def get_stores():
-    """Return the dcc.Store and dcc.Download components needed by the modal."""
+    """Return the dcc.Store components needed by the modal."""
     return [
         dcc.Store(id='classif-rows-store', data=[{'name': '', 'keywords': ''}]),
-        dcc.Store(id='classif-result-store', data=None),
-        dcc.Download(id='classif-download'),
         # Dummy target for the clientside scroll callback (kept out of view).
         html.Div(id='classif-scroll-anchor', style={'display': 'none'}),
     ]
@@ -297,6 +297,22 @@ def register_callbacks(app, filter_data_fn, engine_fn=None):
     """
     global _engine_fn
     _engine_fn = engine_fn
+
+    # Serve saved classification exports as a direct download. Routing through a
+    # real URL (rather than a dcc.Download blob) is reliable even when the
+    # dashboard is embedded in an iframe, where blob downloads can be blocked.
+    _prefix = app.config.requests_pathname_prefix or '/'
+
+    def _serve_classif_export(filename):
+        from flask import send_from_directory, abort
+        safe = os.path.basename(filename)
+        if not safe.endswith('.xlsx') or not os.path.exists(os.path.join(_EXPORT_DIR, safe)):
+            abort(404)
+        return send_from_directory(_EXPORT_DIR, safe, as_attachment=True)
+
+    app.server.add_url_rule(_prefix + 'exports/<path:filename>',
+                            endpoint='classif_export',
+                            view_func=_serve_classif_export)
 
     @app.callback(
         Output('classif-modal-overlay', 'style'),
@@ -399,8 +415,8 @@ def register_callbacks(app, filter_data_fn, engine_fn=None):
     # ── Run classification ────────────────────────────────────────────────────
     @app.callback(
         Output('classif-result-area', 'children'),
-        Output('classif-result-store', 'data'),
         Output('download-classif-wrap', 'style'),
+        Output('download-classif-link', 'href'),
         Input('run-classif-btn', 'n_clicks'),
         State({'type': 'class-name',     'index': ALL}, 'value'),
         State({'type': 'class-keywords', 'index': ALL}, 'value'),
@@ -418,7 +434,7 @@ def register_callbacks(app, filter_data_fn, engine_fn=None):
         ]
         if not classes:
             return (html.P("⚠ Define at least one class (a name, plus optional keywords).",
-                           style={'color': '#e67e22', 'fontSize': '13px'}), None, _hidden)
+                           style={'color': '#e67e22', 'fontSize': '13px'}), _hidden, '')
 
         filtered = filter_data_fn(selected_regions, selected_companies)
         # The DB-backed data uses `trade_name`; the Excel fallback uses `trade name`.
@@ -433,7 +449,7 @@ def register_callbacks(app, filter_data_fn, engine_fn=None):
             results = clf.classify_batch(texts) if texts else []
         except Exception as exc:  # model download / embedding failure
             return (html.P(f"⚠ Semantic model unavailable: {exc}",
-                           style={'color': '#c0392b', 'fontSize': '13px'}), None, _hidden)
+                           style={'color': '#c0392b', 'fontSize': '13px'}), _hidden, '')
 
         counts = {name: 0 for name, _ in classes}
         per_row_data = []
@@ -474,34 +490,11 @@ def register_callbacks(app, filter_data_fn, engine_fn=None):
             per_row_data,
             columns=['Company Name', 'Tags', 'Predicted Class', 'Confidence'],
         )
-        saved_path = _save_export(export_df, filename)
+        _save_export(export_df, filename)
         # Persist the run (classes + keywords as JSON, date, filename) — best-effort.
         class_keywords = [{'name': name, 'keywords': kws} for name, kws in classes]
         log_classification(class_keywords, filename)
 
-        store = {'rows': per_row_data, 'filename': filename, 'path': saved_path}
-        return summary, store, _shown
-
-    # ── Excel download ────────────────────────────────────────────────────────
-    @app.callback(
-        Output('classif-download', 'data'),
-        Input('download-classif-btn', 'n_clicks'),
-        State('classif-result-store', 'data'),
-        prevent_initial_call=True,
-    )
-    def download_classification(_, store_data):
-        if not store_data:
-            raise PreventUpdate
-        filename = store_data.get('filename') or 'classification_results.xlsx'
-        # Prefer the file saved on disk; fall back to regenerating from the store.
-        path = store_data.get('path')
-        if path and os.path.exists(path):
-            return dcc.send_file(path, filename=filename)
-        rows = store_data.get('rows')
-        if not rows:
-            raise PreventUpdate
-        df = pd.DataFrame(rows,
-                          columns=['Company Name', 'Tags', 'Predicted Class', 'Confidence'])
-        return dcc.send_data_frame(
-            df.to_excel, filename, index=False, sheet_name='Results'
-        )
+        # Direct download URL to the saved file (served by the Flask route above).
+        href = app.get_relative_path('/exports/' + filename)
+        return summary, _shown, href
