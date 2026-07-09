@@ -147,6 +147,43 @@ def load_companies():
 
 data = load_companies()
 
+# ── Consortium affiliations ────────────────────────────────────────────────
+# The `affiliations` table maps org_id → one flag column per consortium (1 =
+# member). We build {consortium_column: {org_id, ...}} so companies can be
+# filtered by consortium membership. Failures fall back to an empty mapping so
+# the feature degrades gracefully (empty dropdown, no filtering).
+_CONSORTIUM_LABELS = {
+    'newtexeco2026': 'NewTexEco 2026',
+    'newtexeco2023': 'NewTexEco 2023',
+}
+
+
+def _consortium_label(col):
+    return _CONSORTIUM_LABELS.get(col, col)
+
+
+def load_affiliations():
+    """Return {consortium_column: set(org_ids)} from the affiliations table."""
+    engine = _get_engine()
+    if engine is None:
+        return {}
+    try:
+        df = pd.read_sql("SELECT * FROM affiliations", engine)
+    except Exception:
+        return {}
+    mapping = {}
+    for col in df.columns:
+        if col == 'org_id':
+            continue
+        mapping[col] = set(pd.to_numeric(df.loc[df[col] == 1, 'org_id'],
+                                         errors='coerce').dropna().astype(int).tolist())
+    return mapping
+
+
+affiliations = load_affiliations()
+_consortium_options = [{'label': _consortium_label(c), 'value': c}
+                       for c in affiliations.keys()]
+
 # ── Usage tracking ────────────────────────────────────────────────────────────
 # Session starts, click events, and filter changes are written to the
 # `tracking_events` table. Writes run on a background thread so they never block
@@ -260,6 +297,11 @@ app.layout = html.Div([
         _filter_col("Filter by Region:",  'region-dropdown',  "Select a region...",  data['region']),
         _filter_col("Filter by City:",    'city-dropdown',    "Select a city...",    data['city']),
         _filter_col("Filter by Company:", 'company-dropdown', "Search a company...", data['trade_name']),
+        html.Div([
+            html.Label("Filter by Consortium:"),
+            dcc.Dropdown(id='consortium-dropdown', options=_consortium_options, value=None,
+                         placeholder="Select a consortium...", multi=True),
+        ], className='tell-filter-col', style={'flex': '1', 'minWidth': '0', 'padding': '10px'}),
     ], className='tell-filters', style={'backgroundColor': '#ecf0f1', 'borderRadius': '8px', 'marginBottom': '20px'}),
 
     # ── KPI cards ─────────────────────────────────────────────────────────────
@@ -336,7 +378,8 @@ app.layout = html.Div([
 
 
 # ── Filter helper ─────────────────────────────────────────────────────────────
-def filter_data(regions, companies, keywords=None, cities=None, categories=None, tiers=None):
+def filter_data(regions, companies, keywords=None, cities=None, categories=None,
+                tiers=None, consortiums=None):
     filtered = data.copy()
     if regions:
         filtered = filtered[filtered['region'].isin(regions)]
@@ -351,6 +394,11 @@ def filter_data(regions, companies, keywords=None, cities=None, categories=None,
     if keywords:
         pattern  = '|'.join([str(k) for k in keywords])
         filtered = filtered[filtered['tags'].astype(str).str.contains(pattern, case=False, na=False)]
+    if consortiums and 'id' in filtered.columns:
+        member_ids = set()
+        for c in consortiums:
+            member_ids |= affiliations.get(c, set())
+        filtered = filtered[filtered['id'].isin(member_ids)]
     return filtered
 
 
@@ -371,14 +419,15 @@ def filter_data(regions, companies, keywords=None, cities=None, categories=None,
     Input('category-dropdown',  'value'),
     Input('tier-dropdown',      'value'),
     Input('keywords-dropdown',  'value'),
+    Input('consortium-dropdown','value'),
 )
-def update_filter_options(regions, cities, companies, categories, tiers, keywords):
-    region_opts   = _options(filter_data(None,    companies, keywords, cities, categories, tiers)['region'])
-    city_opts     = _options(filter_data(regions, companies, keywords, None,   categories, tiers)['city'])
-    company_opts  = _options(filter_data(regions, None,      keywords, cities, categories, tiers)['trade_name'])
-    category_opts = _options(filter_data(regions, companies, keywords, cities, None,       tiers)['Predicted_Category'])
-    tier_opts     = _options(filter_data(regions, companies, keywords, cities, categories, None )['Predicted_Tier'])
-    keyword_opts  = _options(filter_data(regions, companies, None,     cities, categories, tiers)['tags'])
+def update_filter_options(regions, cities, companies, categories, tiers, keywords, consortiums):
+    region_opts   = _options(filter_data(None,    companies, keywords, cities, categories, tiers, consortiums)['region'])
+    city_opts     = _options(filter_data(regions, companies, keywords, None,   categories, tiers, consortiums)['city'])
+    company_opts  = _options(filter_data(regions, None,      keywords, cities, categories, tiers, consortiums)['trade_name'])
+    category_opts = _options(filter_data(regions, companies, keywords, cities, None,       tiers, consortiums)['Predicted_Category'])
+    tier_opts     = _options(filter_data(regions, companies, keywords, cities, categories, None,  consortiums)['Predicted_Tier'])
+    keyword_opts  = _options(filter_data(regions, companies, None,     cities, categories, tiers, consortiums)['tags'])
     return region_opts, city_opts, company_opts, category_opts, tier_opts, keyword_opts
 
 
@@ -432,12 +481,15 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
     Input('city-dropdown',      'value'),
     Input('category-dropdown',  'value'),
     Input('tier-dropdown',      'value'),
+    Input('consortium-dropdown','value'),
     Input('selected-city',      'data'),
 )
 def update_dashboard(selected_regions, selected_companies, selected_keywords,
-                     selected_cities, selected_categories, selected_tiers, selected_city):
+                     selected_cities, selected_categories, selected_tiers,
+                     selected_consortiums, selected_city):
     filtered = filter_data(selected_regions, selected_companies, selected_keywords,
-                           selected_cities, selected_categories, selected_tiers)
+                           selected_cities, selected_categories, selected_tiers,
+                           selected_consortiums)
     if selected_city:
         filtered = filtered[filtered['city'] == selected_city]
 
@@ -551,16 +603,18 @@ def track_session(session_id):
     Input('category-dropdown', 'value'),
     Input('tier-dropdown',     'value'),
     Input('keywords-dropdown', 'value'),
+    Input('consortium-dropdown','value'),
     State('session-id', 'data'),
     prevent_initial_call=True,
 )
-def track_filters(regions, cities, companies, categories, tiers, keywords, session_id):
+def track_filters(regions, cities, companies, categories, tiers, keywords, consortiums, session_id):
     """Record every filter dropdown change."""
     log_event(session_id, 'filter_change', {
         'changed': ctx.triggered_id,
         'filters': {
             'region': regions, 'city': cities, 'company': companies,
             'category': categories, 'tier': tiers, 'keywords': keywords,
+            'consortium': consortiums,
         },
     })
     return dash.no_update
