@@ -6,7 +6,6 @@ After=network.target
 User=tell
 Group=www-data
 WorkingDirectory=/home/tell/app
-Environment="TEXTILE_DATA_PATH=/home/tell/data/KvK_textile.xlsx"
 ExecStart=/home/tell/app/venv/bin/gunicorn \
     --workers 2 \
     --bind 127.0.0.1:8051 \

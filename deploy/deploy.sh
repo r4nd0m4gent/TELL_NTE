@@ -6,9 +6,8 @@ set -euo pipefail
 # ── Config – edit these ───────────────────────────────────────────────────────
 APP_USER=tell
 APP_DIR=/home/${APP_USER}/app
-DATA_DIR=/home/${APP_USER}/data
+DATA_DIR=/home/${APP_USER}/app/data
 REPO_URL="<YOUR_GIT_REPO_URL>"        # e.g. https://github.com/yourname/TELL.git
-DATA_FILE="<PATH_TO_KvK_textile.xlsx>" # local path on your machine; upload separately
 
 # ── 1. System packages ────────────────────────────────────────────────────────
 apt-get update -y
@@ -33,7 +32,7 @@ sudo -u ${APP_USER} "${APP_DIR}/venv/bin/pip" install -r "${APP_DIR}/requirement
 
 # ── 5. Data file ──────────────────────────────────────────────────────────────
 # Upload the Excel file to the server first, e.g.:
-#   scp KvK\ textile.xlsx root@YOUR_IP:/home/tell/data/KvK_textile.xlsx
+#   scp companies.xlsx root@YOUR_IP:/home/tell/app/data/companies.xlsx
 mkdir -p "${DATA_DIR}"
 chown ${APP_USER}:${APP_USER} "${DATA_DIR}"
 
@@ -72,5 +71,5 @@ echo ""
 echo "Next steps:"
 echo "  1. Edit deploy/nginx_tell.conf  – replace YOUR_DOMAIN_OR_IP"
 echo "  2. Upload the Excel data file:"
-echo "     scp 'KvK textile.xlsx' ${APP_USER}@YOUR_IP:${DATA_DIR}/KvK_textile.xlsx"
+echo "     scp companies.xlsx ${APP_USER}@YOUR_IP:${DATA_DIR}/companies.xlsx"
 echo "  3. (Optional) Add a free TLS certificate: sudo certbot --nginx"

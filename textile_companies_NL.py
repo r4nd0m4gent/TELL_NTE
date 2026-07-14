@@ -64,6 +64,7 @@ query_org = """
         o.employees,
         o.surface,
         o.year_start,
+        o.legal_form,
         t.tags,
         t.category    AS Predicted_Category,
         t.tier        AS Predicted_Tier
@@ -315,9 +316,9 @@ app.layout = html.Div([
 
     # ── Map + Region chart ────────────────────────────────────────────────────
     html.Div([
-        html.Div([dcc.Graph(id='map-graph', config={'scrollZoom': True}, style={'height': '500px'})],
+        html.Div([dcc.Graph(id='map-graph', config={'scrollZoom': True, 'displayModeBar': False, 'responsive': True}, style={'height': '500px'})],
                  style={'flex': '1.5', 'minWidth': 0}),
-        html.Div([dcc.Graph(id='region-chart', style={'height': '500px'})],
+        html.Div([dcc.Graph(id='region-chart', config={'displayModeBar': False, 'responsive': True}, style={'height': '500px'})],
                  style={'flex': '1.5', 'minWidth': 0}),
     ], className='tell-map-row', style={'display': 'flex', 'gap': '16px', 'marginBottom': '20px'}),
     # ── Filters: category / tier / keywords (between map and table) ─────────
@@ -346,11 +347,13 @@ app.layout = html.Div([
         active_cell=None, tooltip_data=[], tooltip_duration=None,
     ),
 
-    # ── Pie charts ────────────────────────────────────────────────────────────
+    # ── Distribution charts ─────────────────────────────────────────────────
     html.Div([
-        dcc.Graph(id='pie-category', style={'flex': '1', 'minWidth': 0}),
-        dcc.Graph(id='pie-tier',     style={'flex': '1', 'minWidth': 0}),
-    ], className='tell-pies', style={'display': 'flex', 'gap': '16px', 'marginTop': '20px'}),
+        dcc.Graph(id='pie-category', config={'displayModeBar': False, 'responsive': True}, style={'flex': '1 1 220px', 'minWidth': '220px', 'height': '320px'}),
+        dcc.Graph(id='pie-tier',     config={'displayModeBar': False, 'responsive': True}, style={'flex': '1 1 220px', 'minWidth': '220px', 'height': '320px'}),
+        dcc.Graph(id='year-bar',     config={'displayModeBar': False, 'responsive': True}, style={'flex': '1 1 220px', 'minWidth': '220px', 'height': '320px'}),
+        dcc.Graph(id='pie-legal',    config={'displayModeBar': False, 'responsive': True}, style={'flex': '1 1 220px', 'minWidth': '220px', 'height': '320px'}),
+    ], className='tell-pies', style={'display': 'flex', 'flexWrap': 'wrap', 'gap': '16px', 'marginTop': '20px'}),
 
     # ── Buttons ───────────────────────────────────────────────────────────────
     html.Div([
@@ -472,6 +475,8 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
     Output('region-chart',      'figure'),
     Output('pie-category',      'figure'),
     Output('pie-tier',          'figure'),
+    Output('year-bar',          'figure'),
+    Output('pie-legal',         'figure'),
     Output('company-table',     'data'),
     Output('company-table',     'tooltip_data'),
     Output('city-filter-label', 'children'),
@@ -525,7 +530,7 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
         custom_data=['city'],
         zoom=6,
         center={'lat': 52.3, 'lon': 5.3},
-        size_max=40, title='Number of Companies per City', height=500,
+        size_max=40, title='Number of Companies per City',
     )
     map_fig.update_layout(
         map={'style': OSM_HTTPS_STYLE},
@@ -535,7 +540,7 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
     region_counts = filtered.groupby('region', as_index=False).size().rename(columns={'size': 'count'})
     region_fig    = px.bar(
         region_counts.sort_values('count'), x='count', y='region',
-        orientation='h', title='Companies per Region', height=500,
+        orientation='h', title='Companies per Region',
         color_discrete_sequence=[nte_darkblue],
     )
     region_fig.update_layout(margin={'l': 120, 'r': 20, 't': 40, 'b': 20})
@@ -554,13 +559,30 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
     pie_tier.update_traces(textposition='inside', textinfo='percent+label')
     pie_tier.update_layout(showlegend=False, margin={'t': 50, 'b': 10, 'l': 10, 'r': 10})
 
+    _year = pd.to_numeric(filtered.get('year_start'), errors='coerce').dropna().astype(int)
+    _year_counts = _year.value_counts().sort_index().reset_index()
+    _year_counts.columns = ['year_start', 'count']
+    year_bar = px.bar(_year_counts, x='year_start', y='count', title='Founding Year',
+                      color_discrete_sequence=[nte_darkblue])
+    year_bar.update_layout(margin={'t': 50, 'b': 30, 'l': 40, 'r': 10},
+                           xaxis_title=None, yaxis_title=None)
+
+    _legal = (filtered['legal_form'] if 'legal_form' in filtered.columns
+              else pd.Series(dtype=object))
+    _legal = _legal.fillna('Unknown').replace('', 'Unknown').value_counts().reset_index()
+    _legal.columns = ['legal_form', 'count']
+    pie_legal = px.pie(_legal, names='legal_form', values='count', title='Legal Form',
+                       color_discrete_sequence=px.colors.sequential.Teal_r)
+    pie_legal.update_traces(textposition='inside', textinfo='percent+label')
+    pie_legal.update_layout(showlegend=False, margin={'t': 50, 'b': 10, 'l': 10, 'r': 10})
+
     table_df      = filtered[['trade_name', 'Predicted_Category', 'Predicted_Tier', 'tags', 'employees']].copy()
     table_df['employees'] = table_df['employees'].astype(int)
     records       = table_df.to_dict('records')
     tooltip_data  = [{'tags': {'value': str(r.get('tags', '') or ''), 'type': 'markdown'}} for r in records]
 
     city_label = f"City filter: {selected_city} — click the same bubble again to clear" if selected_city else ""
-    return kpi_total, kpi_active, kpi_web, map_fig, region_fig, pie_cat, pie_tier, records, tooltip_data, city_label
+    return kpi_total, kpi_active, kpi_web, map_fig, region_fig, pie_cat, pie_tier, year_bar, pie_legal, records, tooltip_data, city_label
 
 # ── Usage tracking callbacks ──────────────────────────────────────────────────
 # Generate a stable per-browser-session id (kept in sessionStorage) on load.

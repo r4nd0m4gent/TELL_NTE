@@ -22,6 +22,11 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
 /* Filters: keep the three dropdowns on one row */
 .tell-filters { display: flex; flex-wrap: nowrap; align-items: flex-end; }
 
+/* Never let a graph push the page wider than the screen */
+.tell-app, .tell-map-row, .tell-pies { max-width: 100%; }
+.tell-map-row .js-plotly-plot,
+.tell-pies .js-plotly-plot { max-width: 100% !important; }
+
 /* ── Responsive: dashboard on phones ──────────────────────────────────── */
 @media (max-width: 768px) {
     /* Tighter outer padding to reclaim screen width */
@@ -37,11 +42,16 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
     .tell-pies,
     .tell-buttons { flex-direction: column !important; }
 
+    /* Map/region graphs and their wrappers fill the width, shorter height */
+    .tell-map-row > div { width: 100% !important; flex: none !important; }
+    .tell-map-row .dash-graph,
+    .tell-map-row .js-plotly-plot { height: 360px !important; width: 100% !important; }
+
+    /* Distribution charts: full width, one per row */
+    .tell-pies > .dash-graph,
+    .tell-pies .js-plotly-plot { width: 100% !important; flex: none !important; height: 300px !important; }
+
     /* Buttons go full width and easier to tap */
     .tell-buttons > a,
     .tell-buttons > button { width: 100% !important; text-align: center; }
-
-    /* Shorter graphs so the page isn't endlessly tall */
-    .tell-map-row .dash-graph,
-    .tell-map-row .js-plotly-plot { height: 360px !important; }
 }
