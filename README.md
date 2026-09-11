@@ -36,3 +36,14 @@ ssh root@tell.newtexeco.nl   # or root@<server-ip>
 
 # 4. Launch the redeploy.sh file
 sudo bash /home/tell/app/deploy/redeploy.sh
+
+
+-------------- HTTPS CERTIFICATE -------
+
+# Let's Encrypt cert, renewed automatically by certbot (webroot method + nginx
+# reload hook). To (re)install or repair it — safe to re-run any time:
+sudo bash /home/tell/app/deploy/setup_ssl.sh
+
+# Check renewal status / expiry
+certbot certificates
+systemctl list-timers | grep certbot
