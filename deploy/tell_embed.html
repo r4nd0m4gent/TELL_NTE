@@ -92,9 +92,16 @@ from Modint-KvK (2021).
         if (firstLoad) { firstLoad = false; return; }   // ignore the initial load
         f.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
+      var frameOrigin = new URL(f.src, location.href).origin;
       window.addEventListener('message', function (e) {
-        if (e && e.data && e.data.tellFocus) {
+        if (!e || !e.data) return;
+        if (e.data.tellFocus) {
           f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        // Fit the iframe to the dashboard's height (sent by assets/tell_resize.js).
+        // The CSS heights above remain the fallback until the first message.
+        if (e.origin === frameOrigin && typeof e.data.tellHeight === 'number') {
+          f.style.height = Math.max(600, Math.ceil(e.data.tellHeight) + 8) + 'px';
         }
       });
     })();

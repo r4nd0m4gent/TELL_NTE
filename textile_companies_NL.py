@@ -4,6 +4,8 @@ import threading
 import dash
 from dash import dcc, html, Input, Output, State, dash_table, ctx
 import plotly.express as px
+import plotly.graph_objects as go
+import plotly.io as pio
 import pandas as pd
 import pgeocode
 import classification
@@ -11,6 +13,64 @@ import classification
 # ── Colors ────────────────────────────────────────────────────────────────────
 nte_violet   = '#513773'
 nte_darkblue = '#54639E'
+
+FONT_STACK = 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
+INK        = '#2c2c2c'   # primary text
+MUTED      = '#6b6b76'   # labels, axis ticks
+GRID       = '#eeecf2'   # gridlines, row dividers
+
+# Brand ramps for the donut charts (dark → light). Plotly picks black or white
+# slice text automatically, so light shades stay readable.
+VIOLET_RAMP = ['#513773', '#7a5a9e', '#a58cc4', '#cbbbe0', '#e7dff0', '#f3eff8']
+BLUE_RAMP   = ['#2f3c70', '#54639E', '#8390c0', '#b3bcdc', '#dde1f0', '#eef0f7']
+MIXED_RAMP  = ['#54639E', '#513773', '#8390c0', '#a58cc4', '#b3bcdc', '#cbbbe0',
+               '#dde1f0', '#e7dff0']
+
+# ── Plotly theme ──────────────────────────────────────────────────────────────
+# One shared template so every chart gets the same font, white background,
+# light gridlines and hover style; individual figures only set what differs.
+# Chart titles are HTML headings above each card (see _graph), not in the figure.
+pio.templates['tell'] = go.layout.Template(layout={
+    'font':          {'family': FONT_STACK, 'size': 12, 'color': MUTED},
+    'paper_bgcolor': 'white',
+    'plot_bgcolor':  'white',
+    'hoverlabel':    {'bgcolor': 'white', 'bordercolor': GRID,
+                      'font': {'family': FONT_STACK, 'size': 12, 'color': INK}},
+    'xaxis':         {'gridcolor': GRID, 'linecolor': GRID, 'zeroline': False,
+                      'ticks': '', 'automargin': True},
+    'yaxis':         {'gridcolor': GRID, 'linecolor': GRID, 'zeroline': False,
+                      'ticks': '', 'automargin': True},
+    'barcornerradius': 4,
+})
+pio.templates.default = 'plotly_white+tell'
+
+
+def _donut(df, names, colors):
+    """Donut chart with the total in the centre.
+
+    Slices are labelled in place; labels that don't fit (small slices) are
+    hidden rather than shrunk, and every slice still shows details on hover.
+    No legend: some fields have ~10 categories, which would squash the chart.
+    """
+    total = int(df['count'].sum())
+    fig = px.pie(df, names=names, values='count', hole=0.42,
+                 color_discrete_sequence=colors)
+    fig.update_traces(
+        sort=True, direction='clockwise', rotation=0,
+        textposition='inside', textinfo='label+percent', insidetextorientation='auto',
+        texttemplate='%{label}<br>%{percent:.0%}',
+        marker={'line': {'color': 'white', 'width': 2}},
+        hovertemplate='<b>%{label}</b><br>%{value:,} companies (%{percent})<extra></extra>',
+    )
+    fig.update_layout(
+        uniformtext_minsize=10, uniformtext_mode='hide',
+        showlegend=False,
+        margin={'t': 20, 'b': 20, 'l': 16, 'r': 16},
+        annotations=[{'text': f"<b>{total:,}</b><br><span style='font-size:11px'>companies</span>",
+                      'x': 0.5, 'y': 0.5, 'showarrow': False,
+                      'font': {'size': 16, 'color': INK}}],
+    )
+    return fig
 
 # ── Map basemap ───────────────────────────────────────────────────────────────
 # Plotly.js 3.x renders maps with MapLibre. The built-in "open-street-map"
@@ -262,7 +322,7 @@ def _request_meta():
 # ── App ───────────────────────────────────────────────────────────────────────
 app = dash.Dash(
     __name__,
-    external_stylesheets=['https://fonts.googleapis.com/css2?family=Inter&display=swap'],
+    external_stylesheets=['https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'],
     suppress_callback_exceptions=True,
     url_base_pathname='/dashboard/',
     meta_tags=[{'name': 'viewport',
@@ -270,11 +330,35 @@ app = dash.Dash(
 )
 server = app.server  # WSGI entry point for Gunicorn
 
-_card = {
-    'flex': '1', 'backgroundColor': 'white', 'borderRadius': '8px',
-    'padding': '16px 20px', 'boxShadow': '0 1px 4px rgba(0,0,0,0.1)',
-    'textAlign': 'center',
-}
+_kpi_label = {'margin': '0 0 6px', 'color': MUTED, 'fontSize': '12px', 'fontWeight': '600',
+              'textTransform': 'uppercase', 'letterSpacing': '0.6px'}
+_kpi_value = {'margin': 0, 'color': nte_violet, 'fontSize': '28px', 'fontWeight': '700'}
+
+
+def _kpi(label, value_id):
+    return html.Div([html.P(label, style=_kpi_label), html.H2(id=value_id, style=_kpi_value)],
+                    className='tell-card tell-kpi')
+
+
+def _block_head(title, subtitle=None, subtitle_id=None):
+    """Section heading shown above a card (title + optional grey subtitle)."""
+    sub = None
+    if subtitle is not None or subtitle_id is not None:
+        sub = html.P(subtitle, id=subtitle_id, className='tell-block-sub') if subtitle_id \
+            else html.P(subtitle, className='tell-block-sub')
+    return html.Div([html.H3(title, className='tell-block-title'), sub],
+                    className='tell-block-head')
+
+
+def _graph(graph_id, height, title, subtitle=None, config=None, **wrapper_style):
+    """A titled block: heading above, dcc.Graph inside a white rounded card."""
+    return html.Div([
+        _block_head(title, subtitle),
+        html.Div(
+            dcc.Graph(id=graph_id, style={'height': height},
+                      config={'displayModeBar': False, 'responsive': True, **(config or {})}),
+            className='tell-card'),
+    ], className='tell-block', style=wrapper_style)
 
 
 def _options(values):
@@ -303,56 +387,84 @@ app.layout = html.Div([
             dcc.Dropdown(id='consortium-dropdown', options=_consortium_options, value=None,
                          placeholder="Select a consortium...", multi=True),
         ], className='tell-filter-col', style={'flex': '1', 'minWidth': '0', 'padding': '10px'}),
-    ], className='tell-filters', style={'backgroundColor': '#ecf0f1', 'borderRadius': '8px', 'marginBottom': '20px'}),
+    ], className='tell-filters tell-panel', style={'marginBottom': '20px'}),
 
     # ── KPI cards ─────────────────────────────────────────────────────────────
     html.Div([
-        html.Div([html.P('Total Records',      style={'margin': '0 0 4px', 'color': '#7f8c8d', 'fontSize': '13px', 'textTransform': 'uppercase', 'letterSpacing': '0.5px'}), html.H2(id='kpi-total',  style={'margin': 0})], style=_card),
-        html.Div([html.P('Active Businesses',  style={'margin': '0 0 4px', 'color': '#7f8c8d', 'fontSize': '13px', 'textTransform': 'uppercase', 'letterSpacing': '0.5px'}), html.H2(id='kpi-active', style={'margin': 0})], style=_card),
-        html.Div([html.P('Registered Websites',style={'margin': '0 0 4px', 'color': '#7f8c8d', 'fontSize': '13px', 'textTransform': 'uppercase', 'letterSpacing': '0.5px'}), html.H2(id='kpi-web',    style={'margin': 0})], style=_card),
+        _kpi('Total Records',       'kpi-total'),
+        _kpi('Active Businesses',   'kpi-active'),
+        _kpi('Registered Websites', 'kpi-web'),
     ], className='tell-kpis', style={'display': 'flex', 'gap': '16px', 'marginBottom': '20px'}),
 
-    html.Div(id='city-filter-label', style={'minHeight': '22px', 'marginBottom': '4px', 'fontSize': '13px', 'color': '#832394', 'fontWeight': '600'}),
+    html.Div(id='city-filter-label', style={'minHeight': '22px', 'marginBottom': '4px', 'fontSize': '13px', 'color': nte_violet, 'fontWeight': '600'}),
 
     # ── Map + Region chart ────────────────────────────────────────────────────
     html.Div([
-        html.Div([dcc.Graph(id='map-graph', config={'scrollZoom': True, 'displayModeBar': False, 'responsive': True}, style={'height': '500px'})],
-                 style={'flex': '1.5', 'minWidth': 0}),
-        html.Div([dcc.Graph(id='region-chart', config={'displayModeBar': False, 'responsive': True}, style={'height': '500px'})],
-                 style={'flex': '1.5', 'minWidth': 0}),
+        _graph('map-graph', '500px', 'Companies per City',
+               'Bubble size shows the number of companies · click a bubble to filter by city',
+               config={'scrollZoom': True}, flex='1.5', minWidth=0),
+        _graph('region-chart', '500px', 'Companies per Region',
+               'Number of companies in each province', flex='1.5', minWidth=0),
     ], className='tell-map-row', style={'display': 'flex', 'gap': '16px', 'marginBottom': '20px'}),
     # ── Filters: category / tier / keywords (between map and table) ─────────
     html.Div([
         _filter_col("Filter by Category:",       'category-dropdown', "Select a category...", data['Predicted_Category']),
         _filter_col("Filter by Tier:",           'tier-dropdown',     "Select a tier...",     data['Predicted_Tier']),
         _filter_col("Filter by Keywords/Tags:",  'keywords-dropdown', "Select keywords...",   data['tags']),
-    ], className='tell-filters', style={'backgroundColor': '#ecf0f1', 'borderRadius': '8px', 'marginBottom': '20px'}),
+    ], className='tell-filters tell-panel', style={'marginBottom': '20px'}),
     # ── Data table ────────────────────────────────────────────────────────────
-    dash_table.DataTable(
-        id='company-table',
-        columns=[
-            {'name': 'Company',            'id': 'trade_name'},
-            {'name': 'Predicted Category', 'id': 'Predicted_Category'},
-            {'name': 'Predicted Tier',     'id': 'Predicted_Tier'},
-            {'name': 'Tags',               'id': 'tags'},
-            {'name': '# Employees',        'id': 'employees'},
-        ],
-        page_size=10, sort_action='native', filter_action='none',
-        style_table={'overflowX': 'auto', 'overflowY': 'auto', 'maxHeight': '380px', 'marginTop': '20px'},
-        style_header={'backgroundColor': nte_darkblue, 'color': 'white', 'fontWeight': 'bold'},
-        style_cell={'padding': '8px', 'textAlign': 'left', 'fontSize': '13px',
-                    'overflow': 'hidden', 'textOverflow': 'ellipsis', 'maxWidth': '250px'},
-        style_data_conditional=[{'if': {'row_index': 'odd'}, 'backgroundColor': '#f9f9f9'}],
-        style_data={'cursor': 'pointer'},
-        active_cell=None, tooltip_data=[], tooltip_duration=None,
-    ),
+    _block_head('Companies', subtitle_id='table-count'),
+    html.Div([
+        dash_table.DataTable(
+            id='company-table',
+            columns=[
+                {'name': 'Company',            'id': 'trade_name'},
+                {'name': 'Predicted Category', 'id': 'Predicted_Category'},
+                {'name': 'Predicted Tier',     'id': 'Predicted_Tier'},
+                {'name': 'Tags',               'id': 'tags'},
+                {'name': 'Employees',          'id': 'employees', 'type': 'numeric'},
+            ],
+            page_size=10, sort_action='native', filter_action='none',
+            style_as_list_view=True,
+            style_table={'overflowX': 'auto'},
+            style_header={'backgroundColor': nte_violet, 'color': 'white', 'fontWeight': '600',
+                          'fontSize': '11px', 'textTransform': 'uppercase', 'letterSpacing': '0.7px',
+                          'padding': '14px 16px', 'border': 'none'},
+            style_cell={'fontFamily': FONT_STACK, 'fontSize': '13px', 'color': INK,
+                        'padding': '11px 16px', 'textAlign': 'left', 'backgroundColor': 'white',
+                        'border': 'none', 'borderBottom': f'1px solid {GRID}',
+                        'overflow': 'hidden', 'textOverflow': 'ellipsis', 'maxWidth': '260px'},
+            style_cell_conditional=[
+                {'if': {'column_id': 'trade_name'}, 'fontWeight': '600', 'minWidth': '180px'},
+                {'if': {'column_id': 'tags'},       'color': MUTED, 'minWidth': '220px'},
+                {'if': {'column_id': 'employees'},  'textAlign': 'right', 'width': '110px'},
+            ],
+            style_data={'cursor': 'pointer'},
+            style_data_conditional=[
+                {'if': {'state': 'active'},   'backgroundColor': '#efe9f6',
+                 'border': 'none', 'borderBottom': f'1px solid {GRID}'},
+                {'if': {'state': 'selected'}, 'backgroundColor': '#efe9f6',
+                 'border': 'none', 'borderBottom': f'1px solid {GRID}'},
+            ],
+            css=[
+                {'selector': 'tr:hover td.dash-cell', 'rule': 'background-color: #faf8fc !important;'},
+                {'selector': '.column-header--sort', 'rule': 'color: rgba(255,255,255,0.55); margin-right: 6px;'},
+                {'selector': 'th.dash-header:hover .column-header--sort', 'rule': 'color: #fff;'},
+            ],
+            active_cell=None, tooltip_data=[], tooltip_duration=None,
+        ),
+    ], className='tell-card tell-table-card'),
 
     # ── Distribution charts ─────────────────────────────────────────────────
     html.Div([
-        dcc.Graph(id='pie-category', config={'displayModeBar': False, 'responsive': True}, style={'flex': '1 1 220px', 'minWidth': '220px', 'height': '320px'}),
-        dcc.Graph(id='pie-tier',     config={'displayModeBar': False, 'responsive': True}, style={'flex': '1 1 220px', 'minWidth': '220px', 'height': '320px'}),
-        dcc.Graph(id='year-bar',     config={'displayModeBar': False, 'responsive': True}, style={'flex': '1 1 220px', 'minWidth': '220px', 'height': '320px'}),
-        dcc.Graph(id='pie-legal',    config={'displayModeBar': False, 'responsive': True}, style={'flex': '1 1 220px', 'minWidth': '220px', 'height': '320px'}),
+        _graph('pie-category', '300px', 'Product Category', 'Share of companies',
+               flex='1 1 240px', minWidth='240px'),
+        _graph('pie-tier',     '300px', 'Lifecycle Stage',  'Position in the value chain',
+               flex='1 1 240px', minWidth='240px'),
+        _graph('year-bar',     '300px', 'Founding Year',    'Companies founded per year',
+               flex='1 1 240px', minWidth='240px'),
+        _graph('pie-legal',    '300px', 'Legal Form',       'Share of companies',
+               flex='1 1 240px', minWidth='240px'),
     ], className='tell-pies', style={'display': 'flex', 'flexWrap': 'wrap', 'gap': '16px', 'marginTop': '20px'}),
 
     # ── Buttons ───────────────────────────────────────────────────────────────
@@ -480,6 +592,7 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
     Output('company-table',     'data'),
     Output('company-table',     'tooltip_data'),
     Output('city-filter-label', 'children'),
+    Output('table-count',       'children'),
     Input('region-dropdown',    'value'),
     Input('company-dropdown',   'value'),
     Input('keywords-dropdown',  'value'),
@@ -517,64 +630,64 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
 
     if selected_city:
         city_geo['_sel'] = city_geo['city'].apply(lambda c: 'selected' if c == selected_city else 'default')
-        cmap = {'selected': 'rgba(220,80,0,0.85)', 'default': 'rgba(138,43,226,0.25)'}
+        cmap = {'selected': 'rgba(220,80,0,0.85)', 'default': 'rgba(81,55,115,0.22)'}
     else:
         city_geo['_sel'] = 'all'
-        cmap = {'all': 'rgba(138,43,226,0.45)'}
+        cmap = {'all': 'rgba(81,55,115,0.50)'}
 
     map_fig = px.scatter_map(
         city_geo, lat='lat', lon='lon', size='disp',
         color='_sel', color_discrete_map=cmap,
         hover_name='city',
         hover_data={'count': True, 'disp': False, 'lat': False, 'lon': False, '_sel': False},
-        custom_data=['city'],
+        custom_data=['count', 'city'],   # city must stay last: the click callbacks read customdata[-1]
         zoom=6,
         center={'lat': 52.3, 'lon': 5.3},
-        size_max=40, title='Number of Companies per City',
+        size_max=40,
     )
+    map_fig.update_traces(hovertemplate='<b>%{hovertext}</b><br>%{customdata[0]:,} companies<extra></extra>')
     map_fig.update_layout(
         map={'style': OSM_HTTPS_STYLE},
-        margin={'r': 0, 't': 40, 'l': 0, 'b': 0}, showlegend=False,
+        margin={'r': 0, 't': 0, 'l': 0, 'b': 0}, showlegend=False,
     )
 
     region_counts = filtered.groupby('region', as_index=False).size().rename(columns={'size': 'count'})
     region_fig    = px.bar(
         region_counts.sort_values('count'), x='count', y='region',
-        orientation='h', title='Companies per Region',
-        color_discrete_sequence=[nte_darkblue],
+        orientation='h',
+        color_discrete_sequence=[nte_violet], text='count',
     )
-    region_fig.update_layout(margin={'l': 120, 'r': 20, 't': 40, 'b': 20})
+    region_fig.update_traces(texttemplate='%{x:,}', textposition='outside', cliponaxis=False,
+                             textfont={'color': MUTED, 'size': 11},
+                             hovertemplate='<b>%{y}</b><br>%{x:,} companies<extra></extra>')
+    region_fig.update_xaxes(title=None, showgrid=True)
+    region_fig.update_yaxes(title=None, showgrid=False, tickfont={'color': INK, 'size': 12})
+    region_fig.update_layout(bargap=0.35, margin={'l': 16, 'r': 40, 't': 16, 'b': 16})
 
     _cat  = filtered['Predicted_Category'].fillna('Unknown').value_counts().reset_index()
     _cat.columns = ['Predicted_Category', 'count']
-    pie_cat = px.pie(_cat, names='Predicted_Category', values='count', title='Product Category',
-                     color_discrete_sequence=px.colors.sequential.Purples_r)
-    pie_cat.update_traces(textposition='inside', textinfo='percent+label')
-    pie_cat.update_layout(showlegend=False, margin={'t': 50, 'b': 10, 'l': 10, 'r': 10})
+    pie_cat = _donut(_cat, 'Predicted_Category', VIOLET_RAMP)
 
     _tier = filtered['Predicted_Tier'].fillna('Unknown').value_counts().reset_index()
     _tier.columns = ['Predicted_Tier', 'count']
-    pie_tier = px.pie(_tier, names='Predicted_Tier', values='count', title='Lifecycle Stage',
-                      color_discrete_sequence=px.colors.sequential.Blues_r)
-    pie_tier.update_traces(textposition='inside', textinfo='percent+label')
-    pie_tier.update_layout(showlegend=False, margin={'t': 50, 'b': 10, 'l': 10, 'r': 10})
+    pie_tier = _donut(_tier, 'Predicted_Tier', BLUE_RAMP)
 
     _year = pd.to_numeric(filtered.get('year_start'), errors='coerce').dropna().astype(int)
     _year_counts = _year.value_counts().sort_index().reset_index()
     _year_counts.columns = ['year_start', 'count']
-    year_bar = px.bar(_year_counts, x='year_start', y='count', title='Founding Year',
+    year_bar = px.bar(_year_counts, x='year_start', y='count',
                       color_discrete_sequence=[nte_darkblue])
-    year_bar.update_layout(margin={'t': 50, 'b': 30, 'l': 40, 'r': 10},
-                           xaxis_title=None, yaxis_title=None)
+    year_bar.update_traces(marker_cornerradius=0,
+                           hovertemplate='<b>%{x}</b><br>%{y:,} companies founded<extra></extra>')
+    year_bar.update_xaxes(title=None, showgrid=False)
+    year_bar.update_yaxes(title=None)
+    year_bar.update_layout(bargap=0.1, margin={'t': 20, 'b': 20, 'l': 16, 'r': 16})
 
     _legal = (filtered['legal_form'] if 'legal_form' in filtered.columns
               else pd.Series(dtype=object))
     _legal = _legal.fillna('Unknown').replace('', 'Unknown').value_counts().reset_index()
     _legal.columns = ['legal_form', 'count']
-    pie_legal = px.pie(_legal, names='legal_form', values='count', title='Legal Form',
-                       color_discrete_sequence=px.colors.sequential.Teal_r)
-    pie_legal.update_traces(textposition='inside', textinfo='percent+label')
-    pie_legal.update_layout(showlegend=False, margin={'t': 50, 'b': 10, 'l': 10, 'r': 10})
+    pie_legal = _donut(_legal, 'legal_form', MIXED_RAMP)
 
     table_df      = filtered[['trade_name', 'Predicted_Category', 'Predicted_Tier', 'tags', 'employees']].copy()
     table_df['employees'] = table_df['employees'].astype(int)
@@ -582,7 +695,8 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
     tooltip_data  = [{'tags': {'value': str(r.get('tags', '') or ''), 'type': 'markdown'}} for r in records]
 
     city_label = f"City filter: {selected_city} — click the same bubble again to clear" if selected_city else ""
-    return kpi_total, kpi_active, kpi_web, map_fig, region_fig, pie_cat, pie_tier, year_bar, pie_legal, records, tooltip_data, city_label
+    table_count = f"{len(records):,} results · click a row to show its city on the map"
+    return kpi_total, kpi_active, kpi_web, map_fig, region_fig, pie_cat, pie_tier, year_bar, pie_legal, records, tooltip_data, city_label, table_count
 
 # ── Usage tracking callbacks ──────────────────────────────────────────────────
 # Generate a stable per-browser-session id (kept in sessionStorage) on load.

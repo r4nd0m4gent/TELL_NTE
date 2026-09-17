@@ -14,7 +14,7 @@ set -euo pipefail
 
 DOMAIN=tell.newtexeco.nl
 WEBROOT=/var/www/certbot
-APP_DIR=/home/tell/app
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOK=/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 
 echo "▶ Installing certbot (if missing)…"
@@ -29,22 +29,33 @@ mkdir -p "${WEBROOT}/.well-known/acme-challenge"
 chown -R www-data:www-data "${WEBROOT}"
 
 echo "▶ Installing Nginx config (serves the ACME challenge on port 80)…"
-cp "${APP_DIR}/deploy/nginx_tell.conf" /etc/nginx/sites-available/tell
+cp /etc/nginx/sites-available/tell "/etc/nginx/sites-available/tell.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+cp "${SCRIPT_DIR}/nginx_tell.conf" /etc/nginx/sites-available/tell
 ln -sf /etc/nginx/sites-available/tell /etc/nginx/sites-enabled/tell
 nginx -t
 systemctl reload nginx
 
 echo "▶ Checking the challenge path is reachable over HTTP…"
+# `systemctl reload` returns before the new Nginx workers take over, so retry
+# for a few seconds. Only warn on failure: the server may be unable to reach
+# its own public hostname even when Let's Encrypt can, and certbot reports a
+# clear error below if validation really fails.
 echo ok > "${WEBROOT}/.well-known/acme-challenge/selftest"
-if curl -fsS -m 10 "http://${DOMAIN}/.well-known/acme-challenge/selftest" | grep -q ok; then
+REACHABLE=no
+for _ in 1 2 3 4 5; do
+    if curl -sS -m 10 "http://${DOMAIN}/.well-known/acme-challenge/selftest" 2>/dev/null | grep -qx ok; then
+        REACHABLE=yes
+        break
+    fi
+    sleep 2
+done
+rm -f "${WEBROOT}/.well-known/acme-challenge/selftest"
+if [ "${REACHABLE}" = yes ]; then
     echo "  reachable ✓"
 else
-    echo "  ✗ http://${DOMAIN}/.well-known/acme-challenge/selftest is not reachable."
-    echo "    Check that port 80 is open (ufw / DigitalOcean cloud firewall)."
-    rm -f "${WEBROOT}/.well-known/acme-challenge/selftest"
-    exit 1
+    echo "  ⚠ could not fetch the test file from this server; continuing anyway."
+    echo "    If certbot fails below, check that port 80 is open (ufw / DigitalOcean firewall)."
 fi
-rm -f "${WEBROOT}/.well-known/acme-challenge/selftest"
 
 echo "▶ Installing deploy hook (reload Nginx after every renewal)…"
 mkdir -p "$(dirname "${HOOK}")"

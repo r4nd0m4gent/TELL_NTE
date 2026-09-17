@@ -19,8 +19,62 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
 .tell-footer a { color: #54639E; text-decoration: none; }
 .tell-footer a:hover { text-decoration: underline; }
 
+/* ── Cards: KPIs, graphs, table ────────────────────────────────────────── */
+.tell-card {
+    background: #fff;
+    border: 1px solid #e9e6ef;
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(30, 20, 50, 0.04), 0 4px 16px rgba(30, 20, 50, 0.05);
+    overflow: hidden;   /* clips the map and plot corners to the radius */
+}
+.tell-kpi { flex: 1; padding: 18px 20px; text-align: center; }
+
+/* ── Filter panels ─────────────────────────────────────────────────────── */
+.tell-panel {
+    background: #fff;
+    border: 1px solid #e9e6ef;
+    border-radius: 12px;
+    padding: 6px;
+}
+.tell-filter-col label {
+    display: block; margin-bottom: 6px;
+    font-size: 13px; font-weight: 600; color: #6b6b76;
+}
+
 /* Filters: keep the three dropdowns on one row */
 .tell-filters { display: flex; flex-wrap: nowrap; align-items: flex-end; }
+
+/* ── Section headings above cards (charts, map, table) ─────────────────── */
+.tell-block { display: flex; flex-direction: column; }
+.tell-block > .tell-card { flex: 1; }
+.tell-block-head { padding: 4px 4px 10px; }
+.tell-block-title {
+    margin: 0; font-size: 16px; font-weight: 700; color: #513773;
+    display: flex; align-items: center; gap: 8px;
+}
+.tell-block-title::before {   /* small brand accent bar */
+    content: ""; width: 4px; height: 16px; border-radius: 2px; background: #513773;
+}
+.tell-block-sub { margin: 4px 0 0 12px; font-size: 12px; color: #6b6b76; min-height: 15px; }
+
+/* ── Company table ─────────────────────────────────────────────────────── */
+.tell-table-card .dash-table-container th.dash-header:first-child { padding-left: 20px !important; }
+.tell-table-card .dash-table-container td.dash-cell:first-child { padding-left: 20px !important; }
+
+/* Pagination bar under the table */
+.tell-table-card .previous-next-container {
+    float: none; display: flex; justify-content: flex-end; align-items: center;
+    padding: 10px 16px; font-family: inherit; color: #6b6b76;
+}
+.tell-table-card .previous-next-container button {
+    border: 1px solid #e9e6ef; border-radius: 6px; background: #fff;
+    color: #513773; min-width: 30px; height: 30px; margin: 0 2px; cursor: pointer;
+}
+.tell-table-card .previous-next-container button:disabled { color: #cfcad8; cursor: default; }
+.tell-table-card .previous-next-container input.current-page {
+    border: 1px solid #e9e6ef; border-radius: 6px; height: 30px; width: 40px;
+    text-align: center; font-family: inherit; color: #2c2c2c;
+}
 
 /* Never let a graph push the page wider than the screen */
 .tell-app, .tell-map-row, .tell-pies { max-width: 100%; }
@@ -48,10 +102,11 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
     .tell-map-row .js-plotly-plot { height: 360px !important; width: 100% !important; }
 
     /* Distribution charts: full width, one per row */
-    .tell-pies > .dash-graph,
-    .tell-pies .js-plotly-plot { width: 100% !important; flex: none !important; height: 300px !important; }
+    .tell-pies > div { width: 100% !important; flex: none !important; }
+    .tell-pies .dash-graph,
+    .tell-pies .js-plotly-plot { width: 100% !important; height: 320px !important; }
 
     /* Buttons go full width and easier to tap */
     .tell-buttons > a,
-    .tell-buttons > button { width: 100% !important; text-align: center; }
+    .tell-buttons > button { width: 100% !important; text-align: center; box-sizing: border-box; }
 }
