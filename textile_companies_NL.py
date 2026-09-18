@@ -1,6 +1,8 @@
 import os
 import json
 import threading
+from collections import Counter
+from html import escape as escape_html
 import dash
 from dash import dcc, html, Input, Output, State, dash_table, ctx
 import plotly.express as px
@@ -45,22 +47,46 @@ pio.templates['tell'] = go.layout.Template(layout={
 pio.templates.default = 'plotly_white+tell'
 
 
-def _donut(df, names, colors):
+def _fade(hex_color, amount=0.75):
+    """Blend a hex colour towards white, for slices that are not selected."""
+    h = hex_color.lstrip('#')
+    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    mix = lambda c: int(round(c + (255 - c) * amount))
+    return f'#{mix(r):02x}{mix(g):02x}{mix(b):02x}'
+
+
+def _donut(df, names, colors, selected=None):
     """Donut chart with the total in the centre.
 
     Slices are labelled in place; labels that don't fit (small slices) are
     hidden rather than shrunk, and every slice still shows details on hover.
     No legend: some fields have ~10 categories, which would squash the chart.
+
+    `selected` is the slice the user clicked to filter by: it is pulled out of
+    the ring and the others are dimmed, so the active filter is visible on the
+    chart itself.
     """
     total = int(df['count'].sum())
     fig = px.pie(df, names=names, values='count', hole=0.42,
                  color_discrete_sequence=colors)
+    labels = df[names].astype(str).tolist()
+    marker = {'line': {'color': 'white', 'width': 2}}
+    pull   = None
+    if selected is not None:
+        # pie markers have no opacity, so a dimmed slice is its own colour
+        # faded towards the card background instead.
+        slice_colors = [colors[i % len(colors)] for i in range(len(labels))]
+        marker['colors'] = [c if l == selected else _fade(c)
+                            for c, l in zip(slice_colors, labels)]
+        pull = [0.06 if l == selected else 0 for l in labels]
     fig.update_traces(
         sort=True, direction='clockwise', rotation=0,
         textposition='inside', textinfo='label+percent', insidetextorientation='auto',
         texttemplate='%{label}<br>%{percent:.0%}',
-        marker={'line': {'color': 'white', 'width': 2}},
-        hovertemplate='<b>%{label}</b><br>%{value:,} companies (%{percent})<extra></extra>',
+        pull=pull,
+        marker=marker,
+        hovertemplate='<b>%{label}</b><br>%{value:,} companies (%{percent})'
+                      '<br><i>click to filter</i><extra></extra>',
     )
     fig.update_layout(
         uniformtext_minsize=10, uniformtext_mode='hide',
@@ -127,7 +153,8 @@ query_org = """
         o.legal_form,
         t.tags,
         t.category    AS Predicted_Category,
-        t.tier        AS Predicted_Tier
+        t.tier        AS Predicted_Tier,
+        COALESCE(sc.has_contact, 0) AS has_contact
     FROM organizations AS o
     JOIN (
         SELECT city, MAX(region) AS region,
@@ -135,6 +162,14 @@ query_org = """
         FROM geographies GROUP BY city
     ) AS g ON g.city = o.city
     JOIN tags AS t ON t.id = o.id
+    -- Contacts found on the company's public website by the scraper. Grouped
+    -- by website first: a site can appear on several scrape rows, and a plain
+    -- join would then duplicate the organization.
+    LEFT JOIN (
+        SELECT website,
+               MAX(`Website emails` IS NOT NULL AND `Website emails` <> '') AS has_contact
+        FROM scraping17092026 GROUP BY website
+    ) AS sc ON sc.website = o.website
     WHERE o.status = 'Active'
 """
 
@@ -174,6 +209,7 @@ def load_companies_db():
         if df.empty:
             return None
         df['employees'] = pd.to_numeric(df['employees'], errors='coerce').fillna(0).astype(int)
+        df['has_contact'] = pd.to_numeric(df.get('has_contact'), errors='coerce').fillna(0).astype(int)
         return df
     except Exception:
         return None
@@ -366,11 +402,56 @@ def _options(values):
                   key=lambda o: o['label'].lower())
 
 
-def _filter_col(label, dd_id, placeholder, values):
+def split_tags(value):
+    """'fashion, shop, fashion' -> ['fashion', 'shop'] - one entry per keyword."""
+    if pd.isna(value):
+        return []
+    out = []
+    for part in str(value).split(','):
+        tag = ' '.join(part.split()).lower()
+        if tag and tag not in out:
+            out.append(tag)
+    return out
+
+
+def _keyword_options(values):
+    """Dropdown options for the tags column: one option per keyword, not per
+    whole tag string. Counts tell the user how much a keyword narrows things."""
+    counts = Counter(tag for value in values.dropna() for tag in split_tags(value))
+    return [{'label': f'{tag}  ({n:,})', 'value': tag}
+            for tag, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+
+
+CHIPS_SHOWN = 12          # keywords rendered per row before the "+n" counter
+
+
+def tag_chips(value, selected=()):
+    """Render a tag string as separate chips. Keywords the user is filtering on
+    are pulled to the front and highlighted, so it is visible why a row matched.
+    The cell only has room for so many; the tooltip carries the full list."""
+    tags = split_tags(value)
+    if not tags:
+        return ''
+    selected = {str(s).strip().lower() for s in (selected or ())}
+    hits     = [t for t in tags if t in selected]
+    rest     = [t for t in tags if t not in selected]
+    ordered  = hits + rest
+    shown, hidden = ordered[:CHIPS_SHOWN], len(ordered) - CHIPS_SHOWN
+    chips = [
+        f'<span class="tell-chip{" tell-chip-on" if t in selected else ""}">'
+        f'{escape_html(t)}</span>'
+        for t in shown
+    ]
+    if hidden > 0:
+        chips.append(f'<span class="tell-chip tell-chip-more">+{hidden}</span>')
+    return f'<span class="tell-chips">{"".join(chips)}</span>'
+
+
+def _filter_col(label, dd_id, placeholder, values, options=None):
     return html.Div([
         html.Label(label),
-        dcc.Dropdown(id=dd_id, options=_options(values), value=None,
-                     placeholder=placeholder, multi=True),
+        dcc.Dropdown(id=dd_id, options=_options(values) if options is None else options,
+                     value=None, placeholder=placeholder, multi=True),
     ], className='tell-filter-col',
        style={'flex': '1', 'minWidth': '0', 'padding': '10px'})
 
@@ -381,7 +462,6 @@ app.layout = html.Div([
     html.Div([
         _filter_col("Filter by Region:",  'region-dropdown',  "Select a region...",  data['region']),
         _filter_col("Filter by City:",    'city-dropdown',    "Select a city...",    data['city']),
-        _filter_col("Filter by Company:", 'company-dropdown', "Search a company...", data['trade_name']),
         html.Div([
             html.Label("Filter by Consortium:"),
             dcc.Dropdown(id='consortium-dropdown', options=_consortium_options, value=None,
@@ -391,9 +471,9 @@ app.layout = html.Div([
 
     # ── KPI cards ─────────────────────────────────────────────────────────────
     html.Div([
-        _kpi('Total Records',       'kpi-total'),
-        _kpi('Active Businesses',   'kpi-active'),
-        _kpi('Registered Websites', 'kpi-web'),
+        _kpi('Active Businesses',       'kpi-active'),
+        _kpi('Registered Websites',     'kpi-web'),
+        _kpi('Public Website Contacts', 'kpi-contacts'),
     ], className='tell-kpis', style={'display': 'flex', 'gap': '16px', 'marginBottom': '20px'}),
 
     html.Div(id='city-filter-label', style={'minHeight': '22px', 'marginBottom': '4px', 'fontSize': '13px', 'color': nte_violet, 'fontWeight': '600'}),
@@ -406,11 +486,11 @@ app.layout = html.Div([
         _graph('region-chart', '500px', 'Companies per Region',
                'Number of companies in each province', flex='1.5', minWidth=0),
     ], className='tell-map-row', style={'display': 'flex', 'gap': '16px', 'marginBottom': '20px'}),
-    # ── Filters: category / tier / keywords (between map and table) ─────────
+    # ── Filters: company / keywords (between map and table) ─────────────────
     html.Div([
-        _filter_col("Filter by Category:",       'category-dropdown', "Select a category...", data['Predicted_Category']),
-        _filter_col("Filter by Tier:",           'tier-dropdown',     "Select a tier...",     data['Predicted_Tier']),
-        _filter_col("Filter by Keywords/Tags:",  'keywords-dropdown', "Select keywords...",   data['tags']),
+        _filter_col("Filter by Company:",        'company-dropdown',  "Search a company...",  data['trade_name']),
+        _filter_col("Filter by Keywords/Tags:",  'keywords-dropdown', "Select keywords...",   data['tags'],
+                    options=_keyword_options(data['tags'])),
     ], className='tell-filters tell-panel', style={'marginBottom': '20px'}),
     # ── Data table ────────────────────────────────────────────────────────────
     _block_head('Companies', subtitle_id='table-count'),
@@ -419,13 +499,14 @@ app.layout = html.Div([
             id='company-table',
             columns=[
                 {'name': 'Company',            'id': 'trade_name'},
-                {'name': 'Predicted Category', 'id': 'Predicted_Category'},
-                {'name': 'Predicted Tier',     'id': 'Predicted_Tier'},
-                {'name': 'Tags',               'id': 'tags'},
+                {'name': 'Keywords',           'id': 'tags', 'presentation': 'markdown'},
                 {'name': 'Employees',          'id': 'employees', 'type': 'numeric'},
             ],
             page_size=10, sort_action='native', filter_action='none',
+            # Biggest employers first, until the user sorts on another column.
+            sort_by=[{'column_id': 'employees', 'direction': 'desc'}],
             style_as_list_view=True,
+            markdown_options={'html': True},
             style_table={'overflowX': 'auto'},
             style_header={'backgroundColor': nte_violet, 'color': 'white', 'fontWeight': '600',
                           'fontSize': '11px', 'textTransform': 'uppercase', 'letterSpacing': '0.7px',
@@ -436,7 +517,10 @@ app.layout = html.Div([
                         'overflow': 'hidden', 'textOverflow': 'ellipsis', 'maxWidth': '260px'},
             style_cell_conditional=[
                 {'if': {'column_id': 'trade_name'}, 'fontWeight': '600', 'minWidth': '180px'},
-                {'if': {'column_id': 'tags'},       'color': MUTED, 'minWidth': '220px'},
+                # Chips need room to wrap, so this cell does not clip like the others.
+                {'if': {'column_id': 'tags'}, 'color': MUTED, 'minWidth': '260px',
+                 'maxWidth': '420px', 'whiteSpace': 'normal', 'overflow': 'visible',
+                 'textOverflow': 'clip', 'padding': '8px 16px'},
                 {'if': {'column_id': 'employees'},  'textAlign': 'right', 'width': '110px'},
             ],
             style_data={'cursor': 'pointer'},
@@ -457,13 +541,16 @@ app.layout = html.Div([
 
     # ── Distribution charts ─────────────────────────────────────────────────
     html.Div([
-        _graph('pie-category', '300px', 'Product Category', 'Share of companies',
+        _graph('pie-category', '300px', 'Product Category',
+               'Click a slice to filter the table',
                flex='1 1 240px', minWidth='240px'),
-        _graph('pie-tier',     '300px', 'Lifecycle Stage',  'Position in the value chain',
+        _graph('pie-tier',     '300px', 'Lifecycle Stage',
+               'Click a slice to filter the table',
                flex='1 1 240px', minWidth='240px'),
         _graph('year-bar',     '300px', 'Founding Year',    'Companies founded per year',
                flex='1 1 240px', minWidth='240px'),
-        _graph('pie-legal',    '300px', 'Legal Form',       'Share of companies',
+        _graph('pie-legal',    '300px', 'Legal Form',
+               'Click a slice to filter the table',
                flex='1 1 240px', minWidth='240px'),
     ], className='tell-pies', style={'display': 'flex', 'flexWrap': 'wrap', 'gap': '16px', 'marginTop': '20px'}),
 
@@ -481,6 +568,7 @@ app.layout = html.Div([
     classification.get_modal(),
     *classification.get_stores(),
     dcc.Store(id='selected-city', data=None),
+    dcc.Store(id='chart-filters', data={}),
 
     # ── Usage tracking plumbing (hidden) ──────────────────────────────────────
     dcc.Store(id='session-id', storage_type='session'),
@@ -493,8 +581,7 @@ app.layout = html.Div([
 
 
 # ── Filter helper ─────────────────────────────────────────────────────────────
-def filter_data(regions, companies, keywords=None, cities=None, categories=None,
-                tiers=None, consortiums=None):
+def filter_data(regions, companies, keywords=None, cities=None, consortiums=None):
     filtered = data.copy()
     if regions:
         filtered = filtered[filtered['region'].isin(regions)]
@@ -502,13 +589,13 @@ def filter_data(regions, companies, keywords=None, cities=None, categories=None,
         filtered = filtered[filtered['trade_name'].isin(companies)]
     if cities:
         filtered = filtered[filtered['city'].isin(cities)]
-    if categories:
-        filtered = filtered[filtered['Predicted_Category'].isin(categories)]
-    if tiers:
-        filtered = filtered[filtered['Predicted_Tier'].isin(tiers)]
     if keywords:
-        pattern  = '|'.join([str(k) for k in keywords])
-        filtered = filtered[filtered['tags'].astype(str).str.contains(pattern, case=False, na=False)]
+        # Match whole keywords, not substrings: 'wear' used to also pull in
+        # 'workwear' and 'swimwear', and a keyword containing a regex character
+        # used to raise. A company matches when it has any selected keyword.
+        wanted   = {str(k).strip().lower() for k in keywords}
+        filtered = filtered[filtered['tags'].map(
+            lambda v: bool(wanted.intersection(split_tags(v))))]
     if consortiums and 'id' in filtered.columns:
         member_ids = set()
         for c in consortiums:
@@ -525,25 +612,71 @@ def filter_data(regions, companies, keywords=None, cities=None, categories=None,
     Output('region-dropdown',   'options'),
     Output('city-dropdown',     'options'),
     Output('company-dropdown',  'options'),
-    Output('category-dropdown', 'options'),
-    Output('tier-dropdown',     'options'),
     Output('keywords-dropdown', 'options'),
     Input('region-dropdown',    'value'),
     Input('city-dropdown',      'value'),
     Input('company-dropdown',   'value'),
-    Input('category-dropdown',  'value'),
-    Input('tier-dropdown',      'value'),
     Input('keywords-dropdown',  'value'),
     Input('consortium-dropdown','value'),
 )
-def update_filter_options(regions, cities, companies, categories, tiers, keywords, consortiums):
-    region_opts   = _options(filter_data(None,    companies, keywords, cities, categories, tiers, consortiums)['region'])
-    city_opts     = _options(filter_data(regions, companies, keywords, None,   categories, tiers, consortiums)['city'])
-    company_opts  = _options(filter_data(regions, None,      keywords, cities, categories, tiers, consortiums)['trade_name'])
-    category_opts = _options(filter_data(regions, companies, keywords, cities, None,       tiers, consortiums)['Predicted_Category'])
-    tier_opts     = _options(filter_data(regions, companies, keywords, cities, categories, None,  consortiums)['Predicted_Tier'])
-    keyword_opts  = _options(filter_data(regions, companies, None,     cities, categories, tiers, consortiums)['tags'])
-    return region_opts, city_opts, company_opts, category_opts, tier_opts, keyword_opts
+def update_filter_options(regions, cities, companies, keywords, consortiums):
+    region_opts   = _options(filter_data(None,    companies, keywords, cities, consortiums)['region'])
+    city_opts     = _options(filter_data(regions, companies, keywords, None,   consortiums)['city'])
+    company_opts  = _options(filter_data(regions, None,      keywords, cities, consortiums)['trade_name'])
+    keyword_opts  = _keyword_options(filter_data(regions, companies, None, cities, consortiums)['tags'])
+    return region_opts, city_opts, company_opts, keyword_opts
+
+
+# ── Pie click callback ────────────────────────────────────────────────────────
+# Each donut filters on its own column. Clicking a slice selects it, clicking
+# the same slice again clears it, so the charts work like the dropdowns do.
+PIE_FILTERS = {
+    'pie-category': 'Predicted_Category',
+    'pie-tier':     'Predicted_Tier',
+    'pie-legal':    'legal_form',
+}
+PIE_LABELS = {
+    'Predicted_Category': 'Product category',
+    'Predicted_Tier':     'Lifecycle stage',
+    'legal_form':         'Legal form',
+}
+
+
+def apply_chart_filters(df, chart_filters, skip=None):
+    """Narrow `df` by the slices clicked in the donuts.
+
+    `skip` leaves one column out, so a chart is never filtered by its own
+    selection and keeps showing every slice the user can switch to.
+    """
+    for column, value in (chart_filters or {}).items():
+        if value is None or column == skip or column not in df.columns:
+            continue
+        series = df[column].fillna('Unknown')
+        df = df[series == value]
+    return df
+
+
+@app.callback(
+    Output('chart-filters', 'data'),
+    Input('pie-category', 'clickData'),
+    Input('pie-tier',     'clickData'),
+    Input('pie-legal',    'clickData'),
+    State('chart-filters', 'data'),
+    prevent_initial_call=True,
+)
+def update_chart_filters(cat_click, tier_click, legal_click, current):
+    column = PIE_FILTERS.get(ctx.triggered_id)
+    click  = {'pie-category': cat_click, 'pie-tier': tier_click,
+              'pie-legal': legal_click}.get(ctx.triggered_id)
+    if not column or not click:
+        return dash.no_update
+    label   = click['points'][0].get('label')
+    current = dict(current or {})
+    if label is None or current.get(column) == label:
+        current.pop(column, None)          # same slice again clears the filter
+    else:
+        current[column] = label
+    return current
 
 
 # ── City click callback ───────────────────────────────────────────────────────
@@ -580,9 +713,9 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
 
 # ── Main dashboard callback ───────────────────────────────────────────────────
 @app.callback(
-    Output('kpi-total',         'children'),
     Output('kpi-active',        'children'),
     Output('kpi-web',           'children'),
+    Output('kpi-contacts',      'children'),
     Output('map-graph',         'figure'),
     Output('region-chart',      'figure'),
     Output('pie-category',      'figure'),
@@ -597,23 +730,27 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
     Input('company-dropdown',   'value'),
     Input('keywords-dropdown',  'value'),
     Input('city-dropdown',      'value'),
-    Input('category-dropdown',  'value'),
-    Input('tier-dropdown',      'value'),
     Input('consortium-dropdown','value'),
     Input('selected-city',      'data'),
+    Input('chart-filters',      'data'),
 )
 def update_dashboard(selected_regions, selected_companies, selected_keywords,
-                     selected_cities, selected_categories, selected_tiers,
-                     selected_consortiums, selected_city):
+                     selected_cities, selected_consortiums, selected_city,
+                     chart_filters):
     filtered = filter_data(selected_regions, selected_companies, selected_keywords,
-                           selected_cities, selected_categories, selected_tiers,
-                           selected_consortiums)
+                           selected_cities, selected_consortiums)
     if selected_city:
         filtered = filtered[filtered['city'] == selected_city]
+    # Everything except the donuts themselves sees the clicked slices.
+    unsliced = filtered
+    filtered = apply_chart_filters(filtered, chart_filters)
 
-    kpi_total  = f"{len(filtered):,}"
     kpi_active = f"{(filtered['status'].str.lower() == 'active').sum():,}"
     kpi_web    = f"{filtered['website'].notna().sum():,}"
+    # Companies whose public website gave up at least one e-mail address.
+    # The Excel fallback has no scrape data, hence the guard.
+    kpi_contacts = (f"{int(filtered['has_contact'].sum()):,}"
+                    if 'has_contact' in filtered.columns else '—')
 
     _valid   = filtered.dropna(subset=['latitude', 'longitude'])
     city_geo = (
@@ -664,13 +801,19 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
     region_fig.update_yaxes(title=None, showgrid=False, tickfont={'color': INK, 'size': 12})
     region_fig.update_layout(bargap=0.35, margin={'l': 16, 'r': 40, 't': 16, 'b': 16})
 
-    _cat  = filtered['Predicted_Category'].fillna('Unknown').value_counts().reset_index()
+    # A donut is not narrowed by its own slice, so the other slices stay
+    # visible and clickable; the selected one is pulled out of the ring.
+    _cat_src = apply_chart_filters(unsliced, chart_filters, skip='Predicted_Category')
+    _cat  = _cat_src['Predicted_Category'].fillna('Unknown').value_counts().reset_index()
     _cat.columns = ['Predicted_Category', 'count']
-    pie_cat = _donut(_cat, 'Predicted_Category', VIOLET_RAMP)
+    pie_cat = _donut(_cat, 'Predicted_Category', VIOLET_RAMP,
+                     selected=(chart_filters or {}).get('Predicted_Category'))
 
-    _tier = filtered['Predicted_Tier'].fillna('Unknown').value_counts().reset_index()
+    _tier_src = apply_chart_filters(unsliced, chart_filters, skip='Predicted_Tier')
+    _tier = _tier_src['Predicted_Tier'].fillna('Unknown').value_counts().reset_index()
     _tier.columns = ['Predicted_Tier', 'count']
-    pie_tier = _donut(_tier, 'Predicted_Tier', BLUE_RAMP)
+    pie_tier = _donut(_tier, 'Predicted_Tier', BLUE_RAMP,
+                      selected=(chart_filters or {}).get('Predicted_Tier'))
 
     _year = pd.to_numeric(filtered.get('year_start'), errors='coerce').dropna().astype(int)
     _year_counts = _year.value_counts().sort_index().reset_index()
@@ -683,20 +826,39 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
     year_bar.update_yaxes(title=None)
     year_bar.update_layout(bargap=0.1, margin={'t': 20, 'b': 20, 'l': 16, 'r': 16})
 
-    _legal = (filtered['legal_form'] if 'legal_form' in filtered.columns
+    _legal_src = apply_chart_filters(unsliced, chart_filters, skip='legal_form')
+    _legal = (_legal_src['legal_form'] if 'legal_form' in _legal_src.columns
               else pd.Series(dtype=object))
     _legal = _legal.fillna('Unknown').replace('', 'Unknown').value_counts().reset_index()
     _legal.columns = ['legal_form', 'count']
-    pie_legal = _donut(_legal, 'legal_form', MIXED_RAMP)
+    pie_legal = _donut(_legal, 'legal_form', MIXED_RAMP,
+                       selected=(chart_filters or {}).get('legal_form'))
 
-    table_df      = filtered[['trade_name', 'Predicted_Category', 'Predicted_Tier', 'tags', 'employees']].copy()
+    table_df      = filtered[['trade_name', 'tags', 'employees']].copy()
     table_df['employees'] = table_df['employees'].astype(int)
+    # Match the table's default sort, so the first page is right even before
+    # Dash applies sort_by (and stays right when the user sorts elsewhere).
+    table_df      = table_df.sort_values('employees', ascending=False)
+    # The tooltip keeps the plain, complete list; the cell shows it as chips.
+    tooltip_data  = [{'tags': {'value': ', '.join(split_tags(v)), 'type': 'text'}}
+                     for v in table_df['tags']]
+    table_df['tags'] = [tag_chips(v, selected_keywords) for v in table_df['tags']]
     records       = table_df.to_dict('records')
-    tooltip_data  = [{'tags': {'value': str(r.get('tags', '') or ''), 'type': 'markdown'}} for r in records]
 
-    city_label = f"City filter: {selected_city} — click the same bubble again to clear" if selected_city else ""
+    # One line for every filter that was set by clicking a chart rather than a
+    # dropdown, since those have no visible control to read the value off.
+    active = []
+    if selected_city:
+        active.append(f"City: {selected_city}")
+    for column, value in (chart_filters or {}).items():
+        if value is not None:
+            active.append(f"{PIE_LABELS.get(column, column)}: {value}")
+    city_label = (" · ".join(active) + " — click the same slice or bubble again to clear"
+                  if active else "")
     table_count = f"{len(records):,} results · click a row to show its city on the map"
-    return kpi_total, kpi_active, kpi_web, map_fig, region_fig, pie_cat, pie_tier, year_bar, pie_legal, records, tooltip_data, city_label, table_count
+    return (kpi_active, kpi_web, kpi_contacts, map_fig, region_fig,
+            pie_cat, pie_tier, year_bar, pie_legal, records, tooltip_data,
+            city_label, table_count)
 
 # ── Usage tracking callbacks ──────────────────────────────────────────────────
 # Generate a stable per-browser-session id (kept in sessionStorage) on load.
@@ -736,21 +898,18 @@ def track_session(session_id):
     Input('region-dropdown',   'value'),
     Input('city-dropdown',     'value'),
     Input('company-dropdown',  'value'),
-    Input('category-dropdown', 'value'),
-    Input('tier-dropdown',     'value'),
     Input('keywords-dropdown', 'value'),
     Input('consortium-dropdown','value'),
     State('session-id', 'data'),
     prevent_initial_call=True,
 )
-def track_filters(regions, cities, companies, categories, tiers, keywords, consortiums, session_id):
+def track_filters(regions, cities, companies, keywords, consortiums, session_id):
     """Record every filter dropdown change."""
     log_event(session_id, 'filter_change', {
         'changed': ctx.triggered_id,
         'filters': {
             'region': regions, 'city': cities, 'company': companies,
-            'category': categories, 'tier': tiers, 'keywords': keywords,
-            'consortium': consortiums,
+            'keywords': keywords, 'consortium': consortiums,
         },
     })
     return dash.no_update

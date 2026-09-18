@@ -81,14 +81,33 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
 .tell-map-row .js-plotly-plot,
 .tell-pies .js-plotly-plot { max-width: 100% !important; }
 
+/* ── Keyword chips in the companies table ─────────────────────────────── */
+/* The Keywords cell renders one chip per keyword instead of a comma string,
+   so a company's keywords can be read (and counted) at a glance. */
+.tell-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.tell-chip {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    background: #f2eff7; border: 1px solid #e4dcef; color: #513773;
+    font-size: 11px; line-height: 1.6; white-space: nowrap;
+}
+/* Keywords the user is filtering on, so it is clear why the row matched */
+.tell-chip-on { background: #513773; border-color: #513773; color: #fff; font-weight: 600; }
+/* The "+n" counter for keywords that did not fit; the tooltip has them all */
+.tell-chip-more { background: transparent; border-style: dashed; color: #6b6b76; }
+
+/* Markdown cells add their own paragraph margins; chips sit flush without them */
+.dash-cell .dash-cell-value p { margin: 0; }
+
 /* ── Responsive: dashboard on phones ──────────────────────────────────── */
 @media (max-width: 768px) {
     /* Tighter outer padding to reclaim screen width */
     .tell-app { padding: 12px !important; }
 
-    /* Filters: stack the dropdowns full width */
-    .tell-filters { flex-direction: column !important; }
-    .tell-filter-col { width: 100% !important; }
+    /* Filters: stack the dropdowns full width. Stretch (not the desktop
+       flex-end alignment) and border-box keep the 10px padding inside the
+       panel; otherwise the columns stick out on the left. */
+    .tell-filters { flex-direction: column !important; align-items: stretch; }
+    .tell-filter-col { width: auto !important; box-sizing: border-box; }
 
     /* Stack the flex rows vertically (override inline display:flex) */
     .tell-kpis,
