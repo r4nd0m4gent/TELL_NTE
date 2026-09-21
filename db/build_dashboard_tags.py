@@ -1,39 +1,35 @@
 """
 build_dashboard_tags.py
 ───────────────────────
-Prepare an updated keyword string per organization for the TELL dashboard, by
-adding the scraped website keywords to the tags the dashboard already shows.
+Build the merged keyword list per organization that the TELL dashboard shows
+and searches: the curated tags plus everything scraped from the website.
 
 Input (joined on website)
 -------------------------
-    tags.tags                       the current, curated tag string
-    scraping17092026.`English keywords`   the scraped keywords, translated to
-                                    English by new_tell_scraper/translate_keywords.py
+    tags.tags                              the current, curated tag string
+    scraping17092026.`English keywords`    scraped single words  } translated to English by
+    scraping17092026.`English bigrams`     scraped two-word terms } new_tell_scraper/translate_keywords.py
 
-The bigram columns are deliberately left out: they repeat the keywords as
-phrases and are still in the language of the site.
+What goes into the merged list, in this order, de-duplicated
+------------------------------------------------------------
+* every tag the organization already has, in its current order;
+* the scraped keywords, in the order the scraper ranked them;
+* the scraped bigrams, likewise.
 
-What goes into the new string
------------------------------
-* every tag the organization already has, de-duplicated and in its current
-  order. These are curated and kept whatever their frequency - 204 of the 513
-  existing tags are used by fewer than three companies ('upcycle',
-  'womenswear', 'loungewear') and dropping them would lose real information.
-* then the scraped keywords, in the order the scraper ranked them, but only
-  those used by at least --min-companies companies. A keyword one company uses
-  is almost always a brand name, a surname or a typo, and the dashboard's
-  Keywords filter is a dropdown: every kept term becomes an entry in it.
+--min-companies drops scraped terms (never curated tags) that fewer companies
+use; the default of 1 keeps everything. Raise it to trim one-off noise such as
+brand names and surnames.
 
 Output
 ------
 Table `tags_scraped`: id, trade_name, website, tags_old, tags_new and the term
-counts. Nothing writes to `tags`, so the dashboard keeps reading the old column
-until someone points it at this one.
+counts. The dashboard reads tags_new, falling back to `tags` for organizations
+that were not scraped. Nothing writes to `tags`.
 
 Usage
 -----
     python db/build_dashboard_tags.py
-    python db/build_dashboard_tags.py --min-companies 5
+    python db/build_dashboard_tags.py --min-companies 3
     python db/build_dashboard_tags.py --dry-run --csv out.csv
 """
 
@@ -52,7 +48,7 @@ from sqlalchemy import create_engine, text
 ENV_PATH = Path(__file__).resolve().parent / "mysql" / ".env"
 SCRAPE_TABLE = "scraping17092026"
 TARGET_TABLE = "tags_scraped"
-MIN_COMPANIES = 3
+MIN_COMPANIES = 1
 
 QUERY = f"""
     SELECT DISTINCT
@@ -61,7 +57,8 @@ QUERY = f"""
         org.website,
         org.main_activity,
         t.tags,
-        s.`English keywords` AS english_keywords
+        s.`English keywords` AS english_keywords,
+        s.`English bigrams`  AS english_bigrams
     FROM organizations org
     JOIN {SCRAPE_TABLE} s ON org.website = s.website
     JOIN tags t ON t.id = org.id
@@ -94,7 +91,8 @@ def parse_terms(value) -> list[str]:
 
 def build(df: pd.DataFrame, min_companies: int) -> pd.DataFrame:
     old_terms = [parse_terms(v) for v in df["tags"]]
-    new_terms = [parse_terms(v) for v in df["english_keywords"]]
+    new_terms = [parse_terms(k) + parse_terms(b)
+                 for k, b in zip(df["english_keywords"], df["english_bigrams"])]
 
     # How many companies use each scraped keyword; the curated tags are not
     # counted here because they are kept regardless.
@@ -138,13 +136,15 @@ def main() -> int:
     engine = get_engine()
     df = pd.read_sql(text(QUERY), engine)
     print(f"joined {len(df):,} organizations "
-          f"({df['english_keywords'].notna().sum():,} with scraped keywords)")
+          f"({df['english_keywords'].notna().sum():,} with scraped keywords, "
+          f"{df['english_bigrams'].notna().sum():,} with bigrams)")
 
     out = build(df, args.min_companies)
     vocabulary = out.attrs["vocabulary"]
     gained = out["n_new"] - out["n_old"]
-    print(f"keywords used by < {args.min_companies} companies dropped: "
-          f"{out.attrs['dropped']:,}")
+    if args.min_companies > 1:
+        print(f"keywords used by < {args.min_companies} companies dropped: "
+              f"{out.attrs['dropped']:,}")
     print(f"vocabulary for the Keywords filter: {len(vocabulary):,} terms")
     print(f"terms per company: {out['n_old'].mean():.1f} -> {out['n_new'].mean():.1f} "
           f"(max {out['n_new'].max()}) · {int((gained > 0).sum()):,} companies gained terms")

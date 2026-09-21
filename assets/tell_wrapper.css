@@ -36,7 +36,10 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
     border-radius: 12px;
     padding: 6px;
 }
-.tell-filter-col label {
+/* Direct child only: the filter's title. Dash 4 also renders each dropdown
+   option as a <label> inside this column, and `display: block` from here put
+   the option's name on a line below its checkbox. */
+.tell-filter-col > label {
     display: block; margin-bottom: 6px;
     font-size: 13px; font-weight: 600; color: #6b6b76;
 }
@@ -82,9 +85,13 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
 .tell-pies .js-plotly-plot { max-width: 100% !important; }
 
 /* ── Keyword chips in the companies table ─────────────────────────────── */
-/* The Keywords cell renders one chip per keyword instead of a comma string,
-   so a company's keywords can be read (and counted) at a glance. */
-.tell-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+/* The Keywords cell renders one chip per keyword instead of a comma string.
+   It lists all of a company's keywords (up to ~60), so the list scrolls inside
+   the cell rather than stretching the row to fit. */
+.tell-chips {
+    display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+    max-height: 76px; overflow-y: auto; padding-right: 4px;
+}
 .tell-chip {
     display: inline-block; padding: 2px 8px; border-radius: 10px;
     background: #f2eff7; border: 1px solid #e4dcef; color: #513773;
@@ -92,11 +99,58 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
 }
 /* Keywords the user is filtering on, so it is clear why the row matched */
 .tell-chip-on { background: #513773; border-color: #513773; color: #fff; font-weight: 600; }
-/* The "+n" counter for keywords that did not fit; the tooltip has them all */
-.tell-chip-more { background: transparent; border-style: dashed; color: #6b6b76; }
 
 /* Markdown cells add their own paragraph margins; chips sit flush without them */
 .dash-cell .dash-cell-value p { margin: 0; }
+
+/* ── Company profile (opens from a company name in the table) ─────────── */
+.tell-profile-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    align-items: center; justify-content: center; padding: 24px;
+}
+.tell-profile-backdrop { position: absolute; inset: 0; background: rgba(35, 25, 50, 0.45); }
+.tell-profile {
+    position: relative; background: #fff; border-radius: 12px;
+    width: 720px; max-width: 100%; max-height: 88vh; overflow-y: auto;
+    padding: 28px 32px; box-sizing: border-box;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+.tell-profile-close {
+    position: absolute; top: 14px; right: 16px; background: none; border: none;
+    font-size: 26px; line-height: 1; color: #6b6b76; cursor: pointer; padding: 4px 8px;
+}
+.tell-profile-close:hover { color: #513773; }
+.tell-profile-head { padding-right: 32px; margin-bottom: 18px; }
+.tell-profile-name { margin: 0 0 8px; font-size: 1.45rem; color: #513773; line-height: 1.25; }
+.tell-profile-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; color: #6b6b76; }
+.tell-profile-status {
+    background: #e8f3ec; color: #2f6b45; border-radius: 10px;
+    padding: 1px 9px; font-size: 11px; font-weight: 600;
+}
+.tell-profile-link { color: #54639E; text-decoration: none; word-break: break-all; }
+.tell-profile-link:hover { text-decoration: underline; }
+.tell-profile-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;
+}
+.tell-profile-stats-2 { grid-template-columns: repeat(2, 1fr); margin-bottom: 0; }
+.tell-profile-stat { background: #f7f5fa; border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.tell-profile-stat-label {
+    display: block; font-size: 10px; font-weight: 600; letter-spacing: 0.6px;
+    text-transform: uppercase; color: #6b6b76; margin-bottom: 3px;
+}
+.tell-profile-stat-value { display: block; font-size: 15px; font-weight: 600; color: #2c2c2c; overflow-wrap: anywhere; }
+.tell-profile-section { border-top: 1px solid #eeecf2; padding-top: 14px; margin-top: 14px; }
+.tell-profile-section-title {
+    margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.7px;
+    text-transform: uppercase; color: #513773;
+}
+.tell-profile-section p { margin: 0 0 4px; font-size: 14px; }
+.tell-profile-muted { color: #6b6b76; font-size: 13px; }
+.tell-profile-emails { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 6px; }
+.tell-profile-email { color: #54639E; font-size: 14px; text-decoration: none; }
+.tell-profile-email:hover { text-decoration: underline; }
+/* Profiles show every keyword; give the list more room than a table cell */
+.tell-profile-keywords { max-height: 180px; }
 
 /* ── Responsive: dashboard on phones ──────────────────────────────────── */
 @media (max-width: 768px) {
@@ -124,6 +178,11 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
     .tell-pies > div { width: 100% !important; flex: none !important; }
     .tell-pies .dash-graph,
     .tell-pies .js-plotly-plot { width: 100% !important; height: 320px !important; }
+
+    /* Company profile: near full screen, stats two per row */
+    .tell-profile-overlay { padding: 8px; }
+    .tell-profile { padding: 20px 18px; max-height: 94vh; }
+    .tell-profile-stats { grid-template-columns: repeat(2, 1fr); }
 
     /* Buttons go full width and easier to tap */
     .tell-buttons > a,

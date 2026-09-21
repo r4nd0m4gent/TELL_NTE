@@ -151,7 +151,10 @@ query_org = """
         o.surface,
         o.year_start,
         o.legal_form,
-        t.tags,
+        -- The merged keyword list (curated tags + scraped keywords and bigrams,
+        -- built by db/build_dashboard_tags.py); organizations that were not
+        -- scraped keep their curated tags.
+        COALESCE(ts.tags_new, t.tags) AS tags,
         t.category    AS Predicted_Category,
         t.tier        AS Predicted_Tier,
         COALESCE(sc.has_contact, 0) AS has_contact
@@ -162,6 +165,7 @@ query_org = """
         FROM geographies GROUP BY city
     ) AS g ON g.city = o.city
     JOIN tags AS t ON t.id = o.id
+    LEFT JOIN tags_scraped AS ts ON ts.id = o.id
     -- Contacts found on the company's public website by the scraper. Grouped
     -- by website first: a site can appear on several scrape rows, and a plain
     -- join would then duplicate the organization.
@@ -291,9 +295,30 @@ _TRACK_DDL = (
     " session_id VARCHAR(64),"
     " event_type VARCHAR(32) NOT NULL,"
     " details JSON,"
+    " source VARCHAR(16),"
     " created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
     ")"
 )
+
+# Where a tracked event came from, so test and development traffic can be told
+# apart from real visitors (db/mysql/tracking_source.py labels older rows):
+#   public     a visitor on the live site
+#   automated  a headless (scripted) browser on the live site - tests, bots
+#   local      the dashboard running anywhere but the live host, e.g. a laptop
+PUBLIC_HOSTS = {'tell.newtexeco.nl'}
+
+
+def _visit_source():
+    """Classify the current request; None outside a request."""
+    try:
+        from flask import request
+        host = (request.host or '').split(':')[0].lower()
+        agent = request.headers.get('User-Agent', '')
+    except Exception:
+        return None
+    if host not in PUBLIC_HOSTS:
+        return 'local'
+    return 'automated' if 'Headless' in agent else 'public'
 
 _track_engine = None
 _track_schema_ready = False
@@ -308,7 +333,7 @@ def _get_track_engine():
     return _track_engine
 
 
-def _write_event(session_id, event_type, details):
+def _write_event(session_id, event_type, details, source=None):
     """Insert one tracking row. Runs on a worker thread; errors are ignored."""
     global _track_schema_ready
     try:
@@ -323,10 +348,10 @@ def _write_event(session_id, event_type, details):
                         conn.execute(text(_TRACK_DDL))
                         _track_schema_ready = True
             conn.execute(
-                text("INSERT INTO tracking_events (session_id, event_type, details)"
-                     " VALUES (:sid, :etype, :details)"),
+                text("INSERT INTO tracking_events (session_id, event_type, details, source)"
+                     " VALUES (:sid, :etype, :details, :source)"),
                 {'sid': session_id, 'etype': event_type,
-                 'details': json.dumps(details or {}, default=str)},
+                 'details': json.dumps(details or {}, default=str), 'source': source},
             )
     except Exception:
         pass
@@ -334,8 +359,9 @@ def _write_event(session_id, event_type, details):
 
 def log_event(session_id, event_type, details=None):
     """Fire-and-forget tracking write (non-blocking)."""
+    # Read the request here: the worker thread has no request context.
     threading.Thread(target=_write_event,
-                     args=(session_id, event_type, details or {}),
+                     args=(session_id, event_type, details or {}, _visit_source()),
                      daemon=True).start()
 
 
@@ -414,37 +440,220 @@ def split_tags(value):
     return out
 
 
-def _keyword_options(values):
-    """Dropdown options for the tags column: one option per keyword, not per
-    whole tag string. Counts tell the user how much a keyword narrows things."""
-    counts = Counter(tag for value in values.dropna() for tag in split_tags(value))
-    return [{'label': f'{tag}  ({n:,})', 'value': tag}
-            for tag, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+# Split every company's keywords once at load: the filter, the dropdown and the
+# table all work on the list, and re-splitting ~11k strings per callback adds up.
+data['tag_list'] = data['tags'].map(split_tags)
+
+# The merged keyword vocabulary runs to tens of thousands of terms, too many to
+# ship to the browser as dropdown options. The dropdown instead asks the server
+# for the terms matching what the user types, most-used first.
+KEYWORD_OPTIONS_SHOWN = 100
+TABLE_PAGE_SIZE = 10
 
 
-CHIPS_SHOWN = 12          # keywords rendered per row before the "+n" counter
+def _keyword_options(tag_lists, search=None, selected=None):
+    """Keyword dropdown options among the companies in `tag_lists`.
+
+    Only terms containing `search` are returned, capped at
+    KEYWORD_OPTIONS_SHOWN; the counts tell the user how much each narrows the
+    list. Selected keywords are always kept, or the dropdown could no longer
+    display them.
+    """
+    counts = Counter(tag for tags in tag_lists for tag in tags)
+    search = (search or '').strip().lower()
+    matches = [(t, n) for t, n in counts.items() if search in t] if search \
+        else list(counts.items())
+    matches.sort(key=lambda kv: (-kv[1], kv[0]))
+    options = [{'label': f'{t}  ({n:,})', 'value': t}
+               for t, n in matches[:KEYWORD_OPTIONS_SHOWN]]
+    shown = {o['value'] for o in options}
+    for t in selected or ():
+        if t not in shown:
+            options.insert(0, {'label': f'{t}  ({counts.get(t, 0):,})', 'value': t})
+    return options
 
 
-def tag_chips(value, selected=()):
-    """Render a tag string as separate chips. Keywords the user is filtering on
-    are pulled to the front and highlighted, so it is visible why a row matched.
-    The cell only has room for so many; the tooltip carries the full list."""
-    tags = split_tags(value)
+def _company_options(companies, search=None, selected=None):
+    """Company dropdown options among the rows of `companies`.
+
+    With nothing typed, the largest companies; otherwise names containing the
+    search, those starting with it first. Capped like the keyword options, and
+    selected companies are always kept so the dropdown can still show them.
+    """
+    names = companies.sort_values('employees', ascending=False)['trade_name'].dropna()
+    names = names.drop_duplicates()
+    search = (search or '').strip().lower()
+    if search:
+        lowered = names.str.lower()
+        names = pd.concat([names[lowered.str.startswith(search)],
+                           names[lowered.str.contains(search, regex=False)
+                                 & ~lowered.str.startswith(search)]])
+    shown = names.head(KEYWORD_OPTIONS_SHOWN).tolist()
+    for name in reversed(selected or []):
+        if name not in shown:
+            shown.insert(0, name)
+    return [{'label': n, 'value': n} for n in shown]
+
+
+def tag_chips(tags, selected=()):
+    """Render a company's keywords as separate chips, all of them. Keywords the
+    user is filtering on are pulled to the front and highlighted, so it is
+    visible why a row matched; the cell scrolls when the list is long."""
     if not tags:
         return ''
     selected = {str(s).strip().lower() for s in (selected or ())}
     hits     = [t for t in tags if t in selected]
     rest     = [t for t in tags if t not in selected]
-    ordered  = hits + rest
-    shown, hidden = ordered[:CHIPS_SHOWN], len(ordered) - CHIPS_SHOWN
     chips = [
         f'<span class="tell-chip{" tell-chip-on" if t in selected else ""}">'
         f'{escape_html(t)}</span>'
-        for t in shown
+        for t in hits + rest
     ]
-    if hidden > 0:
-        chips.append(f'<span class="tell-chip tell-chip-more">+{hidden}</span>')
     return f'<span class="tell-chips">{"".join(chips)}</span>'
+
+
+# ── Company profile ───────────────────────────────────────────────────────────
+# Clicking a company name opens a profile over the dashboard. The table rows
+# carry most of what it shows; the rest (activities, postcode, what the scraper
+# found on the website) is fetched per company on demand, so none of it slows
+# the dashboard's own load.
+_profile_cache = {}
+_profile_engine = None
+
+
+def load_profile_details(org_id):
+    """Extra fields for one organization, {} when the database is unreachable.
+    Successful lookups are cached; failures are not, so a hiccup can recover."""
+    global _profile_engine
+    if org_id in _profile_cache:
+        return _profile_cache[org_id]
+    try:
+        from sqlalchemy import text
+        if _profile_engine is None:
+            _profile_engine = _get_engine()
+        if _profile_engine is None:
+            return {}
+        with _profile_engine.connect() as conn:
+            org = conn.execute(text(
+                "SELECT main_activity, new_main, activity_2, activity_3, postcode "
+                "FROM organizations WHERE id = :id"), {'id': org_id}).mappings().first()
+            scrape = conn.execute(text(
+                "SELECT s.`Website emails` AS emails, s.`Website languages` AS languages "
+                "FROM scraping17092026 AS s JOIN organizations AS o ON o.website = s.website "
+                "WHERE o.id = :id LIMIT 1"), {'id': org_id}).mappings().first()
+    except Exception:
+        return {}
+    details = {**(org or {}), **(scrape or {})}
+    _profile_cache[org_id] = details
+    return details
+
+
+def _present(value):
+    """The value, or None when it is missing, NaN or blank."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+def _profile_stat(label, value):
+    return html.Div([html.Span(label, className='tell-profile-stat-label'),
+                     html.Span(value if value is not None else '—',
+                               className='tell-profile-stat-value')],
+                    className='tell-profile-stat')
+
+
+def _profile_section(title, *children):
+    return html.Div([html.H4(title, className='tell-profile-section-title'), *children],
+                    className='tell-profile-section')
+
+
+def company_profile(row):
+    """Build the profile body for one row of `data`."""
+    org_id  = _present(row.get('id'))
+    details = load_profile_details(int(org_id)) if org_id is not None else {}
+
+    website = _present(row.get('website'))
+    href    = None
+    if website:
+        href = website if website.startswith(('http://', 'https://')) else f'https://{website}'
+    place = ' · '.join(p for p in (
+        ' '.join(p for p in (_present(details.get('postcode')), _present(row.get('city'))) if p),
+        _present(row.get('region')),
+    ) if p)
+
+    employees = _present(row.get('employees'))
+    founded   = _present(row.get('year_start'))
+    surface   = _present(row.get('surface'))
+    status    = _present(row.get('status'))
+
+    head = html.Div([
+        html.Div([
+            html.H2(row.get('trade_name'), className='tell-profile-name'),
+            html.Div([
+                html.Span(status, className='tell-profile-status') if status else None,
+                html.Span(place, className='tell-profile-place') if place else None,
+                html.A(website, href=href, target='_blank', rel='noopener noreferrer',
+                       className='tell-profile-link') if website else None,
+            ], className='tell-profile-meta'),
+        ]),
+    ], className='tell-profile-head')
+
+    stats = html.Div([
+        _profile_stat('Employees', f'{int(employees):,}' if employees is not None else None),
+        _profile_stat('Founded', str(int(founded)) if founded else None),
+        _profile_stat('Legal form', _present(row.get('legal_form'))),
+        _profile_stat('Surface', f'{int(surface):,} m²' if surface else None),
+    ], className='tell-profile-stats')
+
+    sections = []
+
+    main_activity = _present(details.get('main_activity'))
+    other = [a for a in (_present(details.get('activity_2')),
+                         _present(details.get('activity_3'))) if a]
+    if main_activity or other:
+        lines = []
+        if main_activity:
+            sector = _present(details.get('new_main'))
+            lines.append(html.P([html.Strong(main_activity),
+                                 html.Span(f' · {sector}', className='tell-profile-muted') if sector else None]))
+        if other:
+            lines.append(html.P('Also: ' + ', '.join(other), className='tell-profile-muted'))
+        sections.append(_profile_section('Activity', *lines))
+
+    category, tier = _present(row.get('Predicted_Category')), _present(row.get('Predicted_Tier'))
+    if category or tier:
+        sections.append(_profile_section('Classification', html.Div([
+            _profile_stat('Product category', category),
+            _profile_stat('Lifecycle stage', tier),
+        ], className='tell-profile-stats tell-profile-stats-2')))
+
+    if org_id is not None:
+        member_of = [_consortium_label(c) for c, ids in affiliations.items() if org_id in ids]
+        if member_of:
+            sections.append(_profile_section('Consortia', html.Div(
+                [html.Span(m, className='tell-chip tell-chip-on') for m in member_of],
+                className='tell-chips')))
+
+    emails = [e.strip() for e in str(_present(details.get('emails')) or '').split(';') if e.strip()]
+    languages = _present(details.get('languages'))
+    if emails or languages:
+        contact = []
+        if emails:
+            contact.append(html.Div([html.A(e, href=f'mailto:{e}', className='tell-profile-email')
+                                     for e in emails], className='tell-profile-emails'))
+        if languages:
+            contact.append(html.P(f'Website languages: {languages}', className='tell-profile-muted'))
+        sections.append(_profile_section('Contacts found on the website', *contact))
+
+    tags = row.get('tag_list') or []
+    if tags:
+        sections.append(_profile_section(f'Keywords ({len(tags)})', html.Div(
+            [html.Span(t, className='tell-chip') for t in tags],
+            className='tell-chips tell-profile-keywords')))
+
+    return [head, stats, *sections]
 
 
 def _filter_col(label, dd_id, placeholder, values, options=None):
@@ -488,9 +697,10 @@ app.layout = html.Div([
     ], className='tell-map-row', style={'display': 'flex', 'gap': '16px', 'marginBottom': '20px'}),
     # ── Filters: company / keywords (between map and table) ─────────────────
     html.Div([
-        _filter_col("Filter by Company:",        'company-dropdown',  "Search a company...",  data['trade_name']),
-        _filter_col("Filter by Keywords/Tags:",  'keywords-dropdown', "Select keywords...",   data['tags'],
-                    options=_keyword_options(data['tags'])),
+        _filter_col("Filter by Company:",        'company-dropdown',  "Type to search a company...", data['trade_name'],
+                    options=_company_options(data)),
+        _filter_col("Filter by Keywords/Tags:",  'keywords-dropdown', "Type to search keywords...", data['tags'],
+                    options=_keyword_options(data['tag_list'])),
     ], className='tell-filters tell-panel', style={'marginBottom': '20px'}),
     # ── Data table ────────────────────────────────────────────────────────────
     _block_head('Companies', subtitle_id='table-count'),
@@ -502,7 +712,10 @@ app.layout = html.Div([
                 {'name': 'Keywords',           'id': 'tags', 'presentation': 'markdown'},
                 {'name': 'Employees',          'id': 'employees', 'type': 'numeric'},
             ],
-            page_size=10, sort_action='native', filter_action='none',
+            # Paged and sorted on the server (update_table): the browser only
+            # ever holds the visible page.
+            page_action='custom', page_current=0, page_size=TABLE_PAGE_SIZE,
+            sort_action='custom', sort_mode='single', filter_action='none',
             # Biggest employers first, until the user sorts on another column.
             sort_by=[{'column_id': 'employees', 'direction': 'desc'}],
             style_as_list_view=True,
@@ -516,7 +729,9 @@ app.layout = html.Div([
                         'border': 'none', 'borderBottom': f'1px solid {GRID}',
                         'overflow': 'hidden', 'textOverflow': 'ellipsis', 'maxWidth': '260px'},
             style_cell_conditional=[
-                {'if': {'column_id': 'trade_name'}, 'fontWeight': '600', 'minWidth': '180px'},
+                # Company names open the profile, so they read as links.
+                {'if': {'column_id': 'trade_name'}, 'fontWeight': '600', 'minWidth': '180px',
+                 'color': nte_violet},
                 # Chips need room to wrap, so this cell does not clip like the others.
                 {'if': {'column_id': 'tags'}, 'color': MUTED, 'minWidth': '260px',
                  'maxWidth': '420px', 'whiteSpace': 'normal', 'overflow': 'visible',
@@ -532,10 +747,12 @@ app.layout = html.Div([
             ],
             css=[
                 {'selector': 'tr:hover td.dash-cell', 'rule': 'background-color: #faf8fc !important;'},
+                {'selector': 'td.dash-cell[data-dash-column="trade_name"]:hover',
+                 'rule': 'text-decoration: underline;'},
                 {'selector': '.column-header--sort', 'rule': 'color: rgba(255,255,255,0.55); margin-right: 6px;'},
                 {'selector': 'th.dash-header:hover .column-header--sort', 'rule': 'color: #fff;'},
             ],
-            active_cell=None, tooltip_data=[], tooltip_duration=None,
+            active_cell=None,
         ),
     ], className='tell-card tell-table-card'),
 
@@ -570,6 +787,18 @@ app.layout = html.Div([
     dcc.Store(id='selected-city', data=None),
     dcc.Store(id='chart-filters', data={}),
 
+    # ── Company profile overlay ──────────────────────────────────────────────
+    # The backdrop is a sibling of the dialog, not its parent: a click inside
+    # the dialog would otherwise also count as a click on the backdrop.
+    html.Div([
+        html.Div(id='profile-backdrop', n_clicks=0, className='tell-profile-backdrop'),
+        html.Div([
+            html.Button('×', id='profile-close', n_clicks=0, className='tell-profile-close',
+                        title='Close'),
+            dcc.Loading(html.Div(id='profile-body'), type='dot', color=nte_violet),
+        ], className='tell-profile', role='dialog'),
+    ], id='profile-overlay', className='tell-profile-overlay', style={'display': 'none'}),
+
     # ── Usage tracking plumbing (hidden) ──────────────────────────────────────
     dcc.Store(id='session-id', storage_type='session'),
     dcc.Interval(id='trk-init', interval=400, max_intervals=1),
@@ -594,8 +823,8 @@ def filter_data(regions, companies, keywords=None, cities=None, consortiums=None
         # 'workwear' and 'swimwear', and a keyword containing a regex character
         # used to raise. A company matches when it has any selected keyword.
         wanted   = {str(k).strip().lower() for k in keywords}
-        filtered = filtered[filtered['tags'].map(
-            lambda v: bool(wanted.intersection(split_tags(v))))]
+        filtered = filtered[filtered['tag_list'].map(
+            lambda tags: not wanted.isdisjoint(tags))]
     if consortiums and 'id' in filtered.columns:
         member_ids = set()
         for c in consortiums:
@@ -611,8 +840,6 @@ def filter_data(regions, companies, keywords=None, cities=None, consortiums=None
 @app.callback(
     Output('region-dropdown',   'options'),
     Output('city-dropdown',     'options'),
-    Output('company-dropdown',  'options'),
-    Output('keywords-dropdown', 'options'),
     Input('region-dropdown',    'value'),
     Input('city-dropdown',      'value'),
     Input('company-dropdown',   'value'),
@@ -622,9 +849,39 @@ def filter_data(regions, companies, keywords=None, cities=None, consortiums=None
 def update_filter_options(regions, cities, companies, keywords, consortiums):
     region_opts   = _options(filter_data(None,    companies, keywords, cities, consortiums)['region'])
     city_opts     = _options(filter_data(regions, companies, keywords, None,   consortiums)['city'])
-    company_opts  = _options(filter_data(regions, None,      keywords, cities, consortiums)['trade_name'])
-    keyword_opts  = _keyword_options(filter_data(regions, companies, None, cities, consortiums)['tags'])
-    return region_opts, city_opts, company_opts, keyword_opts
+    return region_opts, city_opts
+
+
+# Like the keywords, the ~11k company names are searched on the server instead
+# of all being sent to the browser (~0.7 MB) on every filter change.
+@app.callback(
+    Output('company-dropdown',  'options'),
+    Input('company-dropdown',   'search_value'),
+    Input('region-dropdown',    'value'),
+    Input('city-dropdown',      'value'),
+    Input('keywords-dropdown',  'value'),
+    Input('consortium-dropdown','value'),
+    State('company-dropdown',   'value'),
+)
+def update_company_options(search, regions, cities, keywords, consortiums, companies):
+    subset = filter_data(regions, None, keywords, cities, consortiums)
+    return _company_options(subset, search, companies)
+
+
+# The keyword dropdown has its own callback because it also follows what the
+# user types: the server searches the full vocabulary and returns the top hits.
+@app.callback(
+    Output('keywords-dropdown', 'options'),
+    Input('keywords-dropdown',  'search_value'),
+    Input('region-dropdown',    'value'),
+    Input('city-dropdown',      'value'),
+    Input('company-dropdown',   'value'),
+    Input('consortium-dropdown','value'),
+    State('keywords-dropdown',  'value'),
+)
+def update_keyword_options(search, regions, cities, companies, consortiums, keywords):
+    subset = filter_data(regions, companies, None, cities, consortiums)
+    return _keyword_options(subset['tag_list'], search, keywords)
 
 
 # ── Pie click callback ────────────────────────────────────────────────────────
@@ -685,10 +942,9 @@ def update_chart_filters(cat_click, tier_click, legal_click, current):
     Input('map-graph', 'clickData'),
     Input('company-table', 'active_cell'),
     State('selected-city', 'data'),
-    State('company-table', 'data'),
     prevent_initial_call=True,
 )
-def update_selected_city(click_data, active_cell, current_city, table_data):
+def update_selected_city(click_data, active_cell, current_city):
     triggered = ctx.triggered_id
     if triggered == 'map-graph' and click_data:
         point   = click_data['points'][0]
@@ -700,15 +956,55 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
         if clicked is None:
             return current_city
         return None if clicked == current_city else clicked
-    if triggered == 'company-table' and active_cell and table_data:
-        row          = table_data[active_cell['row']]
-        company_name = row.get('trade_name')
-        if company_name:
-            match = data[data['trade_name'] == company_name]
-            if not match.empty:
-                city = match.iloc[0]['city']
-                return None if city == current_city else city
-    return current_city
+    if triggered == 'company-table' and active_cell:
+        # A click on the company name opens its profile instead.
+        if active_cell.get('column_id') == 'trade_name':
+            return dash.no_update
+        row_id = active_cell.get('row_id')
+        if row_id in data.index:
+            city = data.at[row_id, 'city']
+            return None if city == current_city else city
+    # no_update rather than the same city: an unchanged value would still make
+    # Dash re-run the whole dashboard (e.g. when the profile clears the cell).
+    return dash.no_update
+
+
+# ── Company profile callback ──────────────────────────────────────────────────
+@app.callback(
+    Output('profile-overlay', 'style'),
+    Output('profile-body',    'children'),
+    Output('company-table',   'active_cell'),
+    Input('company-table',    'active_cell'),
+    Input('profile-close',    'n_clicks'),
+    Input('profile-backdrop', 'n_clicks'),
+    prevent_initial_call=True,
+)
+def toggle_profile(active_cell, _close, _backdrop):
+    hidden = {'display': 'none'}
+    if ctx.triggered_id != 'company-table':
+        return hidden, dash.no_update, dash.no_update
+    if not active_cell or active_cell.get('column_id') != 'trade_name':
+        return dash.no_update, dash.no_update, dash.no_update
+    row_id = active_cell.get('row_id')
+    if row_id not in data.index:
+        return dash.no_update, dash.no_update, dash.no_update
+    # Clearing the active cell lets the same name be clicked again after the
+    # profile is closed; the table only reports a click that changes it.
+    return {'display': 'flex'}, company_profile(data.loc[row_id]), None
+
+
+def select_companies(regions, companies, keywords, cities, consortiums,
+                     selected_city, chart_filters):
+    """The companies every view shows for the current filters.
+
+    Returns (unsliced, filtered): `filtered` also applies the clicked donut
+    slices; `unsliced` does not, for the donuts themselves (see
+    apply_chart_filters).
+    """
+    unsliced = filter_data(regions, companies, keywords, cities, consortiums)
+    if selected_city:
+        unsliced = unsliced[unsliced['city'] == selected_city]
+    return unsliced, apply_chart_filters(unsliced, chart_filters)
 
 
 # ── Main dashboard callback ───────────────────────────────────────────────────
@@ -722,10 +1018,7 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
     Output('pie-tier',          'figure'),
     Output('year-bar',          'figure'),
     Output('pie-legal',         'figure'),
-    Output('company-table',     'data'),
-    Output('company-table',     'tooltip_data'),
     Output('city-filter-label', 'children'),
-    Output('table-count',       'children'),
     Input('region-dropdown',    'value'),
     Input('company-dropdown',   'value'),
     Input('keywords-dropdown',  'value'),
@@ -737,13 +1030,9 @@ def update_selected_city(click_data, active_cell, current_city, table_data):
 def update_dashboard(selected_regions, selected_companies, selected_keywords,
                      selected_cities, selected_consortiums, selected_city,
                      chart_filters):
-    filtered = filter_data(selected_regions, selected_companies, selected_keywords,
-                           selected_cities, selected_consortiums)
-    if selected_city:
-        filtered = filtered[filtered['city'] == selected_city]
-    # Everything except the donuts themselves sees the clicked slices.
-    unsliced = filtered
-    filtered = apply_chart_filters(filtered, chart_filters)
+    unsliced, filtered = select_companies(selected_regions, selected_companies,
+                                          selected_keywords, selected_cities,
+                                          selected_consortiums, selected_city, chart_filters)
 
     kpi_active = f"{(filtered['status'].str.lower() == 'active').sum():,}"
     kpi_web    = f"{filtered['website'].notna().sum():,}"
@@ -834,17 +1123,6 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
     pie_legal = _donut(_legal, 'legal_form', MIXED_RAMP,
                        selected=(chart_filters or {}).get('legal_form'))
 
-    table_df      = filtered[['trade_name', 'tags', 'employees']].copy()
-    table_df['employees'] = table_df['employees'].astype(int)
-    # Match the table's default sort, so the first page is right even before
-    # Dash applies sort_by (and stays right when the user sorts elsewhere).
-    table_df      = table_df.sort_values('employees', ascending=False)
-    # The tooltip keeps the plain, complete list; the cell shows it as chips.
-    tooltip_data  = [{'tags': {'value': ', '.join(split_tags(v)), 'type': 'text'}}
-                     for v in table_df['tags']]
-    table_df['tags'] = [tag_chips(v, selected_keywords) for v in table_df['tags']]
-    records       = table_df.to_dict('records')
-
     # One line for every filter that was set by clicking a chart rather than a
     # dropdown, since those have no visible control to read the value off.
     active = []
@@ -855,10 +1133,72 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
             active.append(f"{PIE_LABELS.get(column, column)}: {value}")
     city_label = (" · ".join(active) + " — click the same slice or bubble again to clear"
                   if active else "")
-    table_count = f"{len(records):,} results · click a row to show its city on the map"
     return (kpi_active, kpi_web, kpi_contacts, map_fig, region_fig,
-            pie_cat, pie_tier, year_bar, pie_legal, records, tooltip_data,
-            city_label, table_count)
+            pie_cat, pie_tier, year_bar, pie_legal, city_label)
+
+
+# ── Companies table callback ──────────────────────────────────────────────────
+# The table is paged and sorted here on the server, and only the visible page
+# goes to the browser. Sending every row made each update ~7.5 MB with the
+# keyword chips, and any callback that read the rows back (the city click did)
+# was refused by Nginx's 1 MB request limit.
+TABLE_SORT_KEYS = {
+    'trade_name': lambda s: s.astype(str).str.lower(),
+    'employees':  None,
+    'tags':       lambda s: s.map(len),      # sorted by number of keywords
+}
+DEFAULT_SORT = [{'column_id': 'employees', 'direction': 'desc'}]
+
+
+@app.callback(
+    Output('company-table', 'data'),
+    Output('company-table', 'page_count'),
+    Output('company-table', 'page_current'),
+    Output('table-count',   'children'),
+    Input('region-dropdown',    'value'),
+    Input('company-dropdown',   'value'),
+    Input('keywords-dropdown',  'value'),
+    Input('city-dropdown',      'value'),
+    Input('consortium-dropdown','value'),
+    Input('selected-city',      'data'),
+    Input('chart-filters',      'data'),
+    Input('company-table',      'page_current'),
+    Input('company-table',      'sort_by'),
+)
+def update_table(selected_regions, selected_companies, selected_keywords,
+                 selected_cities, selected_consortiums, selected_city,
+                 chart_filters, page_current, sort_by):
+    _, filtered = select_companies(selected_regions, selected_companies, selected_keywords,
+                                   selected_cities, selected_consortiums, selected_city,
+                                   chart_filters)
+    # Only a page change keeps the page; a new filter or sort starts again at 1.
+    if 'company-table.page_current' not in ctx.triggered_prop_ids:
+        page_current = 0
+    page_current = page_current or 0
+
+    sort = (sort_by or DEFAULT_SORT)[0]
+    column = sort['column_id'] if sort['column_id'] in TABLE_SORT_KEYS else 'employees'
+    sort_col = 'tag_list' if column == 'tags' else column
+    ordered = filtered.sort_values(sort_col, ascending=sort['direction'] == 'asc',
+                                   key=TABLE_SORT_KEYS[column], kind='stable')
+
+    size  = TABLE_PAGE_SIZE
+    pages = max(1, -(-len(ordered) // size))
+    page_current = min(page_current, pages - 1)
+    page = ordered.iloc[page_current * size:(page_current + 1) * size]
+
+    records = [{
+        # 'id' becomes the row id the table reports on click: the row's index
+        # in `data`, so a click finds the right company on any page or sort.
+        'id':         int(idx),
+        'trade_name': row['trade_name'],
+        'tags':       tag_chips(row['tag_list'], selected_keywords),
+        'employees':  int(row['employees']),
+    } for idx, row in page.iterrows()]
+
+    table_count = (f"{len(ordered):,} results · click a company name for its profile, "
+                   f"or another cell to show its city on the map")
+    return records, pages, page_current, table_count
 
 # ── Usage tracking callbacks ──────────────────────────────────────────────────
 # Generate a stable per-browser-session id (kept in sessionStorage) on load.
@@ -919,11 +1259,10 @@ def track_filters(regions, cities, companies, keywords, consortiums, session_id)
     Output('trk-click-sink', 'data'),
     Input('map-graph', 'clickData'),
     Input('company-table', 'active_cell'),
-    State('company-table', 'data'),
     State('session-id', 'data'),
     prevent_initial_call=True,
 )
-def track_clicks(click_data, active_cell, table_data, session_id):
+def track_clicks(click_data, active_cell, session_id):
     """Record map bubble clicks and table cell clicks."""
     trig = ctx.triggered_id
     if trig == 'map-graph' and click_data:
@@ -934,11 +1273,11 @@ def track_clicks(click_data, active_cell, table_data, session_id):
             if isinstance(cd, list) and cd:
                 city = cd[-1]
         log_event(session_id, 'map_click', {'city': city})
-    elif trig == 'company-table' and active_cell and table_data:
-        row = table_data[active_cell['row']]
+    elif trig == 'company-table' and active_cell:
+        row_id = active_cell.get('row_id')
         log_event(session_id, 'table_click', {
             'column': active_cell.get('column_id'),
-            'company': row.get('trade_name'),
+            'company': data.at[row_id, 'trade_name'] if row_id in data.index else None,
         })
     return dash.no_update
 
