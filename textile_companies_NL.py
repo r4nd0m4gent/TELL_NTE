@@ -151,6 +151,9 @@ query_org = """
         o.surface,
         o.year_start,
         o.legal_form,
+        -- Small-Medium Enterprise / Multinational / Frontrunner /
+        -- Unclassified, from db/classify_companies.py
+        COALESCE(cc.company_class, 'Unclassified') AS company_class,
         -- The merged keyword list (curated tags + scraped keywords and bigrams,
         -- built by db/build_dashboard_tags.py); organizations that were not
         -- scraped keep their curated tags.
@@ -166,6 +169,7 @@ query_org = """
     ) AS g ON g.city = o.city
     JOIN tags AS t ON t.id = o.id
     LEFT JOIN tags_scraped AS ts ON ts.id = o.id
+    LEFT JOIN company_class AS cc ON cc.id = o.id
     -- Contacts found on the company's public website by the scraper. Grouped
     -- by website first: a site can appear on several scrape rows, and a plain
     -- join would then duplicate the organization.
@@ -449,6 +453,10 @@ data['tag_list'] = data['tags'].map(split_tags)
 # for the terms matching what the user types, most-used first.
 KEYWORD_OPTIONS_SHOWN = 100
 TABLE_PAGE_SIZE = 10
+# Founding-year periods for the bar chart, oldest first.
+YEAR_BINS = [-float('inf'), 1969, 1979, 1989, 1999, 2009, 2015, float('inf')]
+YEAR_LABELS = ['Before 1970', '1970-1979', '1980-1989', '1990-1999',
+               '2000-2009', '2010-2015', 'After 2015']
 
 
 def _keyword_options(tag_lists, search=None, selected=None):
@@ -623,10 +631,12 @@ def company_profile(row):
         sections.append(_profile_section('Activity', *lines))
 
     category, tier = _present(row.get('Predicted_Category')), _present(row.get('Predicted_Tier'))
-    if category or tier:
+    company_class = _present(row.get('company_class'))
+    if category or tier or company_class:
         sections.append(_profile_section('Classification', html.Div([
             _profile_stat('Product category', category),
             _profile_stat('Lifecycle stage', tier),
+            _profile_stat('Company class', company_class),
         ], className='tell-profile-stats tell-profile-stats-2')))
 
     if org_id is not None:
@@ -764,9 +774,9 @@ app.layout = html.Div([
         _graph('pie-tier',     '300px', 'Lifecycle Stage',
                'Click a slice to filter the table',
                flex='1 1 240px', minWidth='240px'),
-        _graph('year-bar',     '300px', 'Founding Year',    'Companies founded per year',
+        _graph('year-bar',     '300px', 'Founding Year',    'Companies founded per period',
                flex='1 1 240px', minWidth='240px'),
-        _graph('pie-legal',    '300px', 'Legal Form',
+        _graph('pie-class',    '300px', 'Company Class',
                'Click a slice to filter the table',
                flex='1 1 240px', minWidth='240px'),
     ], className='tell-pies', style={'display': 'flex', 'flexWrap': 'wrap', 'gap': '16px', 'marginTop': '20px'}),
@@ -890,12 +900,12 @@ def update_keyword_options(search, regions, cities, companies, consortiums, keyw
 PIE_FILTERS = {
     'pie-category': 'Predicted_Category',
     'pie-tier':     'Predicted_Tier',
-    'pie-legal':    'legal_form',
+    'pie-class':    'company_class',
 }
 PIE_LABELS = {
     'Predicted_Category': 'Product category',
     'Predicted_Tier':     'Lifecycle stage',
-    'legal_form':         'Legal form',
+    'company_class':      'Company class',
 }
 
 
@@ -917,14 +927,14 @@ def apply_chart_filters(df, chart_filters, skip=None):
     Output('chart-filters', 'data'),
     Input('pie-category', 'clickData'),
     Input('pie-tier',     'clickData'),
-    Input('pie-legal',    'clickData'),
+    Input('pie-class',    'clickData'),
     State('chart-filters', 'data'),
     prevent_initial_call=True,
 )
-def update_chart_filters(cat_click, tier_click, legal_click, current):
+def update_chart_filters(cat_click, tier_click, class_click, current):
     column = PIE_FILTERS.get(ctx.triggered_id)
     click  = {'pie-category': cat_click, 'pie-tier': tier_click,
-              'pie-legal': legal_click}.get(ctx.triggered_id)
+              'pie-class': class_click}.get(ctx.triggered_id)
     if not column or not click:
         return dash.no_update
     label   = click['points'][0].get('label')
@@ -1017,7 +1027,7 @@ def select_companies(regions, companies, keywords, cities, consortiums,
     Output('pie-category',      'figure'),
     Output('pie-tier',          'figure'),
     Output('year-bar',          'figure'),
-    Output('pie-legal',         'figure'),
+    Output('pie-class',         'figure'),
     Output('city-filter-label', 'children'),
     Input('region-dropdown',    'value'),
     Input('company-dropdown',   'value'),
@@ -1104,10 +1114,13 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
     pie_tier = _donut(_tier, 'Predicted_Tier', BLUE_RAMP,
                       selected=(chart_filters or {}).get('Predicted_Tier'))
 
+    # Grouped into periods: one bar per year left a long tail of single
+    # companies and a spike at the recent years, which reads as noise.
     _year = pd.to_numeric(filtered.get('year_start'), errors='coerce').dropna().astype(int)
-    _year_counts = _year.value_counts().sort_index().reset_index()
-    _year_counts.columns = ['year_start', 'count']
-    year_bar = px.bar(_year_counts, x='year_start', y='count',
+    _period = pd.cut(_year, bins=YEAR_BINS, labels=YEAR_LABELS, right=True)
+    _year_counts = (_period.value_counts().reindex(YEAR_LABELS, fill_value=0)
+                    .rename_axis('period').reset_index(name='count'))
+    year_bar = px.bar(_year_counts, x='period', y='count',
                       color_discrete_sequence=[nte_darkblue])
     year_bar.update_traces(marker_cornerradius=0,
                            hovertemplate='<b>%{x}</b><br>%{y:,} companies founded<extra></extra>')
@@ -1115,13 +1128,13 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
     year_bar.update_yaxes(title=None)
     year_bar.update_layout(bargap=0.1, margin={'t': 20, 'b': 20, 'l': 16, 'r': 16})
 
-    _legal_src = apply_chart_filters(unsliced, chart_filters, skip='legal_form')
-    _legal = (_legal_src['legal_form'] if 'legal_form' in _legal_src.columns
+    _class_src = apply_chart_filters(unsliced, chart_filters, skip='company_class')
+    _class = (_class_src['company_class'] if 'company_class' in _class_src.columns
               else pd.Series(dtype=object))
-    _legal = _legal.fillna('Unknown').replace('', 'Unknown').value_counts().reset_index()
-    _legal.columns = ['legal_form', 'count']
-    pie_legal = _donut(_legal, 'legal_form', MIXED_RAMP,
-                       selected=(chart_filters or {}).get('legal_form'))
+    _class = _class.fillna('Unclassified').replace('', 'Unclassified').value_counts().reset_index()
+    _class.columns = ['company_class', 'count']
+    pie_class = _donut(_class, 'company_class', MIXED_RAMP,
+                       selected=(chart_filters or {}).get('company_class'))
 
     # One line for every filter that was set by clicking a chart rather than a
     # dropdown, since those have no visible control to read the value off.
@@ -1134,7 +1147,7 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
     city_label = (" · ".join(active) + " — click the same slice or bubble again to clear"
                   if active else "")
     return (kpi_active, kpi_web, kpi_contacts, map_fig, region_fig,
-            pie_cat, pie_tier, year_bar, pie_legal, city_label)
+            pie_cat, pie_tier, year_bar, pie_class, city_label)
 
 
 # ── Companies table callback ──────────────────────────────────────────────────
