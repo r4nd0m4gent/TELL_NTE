@@ -37,6 +37,66 @@ _EXPORT_DIR = os.environ.get(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'classifications'),
 )
 
+# ── Company embeddings, computed once ──────────────────────────────────────
+# Embedding every company takes minutes and is the whole cost of a run, yet the
+# companies barely change between runs - only the classes the user defines do.
+# The vectors are kept on disk, keyed by the model and the exact texts, so a
+# later run only has to embed the handful of class keywords. 11k companies are
+# ~17 MB. build_embeddings.py fills this ahead of time, so no visitor waits for
+# the first build.
+_EMBED_DIR = os.environ.get(
+    'CLASSIF_EMBED_DIR',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'embeddings'),
+)
+
+
+def company_texts(df):
+    """The text the classifier judges each company on: name + curated tags.
+
+    Not the merged keyword list the table shows - that is about four times
+    longer, and embedding it took a run from ~100s to several minutes.
+    """
+    name_col = 'trade_name' if 'trade_name' in df.columns else 'trade name'
+    tag_col = 'curated_tags' if 'curated_tags' in df.columns else 'tags'
+    return [f"{row.get(name_col, '') or ''} {row.get(tag_col, '') or ''}".strip()
+            for _, row in df.iterrows()]
+
+
+def _cache_file(texts, model_name):
+    """Where the vectors for exactly these texts live."""
+    import hashlib
+    digest = hashlib.sha256(
+        (model_name + '\x00' + '\x00'.join(texts)).encode('utf-8')).hexdigest()[:16]
+    return os.path.join(_EMBED_DIR, f'companies_{digest}.npy')
+
+
+def company_vectors(texts, model, verbose=False):
+    """Embeddings for `texts`, from disk when they were computed before.
+
+    The key covers the model and every text, so any change to the companies or
+    their tags simply produces a different file instead of stale vectors.
+    """
+    import numpy as np
+
+    path = _cache_file(texts, getattr(model, 'model_card_data', None)
+                       and getattr(model.model_card_data, 'base_model', '') or str(type(model)))
+    if os.path.exists(path):
+        if verbose:
+            print(f"embeddings: reusing {path}")
+        return np.load(path)
+
+    if verbose:
+        print(f"embeddings: computing {len(texts):,} vectors (a few minutes)…")
+    vectors = model.encode(texts, batch_size=32, show_progress_bar=verbose)
+    try:
+        os.makedirs(_EMBED_DIR, exist_ok=True)
+        np.save(path, vectors)
+        if verbose:
+            print(f"embeddings: saved {path}")
+    except Exception:
+        pass            # a cache we could not write is not a failure
+    return vectors
+
 
 def _save_export(df, filename):
     """Write *df* to ``_EXPORT_DIR/filename`` and return the full path (or None)."""
@@ -135,20 +195,24 @@ def log_classification(class_keywords, file_path):
 _EMBED_MODEL = None
 
 
+def _load_model():
+    """The embedding model, loaded once per process (it takes ~20s)."""
+    global _EMBED_MODEL
+    if _EMBED_MODEL is None:
+        from semantic_classifier import SemanticClassifier
+        _EMBED_MODEL = SemanticClassifier(confidence_threshold=0.0).model
+    return _EMBED_MODEL
+
+
 def _build_semantic_classifier(classes):
     """Return a ``SemanticClassifier`` for *classes* (list of ``(name, [keywords])``).
 
     ``confidence_threshold=0`` makes every company fall into its closest class,
     so the whole dataset is classified (no "unknown").
     """
-    global _EMBED_MODEL
     from semantic_classifier import SemanticClassifier, ClassDefinition
 
-    if _EMBED_MODEL is None:
-        clf = SemanticClassifier(confidence_threshold=0.0)
-        _EMBED_MODEL = clf.model
-    else:
-        clf = SemanticClassifier(confidence_threshold=0.0, model=_EMBED_MODEL)
+    clf = SemanticClassifier(confidence_threshold=0.0, model=_load_model())
 
     clf.add_classes([ClassDefinition(name=name, keywords=keywords)
                      for name, keywords in classes])
@@ -439,14 +503,20 @@ def register_callbacks(app, filter_data_fn, engine_fn=None):
         filtered = filter_data_fn(selected_regions, selected_companies)
         # The DB-backed data uses `trade_name`; the Excel fallback uses `trade name`.
         name_col = 'trade_name' if 'trade_name' in filtered.columns else 'trade name'
-        texts = [
-            f"{row.get(name_col, '') or ''} {row.get('tags', '') or ''}".strip()
-            for _, row in filtered.iterrows()
-        ]
+        tag_col = 'curated_tags' if 'curated_tags' in filtered.columns else 'tags'
 
         try:
             clf = _build_semantic_classifier(classes)
-            results = clf.classify_batch(texts) if texts else []
+            # Embed every company once and keep the vectors; the filters then
+            # only choose rows from that matrix. Were the cache keyed on the
+            # filtered subset instead, every new filter would pay for a full
+            # re-embedding.
+            everyone = filter_data_fn(None, None)
+            vectors = company_vectors(company_texts(everyone), clf.model)
+            rows = everyone.index.get_indexer(filtered.index)
+            rows = rows[rows >= 0]
+            results = clf.classify_vectors(vectors[rows]) if len(rows) else []
+            filtered = everyone.iloc[rows]
         except Exception as exc:  # model download / embedding failure
             return (html.P(f"⚠ Semantic model unavailable: {exc}",
                            style={'color': '#c0392b', 'fontSize': '13px'}), _hidden, '')
@@ -458,7 +528,7 @@ def register_callbacks(app, filter_data_fn, engine_fn=None):
             counts[assigned] = counts.get(assigned, 0) + 1
             per_row_data.append({
                 'Company Name':    row.get(name_col, ''),
-                'Tags':            row.get('tags', ''),
+                'Tags':            row.get(tag_col, ''),   # the text it judged on
                 'Predicted Class': assigned,
                 'Confidence':      round(result.score, 3),
             })

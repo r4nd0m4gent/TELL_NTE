@@ -10,7 +10,9 @@ bind         = '127.0.0.1:8050'
 workers      = 2
 worker_class = 'gthread'   # thread-based, no extra deps, stable for Dash
 threads      = 4
-timeout      = 120
+# A semantic classification run embeds every company and takes ~100s on this
+# machine, which left almost no headroom under the old 120s.
+timeout      = 300
 keepalive    = 5
 # Load the app once in the master process, then fork workers. The read-only
 # dataset is shared via copy-on-write instead of duplicated per worker, which

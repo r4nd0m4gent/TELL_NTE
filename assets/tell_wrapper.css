@@ -84,6 +84,30 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
 .tell-map-row .js-plotly-plot,
 .tell-pies .js-plotly-plot { max-width: 100% !important; }
 
+/* ── Info mark beside a chart title (explains the chart on hover) ─────── */
+.tell-block-title-row { display: flex; align-items: center; gap: 6px; }
+.tell-info {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%;
+    background: #e4dcef; color: #513773;
+    font-size: 10px; font-weight: 700; font-style: italic;
+    cursor: help; user-select: none;
+}
+.tell-info:hover, .tell-info:focus { background: #513773; color: #fff; outline: none; }
+/* The browser's own tooltip never appears on a touch screen, so the text is
+   also shown on hover or tap (the mark is focusable). */
+.tell-info { position: relative; }
+.tell-info::after {
+    content: attr(data-note);
+    position: absolute; top: 22px; left: 50%; transform: translateX(-45%);
+    width: 230px; padding: 9px 11px; border-radius: 8px; z-index: 20;
+    background: #2c2c2c; color: #fff; font-size: 11px; font-weight: 400;
+    font-style: normal; line-height: 1.45; text-align: left;
+    opacity: 0; visibility: hidden; transition: opacity 0.12s;
+    pointer-events: none;
+}
+.tell-info:hover::after, .tell-info:focus::after { opacity: 1; visibility: visible; }
+
 /* ── Keyword chips in the companies table ─────────────────────────────── */
 /* The Keywords cell renders one chip per keyword instead of a comma string.
    It lists all of a company's keywords (up to ~60), so the list scrolls inside
@@ -116,8 +140,12 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
 }
 .tell-profile-close {
-    position: absolute; top: 14px; right: 16px; background: none; border: none;
-    font-size: 26px; line-height: 1; color: #6b6b76; cursor: pointer; padding: 4px 8px;
+    /* z-index: the header below it is painted later and would otherwise cover
+       the button, which made it untappable on a phone. */
+    position: absolute; top: 10px; right: 10px; z-index: 2;
+    background: none; border: none;
+    font-size: 26px; line-height: 1; color: #6b6b76; cursor: pointer;
+    width: 40px; height: 40px; padding: 0;        /* a finger-sized target */
 }
 .tell-profile-close:hover { color: #513773; }
 .tell-profile-head { padding-right: 32px; margin-bottom: 18px; }
@@ -178,6 +206,18 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
     .tell-pies > div { width: 100% !important; flex: none !important; }
     .tell-pies .dash-graph,
     .tell-pies .js-plotly-plot { width: 100% !important; height: 320px !important; }
+
+    /* Finger-sized: the info mark and the table's paging buttons are drawn
+       for a mouse pointer and are awkward to hit on a phone. */
+    .tell-info { width: 20px; height: 20px; font-size: 12px; }
+    .tell-info::after { width: 210px; transform: translateX(-60%); }
+    .dash-table-container .previous-page,
+    .dash-table-container .next-page,
+    .dash-table-container .first-page,
+    .dash-table-container .last-page {
+        /* !important: Dash sets the height with a more specific rule of its own */
+        width: 38px; flex: none; height: 38px !important;
+    }
 
     /* Company profile: near full screen, stats two per row */
     .tell-profile-overlay { padding: 8px; }

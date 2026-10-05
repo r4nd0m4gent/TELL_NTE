@@ -118,7 +118,8 @@ _DDL = {
         " employees VARCHAR(45),"
         " value_tier TEXT NOT NULL,"
         " given_tags TEXT NOT NULL,"
-        " add_notes TEXT"
+        " add_notes TEXT,"
+        " submitted_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP"
         ")"
     ),
     'edits': (
@@ -145,6 +146,12 @@ _MIGRATIONS = [
     "ALTER TABLE additions MODIFY value_tier TEXT NOT NULL",
     "ALTER TABLE additions MODIFY given_tags TEXT NOT NULL",
     "ALTER TABLE additions MODIFY add_notes TEXT",
+    # Two steps on purpose: adding the column with its default would stamp the
+    # rows already in the table with the moment of the upgrade, claiming those
+    # submissions arrived then. Added bare, they keep NULL for 'unknown', and
+    # only rows inserted afterwards carry a real time.
+    "ALTER TABLE additions ADD COLUMN submitted_at DATETIME NULL",
+    "ALTER TABLE additions MODIFY submitted_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP",
     "ALTER TABLE edits MODIFY id INT NOT NULL AUTO_INCREMENT",
     "ALTER TABLE comments MODIFY idcomments INT NOT NULL AUTO_INCREMENT",
     "ALTER TABLE comments MODIFY comment TEXT NOT NULL",

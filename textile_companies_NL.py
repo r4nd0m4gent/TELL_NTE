@@ -1,4 +1,6 @@
 import os
+import base64
+import datetime
 import json
 import threading
 from collections import Counter
@@ -98,6 +100,33 @@ def _donut(df, names, colors, selected=None):
     )
     return fig
 
+
+def _hbar(df, names, colour, selected=None):
+    """Horizontal bars, largest at the top, each labelled with its count.
+
+    Used where a donut's slices would be too many or too thin to read: the
+    category sits on the axis and the number beside the bar, so nothing has to
+    be hovered. Clicking a bar filters, like the donuts (see CHART_FILTERS).
+    `selected` is the clicked category: the others fade.
+    """
+    df = df.sort_values('count')                 # plotly draws the first at the bottom
+    labels = df[names].astype(str).tolist()
+    bars = [colour if selected is None or l == selected else _fade(colour, 0.65)
+            for l in labels]
+    fig = px.bar(df, x='count', y=names, orientation='h', text='count')
+    fig.update_traces(
+        marker={'color': bars}, marker_cornerradius=0,
+        texttemplate='%{x:,}', textposition='outside', cliponaxis=False,
+        textfont={'color': MUTED, 'size': 11},
+        hovertemplate='<b>%{y}</b><br>%{x:,} companies'
+                      '<br><i>click to filter</i><extra></extra>',
+    )
+    fig.update_xaxes(title=None, showgrid=True, showticklabels=False)
+    fig.update_yaxes(title=None, showgrid=False, tickfont={'color': INK, 'size': 11})
+    fig.update_layout(bargap=0.3, showlegend=False,
+                      margin={'l': 16, 'r': 46, 't': 16, 'b': 16})
+    return fig
+
 # ── Map basemap ───────────────────────────────────────────────────────────────
 # Plotly.js 3.x renders maps with MapLibre. The built-in "open-street-map"
 # preset resolves to HTTP tile URLs, which the browser blocks as mixed content
@@ -158,8 +187,14 @@ query_org = """
         -- built by db/build_dashboard_tags.py); organizations that were not
         -- scraped keep their curated tags.
         COALESCE(ts.tags_new, t.tags) AS tags,
+        -- The curated tags on their own. The semantic classification embeds
+        -- these: the merged list above is ~4x longer, which pushed a run from
+        -- 100 to 370 seconds and past Nginx's timeout.
+        t.tags AS curated_tags,
         t.category    AS Predicted_Category,
-        t.tier        AS Predicted_Tier,
+        -- db/reclassify_tiers.py writes into tags.tier and keeps what a
+        -- company had before in tags.tier_original.
+        COALESCE(t.tier, 'No match') AS Predicted_Tier,
         COALESCE(sc.has_contact, 0) AS has_contact
     FROM organizations AS o
     JOIN (
@@ -300,6 +335,7 @@ _TRACK_DDL = (
     " event_type VARCHAR(32) NOT NULL,"
     " details JSON,"
     " source VARCHAR(16),"
+    " resolves_to VARCHAR(255),"
     " created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
     ")"
 )
@@ -337,7 +373,7 @@ def _get_track_engine():
     return _track_engine
 
 
-def _write_event(session_id, event_type, details, source=None):
+def _write_event(session_id, event_type, details, source=None, ip=None):
     """Insert one tracking row. Runs on a worker thread; errors are ignored."""
     global _track_schema_ready
     try:
@@ -352,10 +388,12 @@ def _write_event(session_id, event_type, details, source=None):
                         conn.execute(text(_TRACK_DDL))
                         _track_schema_ready = True
             conn.execute(
-                text("INSERT INTO tracking_events (session_id, event_type, details, source)"
-                     " VALUES (:sid, :etype, :details, :source)"),
+                text("INSERT INTO tracking_events"
+                     " (session_id, event_type, details, source, resolves_to)"
+                     " VALUES (:sid, :etype, :details, :source, :host)"),
                 {'sid': session_id, 'etype': event_type,
-                 'details': json.dumps(details or {}, default=str), 'source': source},
+                 'details': json.dumps(details or {}, default=str), 'source': source,
+                 'host': _resolves_to(ip)},
             )
     except Exception:
         pass
@@ -363,27 +401,55 @@ def _write_event(session_id, event_type, details, source=None):
 
 def log_event(session_id, event_type, details=None):
     """Fire-and-forget tracking write (non-blocking)."""
-    # Read the request here: the worker thread has no request context.
+    # Read the request here: the worker thread has no request context. The
+    # reverse lookup happens on that thread, where it cannot delay the page.
     threading.Thread(target=_write_event,
-                     args=(session_id, event_type, details or {}, _visit_source()),
+                     args=(session_id, event_type, details or {},
+                           _visit_source(), _client_ip()),
                      daemon=True).start()
 
 
-def _request_meta():
-    """Collect request metadata (IP, user agent, language, referrer)."""
+def _client_ip():
+    """The visitor's address, read through Nginx's forwarding headers."""
     try:
         from flask import request
         xff = request.headers.get('X-Forwarded-For', '')
-        ip = xff.split(',')[0].strip() if xff else (
-            request.headers.get('X-Real-IP') or request.remote_addr)
+        return (xff.split(',')[0].strip() if xff else
+                request.headers.get('X-Real-IP') or request.remote_addr)
+    except Exception:
+        return None
+
+
+def _request_meta():
+    """Collect request metadata. The referrer is not kept: it is this page on
+    every event. The browser's language is, since visitors differ there."""
+    try:
+        from flask import request
         return {
-            'ip': ip,
+            'ip': _client_ip(),
             'user_agent': request.headers.get('User-Agent'),
             'language': request.headers.get('Accept-Language'),
-            'referrer': request.headers.get('Referer'),
         }
     except Exception:
         return {}
+
+
+# Reverse DNS per address, looked up once per process. A hostname says more
+# about a visitor than the number does ('...wireless.hva.nl'); '-' marks an
+# address that does not resolve, so it is not looked up again.
+_HOSTNAMES = {}
+
+
+def _resolves_to(ip):
+    if not ip:
+        return None
+    if ip not in _HOSTNAMES:
+        import socket
+        try:
+            _HOSTNAMES[ip] = socket.gethostbyaddr(ip)[0]
+        except Exception:
+            _HOSTNAMES[ip] = '-'
+    return _HOSTNAMES[ip]
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = dash.Dash(
@@ -406,20 +472,28 @@ def _kpi(label, value_id):
                     className='tell-card tell-kpi')
 
 
-def _block_head(title, subtitle=None, subtitle_id=None):
-    """Section heading shown above a card (title + optional grey subtitle)."""
+def _block_head(title, subtitle=None, subtitle_id=None, info=None):
+    """Section heading shown above a card (title + optional grey subtitle).
+
+    `info` adds a mark beside the title that explains the chart on hover,
+    for what does not fit in a subtitle.
+    """
     sub = None
     if subtitle is not None or subtitle_id is not None:
         sub = html.P(subtitle, id=subtitle_id, className='tell-block-sub') if subtitle_id \
             else html.P(subtitle, className='tell-block-sub')
-    return html.Div([html.H3(title, className='tell-block-title'), sub],
+    heading = [html.H3(title, className='tell-block-title')]
+    if info:
+        heading.append(html.Span('i', className='tell-info', title=info,
+                                 **{'data-note': info, 'aria-label': info, 'tabIndex': 0}))
+    return html.Div([html.Div(heading, className='tell-block-title-row'), sub],
                     className='tell-block-head')
 
 
-def _graph(graph_id, height, title, subtitle=None, config=None, **wrapper_style):
+def _graph(graph_id, height, title, subtitle=None, config=None, info=None, **wrapper_style):
     """A titled block: heading above, dcc.Graph inside a white rounded card."""
     return html.Div([
-        _block_head(title, subtitle),
+        _block_head(title, subtitle, info=info),
         html.Div(
             dcc.Graph(id=graph_id, style={'height': height},
                       config={'displayModeBar': False, 'responsive': True, **(config or {})}),
@@ -453,6 +527,10 @@ data['tag_list'] = data['tags'].map(split_tags)
 # for the terms matching what the user types, most-used first.
 KEYWORD_OPTIONS_SHOWN = 100
 TABLE_PAGE_SIZE = 10
+# Tiers that say only that the classification failed. After
+# db/reclassify_tiers.py there should be none left; any that appear are kept
+# out of the table and the tier chart rather than shown as a bucket.
+HIDDEN_TIERS = {'No match'}
 # Founding-year periods for the bar chart, oldest first.
 YEAR_BINS = [-float('inf'), 1969, 1979, 1989, 1999, 2009, 2015, float('inf')]
 YEAR_LABELS = ['Before 1970', '1970-1979', '1980-1989', '1990-1999',
@@ -635,7 +713,7 @@ def company_profile(row):
     if category or tier or company_class:
         sections.append(_profile_section('Classification', html.Div([
             _profile_stat('Product category', category),
-            _profile_stat('Lifecycle stage', tier),
+            _profile_stat('Supply chain tier', tier),
             _profile_stat('Company class', company_class),
         ], className='tell-profile-stats tell-profile-stats-2')))
 
@@ -771,8 +849,12 @@ app.layout = html.Div([
         _graph('pie-category', '300px', 'Product Category',
                'Click a slice to filter the table',
                flex='1 1 240px', minWidth='240px'),
-        _graph('pie-tier',     '300px', 'Lifecycle Stage',
-               'Click a slice to filter the table',
+        _graph('tier-bar',     '300px', 'Supply Chain Tier',
+               'Click a bar to filter the table',
+               info='"No tier" covers organizations that support the sector without '
+                    'sitting in the supply chain: industry associations, NGOs, cultural '
+                    'organizations, museums, research & education, and other supporting '
+                    'activities.',
                flex='1 1 240px', minWidth='240px'),
         _graph('year-bar',     '300px', 'Founding Year',    'Companies founded per period',
                flex='1 1 240px', minWidth='240px'),
@@ -789,6 +871,12 @@ app.layout = html.Div([
                       'borderRadius': '6px', 'textDecoration': 'none',
                       'fontSize': '14px', 'fontWeight': '600'}),
         classification.get_button(),
+        html.A('⬇ Export filtered data', id='export-filtered-link',
+               href='', target='_blank',
+               style={'display': 'inline-block', 'padding': '10px 24px',
+                      'backgroundColor': '#217346', 'color': 'white',
+                      'borderRadius': '6px', 'textDecoration': 'none',
+                      'fontSize': '14px', 'fontWeight': '600'}),
     ], className='tell-buttons', style={'display': 'flex', 'gap': '12px', 'justifyContent': 'center',
               'marginTop': '32px', 'paddingBottom': '32px'}),
 
@@ -815,6 +903,7 @@ app.layout = html.Div([
     dcc.Store(id='trk-session-sink'),
     dcc.Store(id='trk-filter-sink'),
     dcc.Store(id='trk-click-sink'),
+    dcc.Store(id='axis-click-sink'),
 
 ], className='tell-app', style={'fontFamily': 'Inter, sans-serif', 'padding': '20px', 'maxWidth': '1400px', 'margin': 'auto'})
 
@@ -894,23 +983,23 @@ def update_keyword_options(search, regions, cities, companies, consortiums, keyw
     return _keyword_options(subset['tag_list'], search, keywords)
 
 
-# ── Pie click callback ────────────────────────────────────────────────────────
-# Each donut filters on its own column. Clicking a slice selects it, clicking
-# the same slice again clears it, so the charts work like the dropdowns do.
-PIE_FILTERS = {
+# ── Chart click callback ──────────────────────────────────────────────────────
+# Each chart filters on its own column. Clicking a slice or bar selects it,
+# clicking the same one again clears it, so the charts work like the dropdowns.
+CHART_FILTERS = {
     'pie-category': 'Predicted_Category',
-    'pie-tier':     'Predicted_Tier',
+    'tier-bar':     'Predicted_Tier',
     'pie-class':    'company_class',
 }
-PIE_LABELS = {
+CHART_LABELS = {
     'Predicted_Category': 'Product category',
-    'Predicted_Tier':     'Lifecycle stage',
+    'Predicted_Tier':     'Supply chain tier',
     'company_class':      'Company class',
 }
 
 
 def apply_chart_filters(df, chart_filters, skip=None):
-    """Narrow `df` by the slices clicked in the donuts.
+    """Narrow `df` by the slices and bars clicked in the charts.
 
     `skip` leaves one column out, so a chart is never filtered by its own
     selection and keeps showing every slice the user can switch to.
@@ -926,14 +1015,14 @@ def apply_chart_filters(df, chart_filters, skip=None):
 @app.callback(
     Output('chart-filters', 'data'),
     Input('pie-category', 'clickData'),
-    Input('pie-tier',     'clickData'),
+    Input('tier-bar',     'clickData'),
     Input('pie-class',    'clickData'),
     State('chart-filters', 'data'),
     prevent_initial_call=True,
 )
 def update_chart_filters(cat_click, tier_click, class_click, current):
-    column = PIE_FILTERS.get(ctx.triggered_id)
-    click  = {'pie-category': cat_click, 'pie-tier': tier_click,
+    column = CHART_FILTERS.get(ctx.triggered_id)
+    click  = {'pie-category': cat_click, 'tier-bar': tier_click,
               'pie-class': class_click}.get(ctx.triggered_id)
     if not column or not click:
         return dash.no_update
@@ -1025,7 +1114,7 @@ def select_companies(regions, companies, keywords, cities, consortiums,
     Output('map-graph',         'figure'),
     Output('region-chart',      'figure'),
     Output('pie-category',      'figure'),
-    Output('pie-tier',          'figure'),
+    Output('tier-bar',          'figure'),
     Output('year-bar',          'figure'),
     Output('pie-class',         'figure'),
     Output('city-filter-label', 'children'),
@@ -1109,10 +1198,11 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
                      selected=(chart_filters or {}).get('Predicted_Category'))
 
     _tier_src = apply_chart_filters(unsliced, chart_filters, skip='Predicted_Tier')
-    _tier = _tier_src['Predicted_Tier'].fillna('Unknown').value_counts().reset_index()
+    _tier = (_tier_src.loc[~_tier_src['Predicted_Tier'].isin(HIDDEN_TIERS), 'Predicted_Tier']
+             .value_counts().reset_index())
     _tier.columns = ['Predicted_Tier', 'count']
-    pie_tier = _donut(_tier, 'Predicted_Tier', BLUE_RAMP,
-                      selected=(chart_filters or {}).get('Predicted_Tier'))
+    tier_bar = _hbar(_tier, 'Predicted_Tier', nte_darkblue,
+                     selected=(chart_filters or {}).get('Predicted_Tier'))
 
     # Grouped into periods: one bar per year left a long tail of single
     # companies and a spike at the recent years, which reads as noise.
@@ -1143,11 +1233,11 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
         active.append(f"City: {selected_city}")
     for column, value in (chart_filters or {}).items():
         if value is not None:
-            active.append(f"{PIE_LABELS.get(column, column)}: {value}")
+            active.append(f"{CHART_LABELS.get(column, column)}: {value}")
     city_label = (" · ".join(active) + " — click the same slice or bubble again to clear"
                   if active else "")
     return (kpi_active, kpi_web, kpi_contacts, map_fig, region_fig,
-            pie_cat, pie_tier, year_bar, pie_class, city_label)
+            pie_cat, tier_bar, year_bar, pie_class, city_label)
 
 
 # ── Companies table callback ──────────────────────────────────────────────────
@@ -1184,6 +1274,9 @@ def update_table(selected_regions, selected_companies, selected_keywords,
     _, filtered = select_companies(selected_regions, selected_companies, selected_keywords,
                                    selected_cities, selected_consortiums, selected_city,
                                    chart_filters)
+    # A company whose tier could not be decided is left out of the table, as it
+    # is left out of the tier chart.
+    filtered = filtered[~filtered['Predicted_Tier'].isin(HIDDEN_TIERS)]
     # Only a page change keeps the page; a new filter or sort starts again at 1.
     if 'company-table.page_current' not in ctx.triggered_prop_ids:
         page_current = 0
@@ -1213,6 +1306,149 @@ def update_table(selected_regions, selected_companies, selected_keywords,
                    f"or another cell to show its city on the map")
     return records, pages, page_current, table_count
 
+
+# ── Export the filtered companies ─────────────────────────────────────────────
+# A real URL rather than a dcc.Download blob: the dashboard is served inside an
+# iframe, where blob downloads are blocked. The filters travel in the link, so
+# the file always matches what the page is showing when it is clicked.
+EXPORT_COLUMNS = [
+    ('trade_name', 'Company'),
+    ('city', 'City'),
+    ('region', 'Region'),
+    ('website', 'Website'),
+    ('employees', 'Employees'),
+    ('surface', 'Surface (m2)'),
+    ('year_start', 'Founded'),
+    ('legal_form', 'Legal form'),
+    ('status', 'Status'),
+    ('Predicted_Category', 'Product category'),
+    ('Predicted_Tier', 'Supply chain tier'),
+    ('company_class', 'Company class'),
+    ('has_contact', 'Website contact found'),
+    ('tags', 'Keywords'),
+]
+
+
+def _export_state(regions, companies, keywords, cities, consortiums,
+                  selected_city, chart_filters):
+    """Pack the current filters into something that fits in a URL."""
+    state = {'regions': regions, 'companies': companies, 'keywords': keywords,
+             'cities': cities, 'consortiums': consortiums,
+             'city': selected_city, 'charts': chart_filters}
+    packed = json.dumps({k: v for k, v in state.items() if v}, separators=(',', ':'))
+    return base64.urlsafe_b64encode(packed.encode()).decode()
+
+
+@app.callback(
+    Output('export-filtered-link', 'href'),
+    Output('export-filtered-link', 'children'),
+    Input('region-dropdown',    'value'),
+    Input('company-dropdown',   'value'),
+    Input('keywords-dropdown',  'value'),
+    Input('city-dropdown',      'value'),
+    Input('consortium-dropdown','value'),
+    Input('selected-city',      'data'),
+    Input('chart-filters',      'data'),
+)
+def update_export_link(regions, companies, keywords, cities, consortiums,
+                       selected_city, chart_filters):
+    _, filtered = select_companies(regions, companies, keywords, cities,
+                                   consortiums, selected_city, chart_filters)
+    filtered = filtered[~filtered['Predicted_Tier'].isin(HIDDEN_TIERS)]
+    href = app.get_relative_path('/export/companies.xlsx') + '?f=' + _export_state(
+        regions, companies, keywords, cities, consortiums, selected_city, chart_filters)
+    return href, f'⬇ Export filtered data ({len(filtered):,})'
+
+
+@server.route(app.config.requests_pathname_prefix + 'export/companies.xlsx')
+def export_filtered_companies():
+    """Send the filtered companies as an Excel file, keywords and classes included."""
+    import io
+    from flask import request, send_file
+
+    try:
+        packed = request.args.get('f', '')
+        state = json.loads(base64.urlsafe_b64decode(packed).decode()) if packed else {}
+    except Exception:
+        state = {}          # an unreadable link exports everything rather than failing
+
+    _, filtered = select_companies(
+        state.get('regions'), state.get('companies'), state.get('keywords'),
+        state.get('cities'), state.get('consortiums'), state.get('city'),
+        state.get('charts'))
+    filtered = filtered[~filtered['Predicted_Tier'].isin(HIDDEN_TIERS)]
+
+    columns = [(col, label) for col, label in EXPORT_COLUMNS if col in filtered.columns]
+    export = filtered[[col for col, _ in columns]].rename(columns=dict(columns))
+    if 'Website contact found' in export.columns:
+        export['Website contact found'] = export['Website contact found'].map(
+            {1: 'yes', 0: 'no'}).fillna('no')
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        export.to_excel(writer, index=False, sheet_name='Companies')
+    buffer.seek(0)
+    stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    return send_file(buffer, as_attachment=True,
+                     download_name=f'tell_companies_{stamp}.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.'
+                              'spreadsheetml.sheet')
+
+
+# ── Clickable category labels ─────────────────────────────────────────────────
+# Plotly raises no event for an axis tick label, so a click on one is forwarded
+# to its graph as an ordinary point click carrying that label. The chart's
+# callback (update_chart_filters) then cannot tell the two apart.
+#
+# The listener sits on the document: Plotly redraws the axis on every update,
+# which would drop a listener attached to the labels themselves. It is
+# installed once, from the interval that already runs at start-up.
+app.clientside_callback(
+    """
+    function(n) {
+        if (window.__tellAxisClick) { return window.dash_clientside.no_update; }
+        window.__tellAxisClick = true;
+        var CLICKABLE = ['tier-bar'];           // graphs whose labels filter
+
+        // Plotly covers its plot with an overlay that swallows pointer events,
+        // so a click never comes FROM the label: find the label the pointer is
+        // over by position instead.
+        function labelAt(event) {
+            var graph = event.target.closest('.js-plotly-plot');
+            var holder = graph && graph.closest('[id]');
+            if (!holder || CLICKABLE.indexOf(holder.id) === -1) { return null; }
+            var labels = graph.querySelectorAll('.yaxislayer-above text');
+            for (var i = 0; i < labels.length; i++) {
+                var box = labels[i].getBoundingClientRect();
+                if (event.clientX >= box.left - 4 && event.clientX <= box.right + 4 &&
+                    event.clientY >= box.top - 2 && event.clientY <= box.bottom + 2) {
+                    var node = labels[i];
+                    // Plotly keeps the full text here; textContent can be cut short.
+                    var value = node.getAttribute('data-unformatted') || node.textContent;
+                    return value ? {graph: graph, value: value} : null;
+                }
+            }
+            return null;
+        }
+
+        document.addEventListener('click', function(event) {
+            var hit = labelAt(event);
+            if (hit) { hit.graph.emit('plotly_click', {points: [{label: hit.value}]}); }
+        });
+        document.addEventListener('mousemove', function(event) {
+            var graph = event.target.closest('.js-plotly-plot');
+            var holder = graph && graph.closest('[id]');
+            if (!holder || CLICKABLE.indexOf(holder.id) === -1) { return; }
+            graph.style.cursor = labelAt(event) ? 'pointer' : '';
+        });
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output('axis-click-sink', 'data'),
+    Input('trk-init', 'n_intervals'),
+)
+
+
 # ── Usage tracking callbacks ──────────────────────────────────────────────────
 # Generate a stable per-browser-session id (kept in sessionStorage) on load.
 app.clientside_callback(
@@ -1224,6 +1460,12 @@ app.clientside_callback(
                 ? crypto.randomUUID()
                 : 'sid-' + Date.now() + '-' + Math.random().toString(16).slice(2);
             window.sessionStorage.setItem('tell_sid', sid);
+        }
+        // This runs twice per page load - once on render, once when the
+        // interval fires - and each store update logs a session_start. Only
+        // the first run reports anything.
+        if (window.__sid === sid) {
+            return window.dash_clientside.no_update;
         }
         window.__sid = sid;
         return sid;

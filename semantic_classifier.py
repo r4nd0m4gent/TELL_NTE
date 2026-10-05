@@ -159,10 +159,18 @@ class SemanticClassifier:
 
     def classify_batch(self, texts: list[str]) -> list[ClassificationResult]:
         """Classify multiple texts efficiently (single encode call)."""
+        return self.classify_vectors(self.model.encode(texts))
+
+    def classify_vectors(self, vecs) -> list[ClassificationResult]:
+        """Classify already-embedded texts.
+
+        Embedding is the expensive part and the same texts are classified over
+        and over against different classes, so callers that keep their vectors
+        (see classification.py's cache) can skip it.
+        """
         if self._centroids is None:
             raise RuntimeError("Call build() before classify_batch().")
 
-        vecs = self.model.encode(texts)                          # (n, dim)
         sims = cosine_similarity(vecs, self._centroids)          # (n, n_classes)
 
         results = []
