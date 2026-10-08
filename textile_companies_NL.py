@@ -30,6 +30,13 @@ BLUE_RAMP   = ['#2f3c70', '#54639E', '#8390c0', '#b3bcdc', '#dde1f0', '#eef0f7']
 MIXED_RAMP  = ['#54639E', '#513773', '#8390c0', '#a58cc4', '#b3bcdc', '#cbbbe0',
                '#dde1f0', '#e7dff0']
 
+# The legend is laid out in two fixed columns (see entrywidth below), so its
+# height no longer depends on how wide the card happens to be: six entries are
+# always three rows. That makes the band under the donut predictable - wide
+# enough never to be hit, tight enough not to leave a hole.
+LEGEND_BAND = 0.26
+LEGEND_GAP = 0.03
+
 # ── Plotly theme ──────────────────────────────────────────────────────────────
 # One shared template so every chart gets the same font, white background,
 # light gridlines and hover style; individual figures only set what differs.
@@ -83,20 +90,36 @@ def _donut(df, names, colors, selected=None):
         pull = [0.06 if l == selected else 0 for l in labels]
     fig.update_traces(
         sort=True, direction='clockwise', rotation=0,
-        textposition='inside', textinfo='label+percent', insidetextorientation='auto',
-        texttemplate='%{label}<br>%{percent:.0%}',
+        # The names live in the legend, so slices only carry their share; a
+        # thin slice could never hold its name anyway.
+        textposition='inside', textinfo='percent', insidetextorientation='auto',
+        texttemplate='%{percent:.0%}',
         pull=pull,
         marker=marker,
+        domain={'y': [LEGEND_BAND, 1.0]},
+        # The pie's own centre title rather than a layout annotation: it
+        # follows the donut, where paper coordinates do not once the legend
+        # takes its share of the figure.
+        title={'text': f"<b>{total:,}</b><br><span style='font-size:11px'>companies</span>",
+               'position': 'middle center', 'font': {'size': 16, 'color': INK}},
         hovertemplate='<b>%{label}</b><br>%{value:,} companies (%{percent})'
                       '<br><i>click to filter</i><extra></extra>',
     )
     fig.update_layout(
         uniformtext_minsize=10, uniformtext_mode='hide',
-        showlegend=False,
-        margin={'t': 20, 'b': 20, 'l': 16, 'r': 16},
-        annotations=[{'text': f"<b>{total:,}</b><br><span style='font-size:11px'>companies</span>",
-                      'x': 0.5, 'y': 0.5, 'showarrow': False,
-                      'font': {'size': 16, 'color': INK}}],
+        # A legend so the small slices can be read and clicked at all: 27
+        # companies make a sliver no label fits in and no finger can hit.
+        # itemclick off: Plotly's own legend click hides a slice, which would
+        # fight with the click-to-filter the dashboard puts on these charts.
+        showlegend=True,
+        # The donut is confined to the top of the plot (see the trace's domain
+        # below) and the legend sits in the band under it. Left to themselves
+        # they share the same space and the legend lands on the chart.
+        legend={'orientation': 'h', 'yanchor': 'top', 'y': LEGEND_BAND - LEGEND_GAP,
+                'xanchor': 'center', 'x': 0.5, 'font': {'size': 10, 'color': INK},
+                'entrywidthmode': 'fraction', 'entrywidth': 0.5,
+                'itemclick': False, 'itemdoubleclick': False, 'traceorder': 'normal'},
+        margin={'t': 8, 'b': 8, 'l': 16, 'r': 16},
     )
     return fig
 
@@ -195,7 +218,8 @@ query_org = """
         -- db/reclassify_tiers.py writes into tags.tier and keeps what a
         -- company had before in tags.tier_original.
         COALESCE(t.tier, 'No match') AS Predicted_Tier,
-        COALESCE(sc.has_contact, 0) AS has_contact
+        COALESCE(sc.has_contact, 0) AS has_contact,
+        sc.website_emails
     FROM organizations AS o
     JOIN (
         SELECT city, MAX(region) AS region,
@@ -210,7 +234,8 @@ query_org = """
     -- join would then duplicate the organization.
     LEFT JOIN (
         SELECT website,
-               MAX(`Website emails` IS NOT NULL AND `Website emails` <> '') AS has_contact
+               MAX(`Website emails` IS NOT NULL AND `Website emails` <> '') AS has_contact,
+               MIN(NULLIF(`Website emails`, '')) AS website_emails
         FROM scraping17092026 GROUP BY website
     ) AS sc ON sc.website = o.website
     WHERE o.status = 'Active'
@@ -531,6 +556,19 @@ TABLE_PAGE_SIZE = 10
 # db/reclassify_tiers.py there should be none left; any that appear are kept
 # out of the table and the tier chart rather than shown as a bucket.
 HIDDEN_TIERS = {'No match'}
+# Same for the product category: a company whose category could not be decided
+# is left out rather than shown under a label that means "we could not tell".
+HIDDEN_CATEGORIES = {'No match'}
+
+
+def visible_companies(df):
+    """Drop companies whose tier or category could not be decided.
+
+    The table, the two charts and the export all show the same set, so they all
+    go through here.
+    """
+    return df[~df['Predicted_Tier'].isin(HIDDEN_TIERS)
+              & ~df['Predicted_Category'].isin(HIDDEN_CATEGORIES)]
 # Founding-year periods for the bar chart, oldest first.
 YEAR_BINS = [-float('inf'), 1969, 1979, 1989, 1999, 2009, 2015, float('inf')]
 YEAR_LABELS = ['Before 1970', '1970-1979', '1980-1989', '1990-1999',
@@ -846,21 +884,26 @@ app.layout = html.Div([
 
     # ── Distribution charts ─────────────────────────────────────────────────
     html.Div([
-        _graph('pie-category', '300px', 'Product Category',
-               'Click a slice to filter the table',
-               flex='1 1 240px', minWidth='240px'),
-        _graph('tier-bar',     '300px', 'Supply Chain Tier',
-               'Click a bar to filter the table',
+        _graph('pie-category', '360px', 'Product Category',
+               'Click a slice or legend entry to filter',
+               flex='1 1 300px', minWidth='300px'),
+        _graph('tier-bar',     '360px', 'Supply Chain Tier',
+               'Click a bar or its name to filter',
                info='"No tier" covers organizations that support the sector without '
                     'sitting in the supply chain: industry associations, NGOs, cultural '
                     'organizations, museums, research & education, and other supporting '
                     'activities.',
-               flex='1 1 240px', minWidth='240px'),
-        _graph('year-bar',     '300px', 'Founding Year',    'Companies founded per period',
-               flex='1 1 240px', minWidth='240px'),
-        _graph('pie-class',    '300px', 'Company Class',
-               'Click a slice to filter the table',
-               flex='1 1 240px', minWidth='240px'),
+               flex='1 1 300px', minWidth='300px'),
+        _graph('year-bar',     '360px', 'Founding Year',    'Companies founded per period',
+               flex='1 1 300px', minWidth='300px'),
+        _graph('pie-class',    '360px', 'Company Class',
+               'Click a slice or legend entry to filter',
+                info='The classification is based primarily on keywords, ' 
+                'assigining organization to the "frontrunner" class when '
+                'keywords related to circularity and digitalization are present. '
+                'Website languages, employee count, and other factors are also considered. ' \
+                'To learn more about the classification, please contact f.sollitto@hva.nl.',
+               flex='1 1 300px', minWidth='300px'),
     ], className='tell-pies', style={'display': 'flex', 'flexWrap': 'wrap', 'gap': '16px', 'marginTop': '20px'}),
 
     # ── Buttons ───────────────────────────────────────────────────────────────
@@ -1192,7 +1235,8 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
     # A donut is not narrowed by its own slice, so the other slices stay
     # visible and clickable; the selected one is pulled out of the ring.
     _cat_src = apply_chart_filters(unsliced, chart_filters, skip='Predicted_Category')
-    _cat  = _cat_src['Predicted_Category'].fillna('Unknown').value_counts().reset_index()
+    _cat  = (_cat_src.loc[~_cat_src['Predicted_Category'].isin(HIDDEN_CATEGORIES),
+                          'Predicted_Category'].fillna('Unknown').value_counts().reset_index())
     _cat.columns = ['Predicted_Category', 'count']
     pie_cat = _donut(_cat, 'Predicted_Category', VIOLET_RAMP,
                      selected=(chart_filters or {}).get('Predicted_Category'))
@@ -1223,7 +1267,7 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
               else pd.Series(dtype=object))
     _class = _class.fillna('Unclassified').replace('', 'Unclassified').value_counts().reset_index()
     _class.columns = ['company_class', 'count']
-    pie_class = _donut(_class, 'company_class', MIXED_RAMP,
+    pie_class = _donut(_class, 'company_class', VIOLET_RAMP,
                        selected=(chart_filters or {}).get('company_class'))
 
     # One line for every filter that was set by clicking a chart rather than a
@@ -1274,9 +1318,7 @@ def update_table(selected_regions, selected_companies, selected_keywords,
     _, filtered = select_companies(selected_regions, selected_companies, selected_keywords,
                                    selected_cities, selected_consortiums, selected_city,
                                    chart_filters)
-    # A company whose tier could not be decided is left out of the table, as it
-    # is left out of the tier chart.
-    filtered = filtered[~filtered['Predicted_Tier'].isin(HIDDEN_TIERS)]
+    filtered = visible_companies(filtered)
     # Only a page change keeps the page; a new filter or sort starts again at 1.
     if 'company-table.page_current' not in ctx.triggered_prop_ids:
         page_current = 0
@@ -1324,7 +1366,7 @@ EXPORT_COLUMNS = [
     ('Predicted_Category', 'Product category'),
     ('Predicted_Tier', 'Supply chain tier'),
     ('company_class', 'Company class'),
-    ('has_contact', 'Website contact found'),
+    ('website_emails', 'Email contacts'),
     ('tags', 'Keywords'),
 ]
 
@@ -1354,7 +1396,7 @@ def update_export_link(regions, companies, keywords, cities, consortiums,
                        selected_city, chart_filters):
     _, filtered = select_companies(regions, companies, keywords, cities,
                                    consortiums, selected_city, chart_filters)
-    filtered = filtered[~filtered['Predicted_Tier'].isin(HIDDEN_TIERS)]
+    filtered = visible_companies(filtered)
     href = app.get_relative_path('/export/companies.xlsx') + '?f=' + _export_state(
         regions, companies, keywords, cities, consortiums, selected_city, chart_filters)
     return href, f'⬇ Export filtered data ({len(filtered):,})'
@@ -1376,13 +1418,13 @@ def export_filtered_companies():
         state.get('regions'), state.get('companies'), state.get('keywords'),
         state.get('cities'), state.get('consortiums'), state.get('city'),
         state.get('charts'))
-    filtered = filtered[~filtered['Predicted_Tier'].isin(HIDDEN_TIERS)]
+    filtered = visible_companies(filtered)
 
     columns = [(col, label) for col, label in EXPORT_COLUMNS if col in filtered.columns]
     export = filtered[[col for col, _ in columns]].rename(columns=dict(columns))
-    if 'Website contact found' in export.columns:
-        export['Website contact found'] = export['Website contact found'].map(
-            {1: 'yes', 0: 'no'}).fillna('no')
+    if 'Email contacts' in export.columns:
+        # The scraper separates addresses with '; '; keep that in the cell.
+        export['Email contacts'] = export['Email contacts'].fillna('')
 
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
@@ -1408,7 +1450,14 @@ app.clientside_callback(
     function(n) {
         if (window.__tellAxisClick) { return window.dash_clientside.no_update; }
         window.__tellAxisClick = true;
-        var CLICKABLE = ['tier-bar'];           // graphs whose labels filter
+        // Graphs whose category labels filter: the bar chart's axis labels and
+        // the donuts' legend entries.
+        var CLICKABLE = ['tier-bar', 'pie-category', 'pie-class'];
+        var LABELS = '.yaxislayer-above text, .legend text';
+        // The column each chart filters on; mirrors CHART_FILTERS in Python.
+        var COLUMN = {'tier-bar': 'Predicted_Tier',
+                      'pie-category': 'Predicted_Category',
+                      'pie-class': 'company_class'};
 
         // Plotly covers its plot with an overlay that swallows pointer events,
         // so a click never comes FROM the label: find the label the pointer is
@@ -1417,7 +1466,7 @@ app.clientside_callback(
             var graph = event.target.closest('.js-plotly-plot');
             var holder = graph && graph.closest('[id]');
             if (!holder || CLICKABLE.indexOf(holder.id) === -1) { return null; }
-            var labels = graph.querySelectorAll('.yaxislayer-above text');
+            var labels = graph.querySelectorAll(LABELS);
             for (var i = 0; i < labels.length; i++) {
                 var box = labels[i].getBoundingClientRect();
                 if (event.clientX >= box.left - 4 && event.clientX <= box.right + 4 &&
@@ -1441,11 +1490,50 @@ app.clientside_callback(
             if (!holder || CLICKABLE.indexOf(holder.id) === -1) { return; }
             graph.style.cursor = labelAt(event) ? 'pointer' : '';
         });
+
+        // The label of the category being filtered on is shown in bold. Plotly
+        // styles a legend as a whole, and putting <b> in the label would change
+        // the value a click reports, so the weight is set on the drawn text.
+        // Plotly rewrites that text on every redraw, hence the observer.
+        window.__tellBoldLabels = function() {
+            var filters = window.__tellChartFilters || {};
+            CLICKABLE.forEach(function(id) {
+                var holder = document.getElementById(id);
+                if (!holder) { return; }
+                var selected = filters[COLUMN[id]];
+                holder.querySelectorAll(LABELS).forEach(function(node) {
+                    var value = node.getAttribute('data-unformatted') || node.textContent;
+                    node.style.fontWeight = (selected && value === selected) ? '700' : '';
+                });
+            });
+        };
+        var pending = false;
+        new MutationObserver(function() {
+            if (pending) { return; }
+            pending = true;
+            requestAnimationFrame(function() { pending = false; window.__tellBoldLabels(); });
+        }).observe(document.body, {childList: true, subtree: true});
         return window.dash_clientside.no_update;
     }
     """,
     Output('axis-click-sink', 'data'),
     Input('trk-init', 'n_intervals'),
+)
+
+
+# Hand the current selection to the code above, which draws that category's
+# label in bold wherever it appears.
+app.clientside_callback(
+    """
+    function(filters) {
+        window.__tellChartFilters = filters || {};
+        if (window.__tellBoldLabels) { window.__tellBoldLabels(); }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output('axis-click-sink', 'data', allow_duplicate=True),
+    Input('chart-filters', 'data'),
+    prevent_initial_call=True,
 )
 
 

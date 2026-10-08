@@ -1,3 +1,4 @@
+
 """
 classify_companies.py
 ─────────────────────
@@ -123,8 +124,8 @@ SCORING = {
     "digital_strong": 2,
     "digital_weak": 1,
 }
-MULTINATIONAL_AT = 4           # score needed for Multinational
-MULTINATIONAL_EMPLOYEES = 100  # this many employees qualifies on its own
+MULTINATIONAL_AT = 4          # score needed for Multinational
+MULTINATIONAL_EMPLOYEES = 50  # this many employees qualifies on its own
 FRONTRUNNER_AT = 4         # score needed in one theme
 FRONTRUNNER_BOTH_AT = 2    # or this much in both themes at once
 KEYWORD_CAP = 3            # how many keyword hits a theme may count
@@ -168,10 +169,16 @@ def classify_row(row) -> dict:
             cross_border += points
         evidence.append(label)
 
+    wholesale = "wholesale" in str(row.get("main_activity") or "").lower()
+
     if employees is not None and employees >= 250:
         add(SCORING["employees_large"], f"{int(employees)} employees")
     elif employees is not None and employees >= 50:
         add(SCORING["employees_medium"], f"{int(employees)} employees")
+    # A wholesaler of this size buys or sells abroad as a matter of course,
+    # which is what separates it from a company that is merely large.
+    if wholesale and employees is not None and employees >= MULTINATIONAL_EMPLOYEES:
+        add(SCORING["wholesale_at_scale"], "wholesale at scale", abroad=True)
     if languages >= 4:
         add(SCORING["languages_many"], f"{languages} website languages", abroad=True)
     elif languages == 3:
@@ -203,8 +210,9 @@ def classify_row(row) -> dict:
                       or (sustainability >= FRONTRUNNER_BOTH_AT
                           and digital >= FRONTRUNNER_BOTH_AT))
     # Nothing to go on: no employee count, and no website the scraper could
-    # read. Such a company still has curated tags, but those describe its
-    # registered activity, not its size or how it operates.
+    # read. These companies are called small and medium enterprises, which is
+    # what the overwhelming majority of the register is; `classified_from`
+    # records that the label rests on no evidence of its own.
     no_evidence = employees is None and languages == 0 and pd.isna(row["keywords"])
 
     # Size alone counts from MULTINATIONAL_EMPLOYEES up - calling a company
@@ -214,9 +222,7 @@ def classify_row(row) -> dict:
     is_multinational = (employees is not None and employees >= MULTINATIONAL_EMPLOYEES) or (
         multinational >= MULTINATIONAL_AT and cross_border >= 1)
 
-    if no_evidence:
-        label = "Unclassified"
-    elif is_frontrunner:
+    if is_frontrunner:
         label = "Frontrunner"
     elif is_multinational:
         label = "Multinational"
@@ -225,6 +231,7 @@ def classify_row(row) -> dict:
 
     return {
         "company_class": label,
+        "classified_from": "no evidence" if no_evidence else "signals",
         "multinational_score": multinational,
         "sustainability_score": sustainability,
         "digital_score": digital,
