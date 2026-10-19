@@ -3,109 +3,35 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Textile Ecosystem Living Lab (TELL) – NewTexEco</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <meta http-equiv="refresh" content="0; url=/">
+  <title>Textile Ecosystem Living Lab - Redirecting...</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', sans-serif; background: #f7f7f5; color: #2c2c2c; }
-
-    header {
-      background: #513773; padding: 18px 40px;
-      display: flex; align-items: center; gap: 16px;
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f7f7f5;
+      text-align: center;
+      padding: 40px;
     }
-    header img { height: 44px; object-fit: contain; }
-    header .site-label {
-      color: rgba(255,255,255,0.75); font-size: 12px; font-weight: 600;
-      letter-spacing: 1.5px; text-transform: uppercase;
+    .message {
+      margin-top: 100px;
+      color: #513773;
+      font-size: 18px;
     }
-
-    .intro { max-width: 860px; margin: 0 auto; padding: 52px 40px 36px; }
-    .intro h1 { font-size: 2rem; font-weight: 700; color: #513773; line-height: 1.25; margin-bottom: 18px; }
-    .intro p  { font-size: 1rem; line-height: 1.75; color: #444; }
-
-    .dashboard-wrap { max-width: 1440px; margin: 0 auto; padding: 0 28px 60px; }
-    .dashboard-wrap iframe {
-      width: 100%; height: 2000px; border: none;
-      border-radius: 12px; box-shadow: 0 4px 28px rgba(0,0,0,0.10);
-      background: white;
-    }
-
-    footer {
-      text-align: center; padding: 24px 40px; font-size: 12px;
-      color: #999; border-top: 1px solid #e5e5e5;
-    }
-    footer a { color: #54639E; text-decoration: none; }
-    footer a:hover { text-decoration: underline; }
-
-    /* ── Mobile ──────────────────────────────────────────── */
-    @media (max-width: 768px) {
-      header { padding: 14px 20px; }
-      .intro { padding: 32px 20px 24px; }
-      .intro h1 { font-size: 1.5rem; margin-bottom: 14px; }
-      .intro p { font-size: 0.95rem; line-height: 1.65; }
-      .dashboard-wrap { padding: 0 10px 32px; }
-      .dashboard-wrap iframe { height: 2600px; border-radius: 8px; }
+    .message p {
+      color: #6b6b76;
+      margin-top: 10px;
     }
   </style>
 </head>
 <body>
-
-  <header>
-    <img src="https://newtexeco.nl/wp-content/uploads/2023/12/logo_2x.png" alt="NewTexEco" />
-    <span class="site-label">NewTexEco</span>
-  </header>
-
-  <div class="intro">
+  <div class="message">
     <h1>Textile Ecosystem Living Lab</h1>
-    <p>
-The TELL aims to improve the visibility of the companies operating in the Textile, Clothing, 
-Leather, and Footwear (TCLF) sector by showing geographic distribution and market specializations
-through keywords (or tags). In this version, you can use the tool as a "search engine" to explore 
-the data we gathered for more than 11,000 active companies across the Netherlands using a dataset 
-from Modint-KvK (2021). 
-    </p>
+    <p>Redirecting to the new multi-perspective dashboard...</p>
+    <p><a href="/">Click here if you're not redirected automatically</a></p>
   </div>
-
-  <div class="dashboard-wrap">
-    <iframe
-      src="https://tell.newtexeco.nl/dashboard/"
-      title="Textile Ecosystem Living Lab Dashboard"
-      loading="lazy"
-      allowfullscreen
-    ></iframe>
-  </div>
-
-  <footer>
-    <a href="https://newtexeco.nl" target="_blank">newtexeco.nl</a>
-    &nbsp;·&nbsp;
-    Textile Ecosystem Living Lab &copy; 2026 NewTexEco
-  </footer>
-
   <script>
-    // Keep the embedded dashboard's pop-ups/navigation in view by scrolling the
-    // iframe into the parent viewport when it asks (modal) or navigates (Contribute).
-    (function () {
-      var f = document.querySelector('.dashboard-wrap iframe');
-      if (!f) return;
-      var firstLoad = true;
-      f.addEventListener('load', function () {
-        if (firstLoad) { firstLoad = false; return; }   // ignore the initial load
-        f.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-      var frameOrigin = new URL(f.src, location.href).origin;
-      window.addEventListener('message', function (e) {
-        if (!e || !e.data) return;
-        if (e.data.tellFocus) {
-          f.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-        // Fit the iframe to the dashboard's height (sent by assets/tell_resize.js).
-        // The CSS heights above remain the fallback until the first message.
-        if (e.origin === frameOrigin && typeof e.data.tellHeight === 'number') {
-          f.style.height = Math.max(600, Math.ceil(e.data.tellHeight) + 8) + 'px';
-        }
-      });
-    })();
+    // Immediate redirect to the new multi-page app
+    window.location.href = '/';
   </script>
-
 </body>
 </html>

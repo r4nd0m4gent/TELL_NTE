@@ -6,6 +6,8 @@
 # It pulls the latest code, refreshes dependencies, publishes the landing
 # page to the path Nginx serves, updates the Nginx config, and restarts the
 # dashboard + contribution-form services.
+# Otherwise, run this command to commit and push first:
+#   cd "c:/Users/fsollit/TELL" && git commit -m "Update" && git push origin main 2>&1 | tail -3
 set -euo pipefail
 
 APP_USER=tell
@@ -17,10 +19,6 @@ chown -R ${APP_USER}:${APP_USER} "${APP_DIR}"
 
 echo "▶ Updating Python dependencies…"
 sudo -u ${APP_USER} "${APP_DIR}/venv/bin/pip" install -q -r "${APP_DIR}/requirements.txt"
-
-echo "▶ Publishing landing page (served from ${APP_DIR}/tell_embed.html)…"
-cp "${APP_DIR}/deploy/tell_embed.html" "${APP_DIR}/tell_embed.html"
-chown ${APP_USER}:${APP_USER} "${APP_DIR}/tell_embed.html"
 
 echo "▶ Updating Nginx config…"
 cp "${APP_DIR}/deploy/nginx_tell.conf" /etc/nginx/sites-available/tell
