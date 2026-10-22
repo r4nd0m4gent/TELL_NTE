@@ -1,10 +1,13 @@
 # Deployment Guide — tell.newtexeco.nl
 
 ## Architecture
-- **Nginx** — terminates HTTPS on port 443, serves `tell_embed.html` at `/`, proxies Dash at `/dashboard/`
+- **Nginx** — terminates HTTPS on port 443, serves the static pages in `site/`, proxies Dash at `/dashboard/`
 - **Gunicorn** — runs plain HTTP on `127.0.0.1:8050`, no SSL
 - **Dash app** — served at `https://tell.newtexeco.nl/dashboard/`
-- **tell_embed.html** — standalone landing page with header/intro/footer, embeds dashboard in iframe
+- **site/** — static pages, served straight from the checkout:
+  - `index.html` (`/`) — landing page: describes the two perspectives and links to them
+  - `network/` (`/network/`) — funding-network visualization and the JSON it loads
+    (copied from the `textile-network` repo, being adapted for TELL)
 
 ## Data file
 Place `companies.xlsx` in the `data/` folder next to the script:
@@ -55,8 +58,9 @@ systemctl status tell_nte
 ```
 
 ### 7. Verify
-- `https://tell.newtexeco.nl` → shows tell_embed.html with header/intro/footer
-- `https://tell.newtexeco.nl/dashboard/` → shows Dash app with working map
+- `https://tell.newtexeco.nl` → shows the landing page (site/index.html)
+- `https://tell.newtexeco.nl/network/` → shows the funding network
+- `https://tell.newtexeco.nl/dashboard/` → shows Dash app (company map) with working map
 - `https://tell.newtexeco.nl/contribute/` → shows contribution form
 
 ## After code changes

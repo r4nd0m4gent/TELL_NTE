@@ -1,0 +1,482 @@
+{
+ "_about": "Locations for the funding network's map view. `organisations` maps the organisation name as the page shows it (normaliseOrgName) to the city of its main seat (head office for multi-campus organisations); `cities` gives each city's coordinates (median of its postcodes, GeoNames postal data via pgeocode). Organisations not listed here are placed by a city in their name, if any, or listed as 'not on the map'. `name_cities` are the cities looked for in names.",
+ "organisations": {
+  "10XL": "Dordrecht",
+  "AHK": "Amsterdam",
+  "Academisch Centrum Tandheelkunde Amsterdam": "Amsterdam",
+  "Academisch Ziekenhuis Groningen": "Groningen",
+  "Airbus Netherlands": "Leiden",
+  "Albeda College Rotterdam": "Rotterdam",
+  "Alfa-college": "Groningen",
+  "Allard Pierson Museum Amsterdam": "Amsterdam",
+  "Amstelveencollege": "Amstelveen",
+  "Amsterdam UMC": "Amsterdam",
+  "Amsterdam UMC - Locatie AMC": "Amsterdam",
+  "Amsterdam UMC - Locatie VUmc": "Amsterdam",
+  "ArtEZ": "Arnhem",
+  "Avans Hogeschool": "Breda",
+  "Avantium Chemicals": "Amsterdam",
+  "Avantium Renewable Polymers": "Amsterdam",
+  "Avantium Support": "Amsterdam",
+  "Besi Netherlands": "Duiven",
+  "Bioprocess Pilot Facility": "Delft",
+  "Boschman Technologies": "Duiven",
+  "Breda University of Applied Sciences": "Breda",
+  "Bright Photonics": "Delft",
+  "CITO": "Arnhem",
+  "CROW": "Ede",
+  "Christelijke Hogeschool Ede": "Ede",
+  "Cinop": "'s-Hertogenbosch",
+  "Circle Economy": "Amsterdam",
+  "Citogroep": "Arnhem",
+  "Codarts Rotterdam": "Rotterdam",
+  "Curio Onderwijsgroep WestBrabant": "Breda",
+  "Cygnus Gymnasium": "Amsterdam",
+  "DSM": "Heerlen",
+  "De Haagse Hogeschool": "Den Haag",
+  "Deltares": "Delft",
+  "Deltion College": "Zwolle",
+  "Dominicanenklooster Zwolle": "Zwolle",
+  "Driestar Hogeschool": "Gouda",
+  "Elitac": "Amersfoort",
+  "Erasmus MC": "Rotterdam",
+  "Erasmus Universiteit Rotterdam": "Rotterdam",
+  "Expertisecentrum Nederlands": "Nijmegen",
+  "Fashion For Good": "Amsterdam",
+  "Feyecon Development & Implementation": "Weesp",
+  "Fontys Hogeschool": "Eindhoven",
+  "Food & Biobased Research": "Wageningen",
+  "Geant Vereniging": "Amsterdam",
+  "Gecco Biotech": "Groningen",
+  "Gemeente Amsterdam": "Amsterdam",
+  "Gemeente Utrecht": "Utrecht",
+  "Gemeentelijk Gymnasium Hilversum": "Hilversum",
+  "Gerrit Rietveld Academie": "Amsterdam",
+  "Graafschap College": "Doetinchem",
+  "Greijdanus Hardenberg": "Hardenberg",
+  "Gymnasium Apeldoorn": "Apeldoorn",
+  "HAN University of Applied Sciences": "Arnhem",
+  "HAS Green Academy": "'s-Hertogenbosch",
+  "HKU": "Utrecht",
+  "HZ University of Applied Sciences": "Vlissingen",
+  "Hanzehogeschool Groningen": "Groningen",
+  "Hogeschool KPZ": "Zwolle",
+  "Hogeschool Leiden": "Leiden",
+  "Hogeschool Marnix Academie": "Utrecht",
+  "Hogeschool Rotterdam": "Rotterdam",
+  "Hogeschool Utrecht": "Utrecht",
+  "Hogeschool Windesheim": "Zwolle",
+  "Hogeschool de Kempel": "Helmond",
+  "Hogeschool iPabo": "Amsterdam",
+  "Hogeschool van Amsterdam": "Amsterdam",
+  "Holst Centre": "Eindhoven",
+  "Hotelschool The Hague": "Den Haag",
+  "Hubrecht Institute": "Utrecht",
+  "Hunebedcentrum": "Borger",
+  "Huygen Installatie Adviseurs": "Rotterdam",
+  "IHE Delft": "Delft",
+  "IMC Weekendschool": "Amsterdam",
+  "Imec Nederland": "Eindhoven",
+  "Iselinge Hogeschool": "Doetinchem",
+  "Jacob-Roelandslyceum": "Boxtel",
+  "KBA Nijmegen": "Nijmegen",
+  "KPC Groep": "'s-Hertogenbosch",
+  "KWF Kankerbestrijding": "Amsterdam",
+  "Katholieke Pabo Zwolle": "Zwolle",
+  "Koning Willem I College": "'s-Hertogenbosch",
+  "Koninklijk Nederlands Lucht - en Ruimtevaartcentrum": "Amsterdam",
+  "Koninklijke Bibliotheek": "Den Haag",
+  "Koninklijke Cooperatie Cosun Ua": "Breda",
+  "Koninklijke Nederlandse Akademie van Wetenschappen": "Amsterdam",
+  "Koninklijke Nederlandse Akademie van Wetenschappen - Knaw": "Amsterdam",
+  "Kraton Chemical": "Almere",
+  "Kwr Water": "Nieuwegein",
+  "LUMC": "Leiden",
+  "Leids Universitair Medisch Centrum": "Leiden",
+  "Leidse Instrumentmakers School (LiS)": "Leiden",
+  "Lionix International": "Enschede",
+  "Louis Bolk Instituut": "Bunnik",
+  "Lygature": "Utrecht",
+  "Maastricht UMC+": "Maastricht",
+  "Maastricht University": "Maastricht",
+  "Marcanti College Amsterdam": "Amsterdam",
+  "Medtronic Bakken Research Center": "Maastricht",
+  "Metis Montessori Lyceum": "Amsterdam",
+  "Min. I&W": "Den Haag",
+  "Ministerie van Volksgezondheid, Welzijn en Sport": "Den Haag",
+  "Museum Catharijneconvent": "Utrecht",
+  "Museum Rotterdam": "Rotterdam",
+  "NHL Stenden Hogeschool": "Leeuwarden",
+  "NWO-institutenorganisatie": "Utrecht",
+  "Naturalis": "Leiden",
+  "Natuurmuseum Fryslân": "Leeuwarden",
+  "Nederlands Kanker Instituut": "Amsterdam",
+  "Nederlandse Organisatie voor Wetenschappelijk Onderzoek": "Den Haag",
+  "Nederlandse Wetenschappelijk Onderzoek Instituten": "Utrecht",
+  "Netherlands eScience Center (NLeSC)": "Amsterdam",
+  "Noldus Information Technology": "Wageningen",
+  "Noorderpoortcollege": "Groningen",
+  "Nova College": "Haarlem",
+  "Nrg Pallas": "Petten",
+  "Nv Hvc": "Alkmaar",
+  "Nxp Semiconductors Netherlands": "Eindhoven",
+  "OSG Piter Jelles": "Leeuwarden",
+  "Oberon": "Utrecht",
+  "Open Universiteit": "Heerlen",
+  "Openbaar Onderwijs Groep Groningen (O2G2)": "Groningen",
+  "Orange Quantum Systems Operational": "Delft",
+  "PHIX": "Enschede",
+  "Philips Electronics Nederland": "Eindhoven",
+  "Philips Medical Systems Nederland": "Best",
+  "Photonfirst Technologies": "Alkmaar",
+  "Praktikon": "Nijmegen",
+  "Prinses Maxima Centrum voor Kinderoncologie": "Utrecht",
+  "Process Design Center": "Breda",
+  "Provincie Noord-Brabant": "'s-Hertogenbosch",
+  "Provincie Overijssel": "Zwolle",
+  "Quix Quantum": "Enschede",
+  "RIVM": "Bilthoven",
+  "RKD-Nederlands Instituut voor Kunstgeschiedenis": "Den Haag",
+  "ROC Midden Nederland": "Utrecht",
+  "ROC Mondriaan": "Den Haag",
+  "ROC Nijmegen": "Nijmegen",
+  "ROC van Amsterdam": "Amsterdam",
+  "Radboud UMC": "Nijmegen",
+  "Radboud Universiteit": "Nijmegen",
+  "Regionaal Opleidingen Centrum Aventus": "Apeldoorn",
+  "ResearchNed": "Nijmegen",
+  "Revalidatiecentrum Roessingh": "Enschede",
+  "Rijksuniversiteit Groningen": "Groningen",
+  "Roessingh Research And Development": "Enschede",
+  "SEO Economisch Onderzoek": "Amsterdam",
+  "SURF - Coöperatie SURF U.A.": "Utrecht",
+  "Salvia Bioelectronics": "Eindhoven",
+  "Sardes": "Utrecht",
+  "Saxion University of Applied Sciences": "Enschede",
+  "Senbis Polymer Innovations": "Emmen",
+  "Signify  Netherlands": "Eindhoven",
+  "Single Quantum": "Delft",
+  "Smart Photonics": "Eindhoven",
+  "Spinoza Lyceum": "Amsterdam",
+  "Stedelijk Museum De Lakenhal": "Leiden",
+  "Summa College": "Eindhoven",
+  "Synvina": "Amsterdam",
+  "TNO": "Den Haag",
+  "Technische Universiteit Delft": "Delft",
+  "Technische Universiteit Eindhoven": "Eindhoven",
+  "Teijin Aramid": "Arnhem",
+  "Thermoplastic Compositesresearch Center": "Enschede",
+  "Tilburg University": "Tilburg",
+  "Totalenergies Corbion": "Gorinchem",
+  "UMC Utrecht": "Utrecht",
+  "Uniresearch": "Delft",
+  "Universitair Medisch Centrum Groningen": "Groningen",
+  "Universiteit Leiden": "Leiden",
+  "Universiteit Twente": "Enschede",
+  "Universiteit Utrecht": "Utrecht",
+  "Universiteit van Amsterdam": "Amsterdam",
+  "University Of Applied Sciences, Teacher Training College Katholieke Pabo Zwolle": "Zwolle",
+  "VO Haaglanden": "Den Haag",
+  "Van Hall Larenstein University of Applied Sciences": "Leeuwarden",
+  "Verwey-Jonker Instituut": "Utrecht",
+  "Voortgezet Onderwijs van Amsterdam (VOvA)": "Amsterdam",
+  "Vossius Gymnasium": "Amsterdam",
+  "Vrije Universiteit Amsterdam": "Amsterdam",
+  "Waag Society": "Amsterdam",
+  "Wageningen University & Research": "Wageningen",
+  "Willem Lodewijk Gymnasium": "Groningen",
+  "Wolfert van Borselen Scholengroep": "Rotterdam",
+  "Zuyd Hogeschool": "Heerlen",
+  "het Nederlands Kanker Instituut-antoni van Leeuwenhoek Ziekenhuis": "Amsterdam",
+  "voor educatie en beroepsonderwijs Zadkine": "Rotterdam"
+ },
+ "name_cities": [
+  "Amsterdam",
+  "Rotterdam",
+  "Den Haag",
+  "Utrecht",
+  "Eindhoven",
+  "Groningen",
+  "Tilburg",
+  "Almere",
+  "Breda",
+  "Nijmegen",
+  "Apeldoorn",
+  "Haarlem",
+  "Arnhem",
+  "Enschede",
+  "Amersfoort",
+  "'s-Hertogenbosch",
+  "Zwolle",
+  "Leiden",
+  "Maastricht",
+  "Dordrecht",
+  "Zoetermeer",
+  "Delft",
+  "Leeuwarden",
+  "Deventer",
+  "Alkmaar",
+  "Venlo",
+  "Helmond",
+  "Hilversum",
+  "Heerlen",
+  "Hengelo",
+  "Amstelveen",
+  "Emmen",
+  "Gouda",
+  "Middelburg",
+  "Vlissingen",
+  "Wageningen",
+  "Assen",
+  "Lelystad",
+  "Roermond",
+  "Zeist",
+  "Schiedam",
+  "Sittard",
+  "Kampen",
+  "Terneuzen",
+  "Harderwijk",
+  "Dronten",
+  "Doetinchem",
+  "Hardenberg",
+  "Ede"
+ ],
+ "cities": {
+  "'s-Hertogenbosch": [
+   51.7055,
+   5.3071
+  ],
+  "Alkmaar": [
+   52.6334,
+   4.7542
+  ],
+  "Almere": [
+   52.3681,
+   5.2274
+  ],
+  "Amersfoort": [
+   52.1678,
+   5.3915
+  ],
+  "Amstelveen": [
+   52.29,
+   4.8579
+  ],
+  "Amsterdam": [
+   52.3668,
+   4.8923
+  ],
+  "Apeldoorn": [
+   52.2089,
+   5.9707
+  ],
+  "Arnhem": [
+   51.9736,
+   5.9064
+  ],
+  "Assen": [
+   53.0024,
+   6.5602
+  ],
+  "Best": [
+   51.5081,
+   5.3904
+  ],
+  "Bilthoven": [
+   52.1248,
+   5.1974
+  ],
+  "Borger": [
+   52.9198,
+   6.7889
+  ],
+  "Boxtel": [
+   51.5907,
+   5.3206
+  ],
+  "Breda": [
+   51.5876,
+   4.7691
+  ],
+  "Bunnik": [
+   52.067,
+   5.1974
+  ],
+  "Delft": [
+   51.9987,
+   4.3595
+  ],
+  "Den Haag": [
+   52.0678,
+   4.2921
+  ],
+  "Deventer": [
+   52.2545,
+   6.1842
+  ],
+  "Doetinchem": [
+   51.9636,
+   6.2919
+  ],
+  "Dordrecht": [
+   51.7946,
+   4.6792
+  ],
+  "Dronten": [
+   52.5251,
+   5.7164
+  ],
+  "Duiven": [
+   51.9457,
+   6.013
+  ],
+  "Ede": [
+   52.0416,
+   5.6522
+  ],
+  "Eindhoven": [
+   51.4436,
+   5.4733
+  ],
+  "Emmen": [
+   52.7715,
+   6.9043
+  ],
+  "Enschede": [
+   52.2156,
+   6.8975
+  ],
+  "Gorinchem": [
+   51.833,
+   4.9705
+  ],
+  "Gouda": [
+   52.0119,
+   4.708
+  ],
+  "Groningen": [
+   53.2254,
+   6.5695
+  ],
+  "Haarlem": [
+   52.3813,
+   4.6464
+  ],
+  "Hardenberg": [
+   52.5762,
+   6.6049
+  ],
+  "Harderwijk": [
+   52.3399,
+   5.6331
+  ],
+  "Heerlen": [
+   50.8782,
+   5.9684
+  ],
+  "Helmond": [
+   51.477,
+   5.6681
+  ],
+  "Hengelo": [
+   52.2656,
+   6.7922
+  ],
+  "Hilversum": [
+   52.2232,
+   5.175
+  ],
+  "Kampen": [
+   52.5572,
+   5.9058
+  ],
+  "Leeuwarden": [
+   53.2024,
+   5.8058
+  ],
+  "Leiden": [
+   52.1579,
+   4.4914
+  ],
+  "Lelystad": [
+   52.5076,
+   5.4849
+  ],
+  "Maastricht": [
+   50.8486,
+   5.6919
+  ],
+  "Middelburg": [
+   51.4957,
+   3.6152
+  ],
+  "Nieuwegein": [
+   52.0314,
+   5.0867
+  ],
+  "Nijmegen": [
+   51.8316,
+   5.8441
+  ],
+  "Petten": [
+   52.768,
+   4.662
+  ],
+  "Roermond": [
+   51.1934,
+   6.0077
+  ],
+  "Rotterdam": [
+   51.9191,
+   4.4776
+  ],
+  "Schiedam": [
+   51.9182,
+   4.3908
+  ],
+  "Sittard": [
+   50.9988,
+   5.8662
+  ],
+  "Terneuzen": [
+   51.322,
+   3.8458
+  ],
+  "Tilburg": [
+   51.5692,
+   5.0753
+  ],
+  "Utrecht": [
+   52.0944,
+   5.1058
+  ],
+  "Venlo": [
+   51.3695,
+   6.1454
+  ],
+  "Vlissingen": [
+   51.4595,
+   3.5752
+  ],
+  "Wageningen": [
+   51.97,
+   5.6645
+  ],
+  "Weesp": [
+   52.3084,
+   5.0434
+  ],
+  "Zeist": [
+   52.087,
+   5.237
+  ],
+  "Zoetermeer": [
+   52.0617,
+   4.4983
+  ],
+  "Zwolle": [
+   52.515,
+   6.1065
+  ]
+ }
+}

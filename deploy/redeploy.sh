@@ -3,9 +3,9 @@
 # Run on the SERVER as root (or with sudo):
 #     sudo bash /home/tell/app/deploy/redeploy.sh
 #
-# It pulls the latest code, refreshes dependencies, publishes the landing
-# page to the path Nginx serves, updates the Nginx config, and restarts the
-# dashboard + contribution-form services.
+# It pulls the latest code (which also updates the static pages in site/,
+# served by Nginx straight from the checkout), refreshes dependencies, updates
+# the Nginx config, and restarts the dashboard + contribution-form services.
 # Otherwise, run this command to commit and push first:
 #   cd "c:/Users/fsollit/TELL" && git commit -m "Update" && git push origin main 2>&1 | tail -3
 set -euo pipefail

@@ -1,5 +1,5 @@
-// Report this page's content height to the host page (deploy/tell_embed.html),
-// which resizes its iframe to fit, so nothing is cut off at any screen width.
+// When a page embeds the dashboard in an iframe, report the dashboard's content
+// height so the host page can resize its iframe to fit.
 // Dash loads every file in assets/, so this runs for the dashboard and the
 // contribution form alike. Does nothing when the page isn't embedded.
 (function () {

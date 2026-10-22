@@ -1,0 +1,30 @@
+[Unit]
+Description=TELL dev preview – feature branch dashboard at /dev/dashboard/
+After=network.target
+
+[Service]
+Type=simple
+User=tell
+WorkingDirectory=/home/tell/app-dev
+# Same settings as production, but its own path and port, one worker, and no
+# visit tracking (it shares the production database)
+Environment=TELL_URL_BASE=/dev/dashboard/
+Environment=TELL_INSTANCE=dev
+
+ExecStart=/home/tell/app/venv/bin/gunicorn \
+    --config /home/tell/app-dev/deploy/gunicorn_conf.py \
+    --bind 127.0.0.1:8052 --workers 1 \
+    --access-logfile - --error-logfile - \
+    textile_companies_NL:server
+
+Restart=on-failure
+RestartSec=5
+# The droplet has ~1 GB: cap the preview so it can never starve production.
+# Above MemoryHigh it is slowed down; at MemoryMax it is stopped.
+MemoryHigh=300M
+MemoryMax=400M
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,2157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NL Textile Research Funding Network — All Sources</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
+/* The network fills the first screen; the tables follow below it. Their tab
+   row peeks out at the bottom so it is clear the page scrolls. */
+#viz{height:calc(100vh - 44px);min-height:520px;display:flex;flex-direction:column}
+
+/* ── Top bar ─────────────────────────────────────────────────────────── */
+#topbar,#filterbar{display:flex;align-items:center;gap:9px;padding:7px 12px;background:#161b22;border-bottom:1px solid #30363d;flex-shrink:0;flex-wrap:wrap}
+#filterbar{background:#11161d}
+.bar-right{margin-left:auto;display:flex;align-items:center;gap:9px}
+.chk{display:flex;align-items:center;gap:4px;font-size:11px;color:#8b949e;cursor:pointer;white-space:nowrap;user-select:none}
+.chk input{width:12px;height:12px}
+#topbar h1{font-size:13px;font-weight:700;color:#58a6ff;white-space:nowrap;letter-spacing:.02em}
+#homeLink{font-size:11px;font-weight:600;color:#8b949e;text-decoration:none;white-space:nowrap}
+#homeLink:hover{color:#e6edf3}
+.vsep{width:1px;height:20px;background:#30363d;flex-shrink:0}
+
+.btn-group{display:flex;gap:3px}
+.tog-btn{padding:3px 9px;font-size:11px;border-radius:4px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer;transition:all .15s;white-space:nowrap}
+.tog-btn.active{border-color:#388bfd;background:#1f6feb;color:#fff}
+.tog-btn.prog-nwo.active    {background:#00ffff;border-color:#a78bfa}
+.tog-btn.prog-erasmus.active{background:#238636;border-color:#3fb950}
+.tog-btn.prog-he.active     {background:#1f6feb;border-color:#388bfd}
+.tog-btn.prog-h2020.active  {background:#0969da;border-color:#1f6feb}
+
+.stat{font-size:11px;color:#8b949e;white-space:nowrap}
+.stat b{font-weight:700}
+.s-count b{color:#e6edf3}
+.s-pct   b{color:#3fb950}
+.s-fund  b{color:#d2a8ff}
+
+/* ── Year range ──────────────────────────────────────────────────────── */
+.yr-wrap{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.yr-label{font-size:11px;color:#8b949e}
+.yr-track{position:relative;width:140px;height:20px;display:flex;align-items:center}
+.yr-track input[type=range]{position:absolute;width:100%;pointer-events:none;-webkit-appearance:none;appearance:none;height:3px;border-radius:2px;background:transparent;outline:none}
+.yr-track input[type=range]::-webkit-slider-thumb{pointer-events:all;-webkit-appearance:none;appearance:none;width:13px;height:13px;border-radius:50%;cursor:pointer;border:1.5px solid #30363d}
+#yrFrom::-webkit-slider-thumb{background:#58a6ff}
+#yrTo::-webkit-slider-thumb  {background:#3fb950}
+.yr-fill{position:absolute;height:3px;border-radius:2px;background:linear-gradient(90deg,#58a6ff,#3fb950);pointer-events:none}
+.yr-vals{font-size:11px;color:#e6edf3;font-weight:600;min-width:68px;text-align:center}
+
+#searchBox{padding:3px 9px;font-size:11px;border-radius:5px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;width:150px;transition:border-color .15s}
+#searchBox:focus{outline:none;border-color:#58a6ff}
+#searchBox.has-match{border-color:#3fb950}
+#searchBox::placeholder{color:#484f58}
+#searchClear{font-size:11px;padding:3px 6px;border-radius:4px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer;display:none}
+#searchClear.visible{display:block}
+
+/* ── Keyword filter (dropdown) ────────────────────────────────────── */
+.kw-dd{position:relative}
+.tog-btn.open{border-color:#58a6ff;color:#e6edf3}
+#kw-section{display:none;position:absolute;top:calc(100% + 6px);left:0;width:270px;max-height:min(440px,70vh);background:#161b22;border:1px solid #30363d;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:50;flex-direction:column;overflow:hidden}
+#kw-section.open{display:flex}
+#kw-hdr{padding:7px 10px 5px;font-size:10px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.kwab{font-size:10px;padding:1px 6px;border-radius:3px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer}
+.kwab:hover{color:#e6edf3}
+#kw-list{flex:1;overflow-y:auto;padding:3px 0}
+#kw-list::-webkit-scrollbar{width:4px}
+#kw-list::-webkit-scrollbar-thumb{background:#30363d;border-radius:2px}
+.kw-item{display:flex;align-items:center;gap:5px;padding:3px 10px;cursor:pointer;border-radius:4px;margin:1px 4px;transition:background .1s}
+.kw-item:hover{background:#21262d}
+.kw-item input[type=checkbox]{accent-color:#1f6feb;width:12px;height:12px;flex-shrink:0}
+.kw-label{font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kw-cnt{font-size:10px;color:#58a6ff;background:#0d2040;border-radius:8px;padding:1px 5px;min-width:22px;text-align:center;flex-shrink:0}
+.kw-rm{font-size:11px;color:#484f58;cursor:pointer;padding:0 2px;flex-shrink:0}
+.kw-rm:hover{color:#f85149}
+#kw-add{padding:5px 8px;border-top:1px solid #30363d;display:flex;gap:4px;flex-shrink:0}
+#newKwIn{flex:1;font-size:11px;padding:3px 7px;border-radius:4px;border:1px solid #30363d;background:#0d1117;color:#e6edf3}
+#newKwIn::placeholder{color:#484f58}
+#addKwBtn{font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer}
+#addKwBtn:hover{color:#e6edf3}
+
+/* ── Canvas ───────────────────────────────────────────────────────────── */
+#canvas-wrap{flex:1;position:relative;overflow:hidden}
+
+/* ── View switch: network or map ─────────────────────────────────────── */
+body.view-map #graph-svg, body.view-map .net-only{display:none!important}
+body:not(.view-map) .map-only{display:none!important}
+
+/* ── Map view ─────────────────────────────────────────────────────────── */
+#map{position:absolute;inset:0;background:#0d1117}
+/* Light tiles turned dark: invert, then rotate the hues back (water stays blue-ish) */
+#map canvas{filter:invert(1) hue-rotate(180deg) brightness(.82) contrast(.9)}
+#legend .map-only{max-width:270px}
+/* Organisation panel: opens on a click and stays until closed */
+#org-pop{position:absolute;top:10px;right:10px;bottom:10px;width:370px;max-width:calc(100% - 20px);z-index:6;background:rgba(22,27,34,.97);border:1px solid #30363d;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden}
+#org-pop[hidden]{display:none}
+.mp-head{padding:12px 14px 10px;border-bottom:1px solid #30363d;position:relative;flex-shrink:0}
+.mp-name{font-size:14px;font-weight:700;color:#fb923c;padding-right:26px;line-height:1.3}
+.mp-close{position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:4px;background:none;border:none;color:#8b949e;font-size:14px;cursor:pointer}
+.mp-close:hover{background:#21262d;color:#e6edf3}
+.mp-meta{font-size:11px;color:#8b949e;margin-top:3px}
+.mp-body{overflow:auto;padding:4px 14px 14px}
+.mp-body::-webkit-scrollbar{width:5px}
+.mp-body::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+.mp-sec{font-size:10px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;margin:12px 0 6px}
+.mp-chips{display:flex;flex-wrap:wrap;gap:4px}
+.mp-chip{font-size:10px;padding:1px 7px;border-radius:10px;background:#1a2040;color:#79c0ff;border:1px solid #2d3a6b}
+.mp-chip.off{background:#161b22;color:#8b949e;border-color:#30363d}
+.mp-proj{padding:7px 0;border-top:1px solid #21262d}
+.mp-proj:first-of-type{border-top:none}
+.mp-proj a,.mp-proj .mp-title{color:#e6edf3;text-decoration:none;font-size:12px;line-height:1.35}
+.mp-proj a:hover{color:#58a6ff;text-decoration:underline}
+.mp-pmeta{display:flex;gap:7px;align-items:center;font-size:10px;color:#8b949e;margin-top:3px;flex-wrap:wrap}
+.mp-pmeta .grant{color:#d2a8ff}
+.mp-role{color:#e3b341}
+.mp-pkw{font-size:10px;color:#79c0ff;margin-top:2px}
+.mp-partner{display:block;width:100%;background:none;border:none;color:#c9d1d9;cursor:pointer;font-size:11px;padding:3px 0;text-align:left}
+.mp-partner:hover{color:#fb923c}
+.mp-partner span{color:#484f58}
+/* While the panel is open, the zoom buttons move to its left */
+#canvas-wrap.pop-open .maplibregl-ctrl-bottom-right{right:390px}
+#map-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+.m-node{fill:#c2410c;stroke:#fb923c;stroke-width:1.5;fill-opacity:.85;pointer-events:all;cursor:pointer;transition:opacity .15s}
+.m-node.dim{opacity:.15}
+.m-node.center{stroke:#fff;stroke-width:2.5;filter:drop-shadow(0 0 8px #fb923c)}
+.m-edge{fill:none;stroke:#8b949e;stroke-opacity:.22;transition:stroke-opacity .15s}
+.m-edge.dim{stroke-opacity:.03}
+.m-edge.lit{stroke:#fb923c;stroke-opacity:.85}
+.m-label{font-size:10px;fill:#e6edf3;text-anchor:middle;paint-order:stroke;stroke:#0d1117;stroke-width:3px;stroke-linejoin:round;pointer-events:none}
+#map-info{position:absolute;left:10px;top:10px;z-index:5;background:rgba(22,27,34,.92);border:1px solid #30363d;border-radius:6px;padding:7px 10px;font-size:11px;line-height:1.5;color:#8b949e;max-width:300px}
+#map-info b{color:#e6edf3}
+#map-info summary{cursor:pointer}
+#map-info .mi-list{max-height:200px;overflow:auto;margin-top:4px;font-size:10px;color:#c9d1d9}
+#map-info .mi-list span{color:#484f58}
+/* MapLibre's controls, in the page's dark theme */
+.maplibregl-ctrl-group{background:#21262d!important;border:1px solid #30363d}
+.maplibregl-ctrl-group button+button{border-top-color:#30363d!important}
+.maplibregl-ctrl-group .maplibregl-ctrl-icon{filter:invert(.85)}
+.maplibregl-ctrl-attrib{background:rgba(22,27,34,.85)!important;color:#8b949e;font-size:10px}
+.maplibregl-ctrl-attrib a{color:#8b949e!important}
+.maplibregl-ctrl-attrib-button{filter:invert(.85)}
+
+/* Legend: a small overlay in the corner of the network, collapsible */
+#legend{position:absolute;left:10px;bottom:10px;background:rgba(22,27,34,.92);border:1px solid #30363d;border-radius:6px;padding:6px 10px;z-index:5;max-width:calc(100% - 20px)}
+#legend summary{font-size:10px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;user-select:none}
+#legend[open] summary{margin-bottom:5px}
+.leg-grid{display:grid;grid-template-columns:auto auto;column-gap:16px}
+.lr{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.ldot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.lline{width:26px;height:3px;border-radius:2px;flex-shrink:0}
+.ll{font-size:10px;color:#8b949e}
+#graph-svg{width:100%;height:100%;display:block}
+
+/* ── Tables below the network ───────────────────────────────────────── */
+#tables{background:#0d1117}
+#panel-tabs{display:flex;align-items:stretch;gap:2px;padding:0 12px;background:#161b22;border-top:1px solid #30363d;border-bottom:1px solid #30363d;height:44px}
+.ptab{display:flex;align-items:center;gap:6px;padding:0 14px;font-size:12px;font-weight:600;color:#8b949e;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;user-select:none}
+.ptab.active{color:#e6edf3;border-bottom-color:#1f6feb}
+.ptab:hover{color:#e6edf3}
+.ptab .cnt{color:#8b949e;font-weight:400;font-size:11px}
+.tab-actions{margin-left:auto;display:flex;align-items:center;gap:6px}
+.tab-actions button{font-size:11px;padding:4px 10px;border-radius:4px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer}
+.tab-actions button:hover{color:#e6edf3;border-color:#58a6ff}
+
+.pane{flex-direction:column}
+.tbl-toolbar{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:11px;color:#8b949e;flex-wrap:wrap}
+.tbl-toolbar b{color:#e6edf3}
+.linkbtn{background:none;border:none;color:#58a6ff;cursor:pointer;font-size:11px;padding:0}
+#orgSearchIn{width:240px;font-size:11px;padding:4px 8px;border-radius:4px;border:1px solid #30363d;background:#0d1117;color:#e6edf3}
+#orgSearchIn::placeholder{color:#484f58}
+
+/* The table scrolls inside its own box so the header can stay in view */
+.tbl-wrap{max-height:80vh;overflow:auto;border-top:1px solid #30363d}
+.tbl-wrap::-webkit-scrollbar{width:6px;height:6px}
+.tbl-wrap::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{position:sticky;top:0;z-index:1;background:#161b22;text-align:left;font-size:11px;font-weight:600;color:#8b949e;padding:7px 10px;border-bottom:1px solid #30363d;white-space:nowrap;user-select:none}
+.tbl th[data-sort]{cursor:pointer}
+.tbl th[data-sort]:hover,.tbl th.sorted{color:#e6edf3}
+.tbl th.sorted[data-dir='1']::after{content:' ▲';font-size:9px}
+.tbl th.sorted[data-dir='-1']::after{content:' ▼';font-size:9px}
+.tbl td{padding:6px 10px;border-bottom:1px solid #21262d;vertical-align:top;color:#c9d1d9}
+.tbl tbody tr:hover td{background:#161b22}
+.tbl .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tbl .sub{font-size:11px;color:#8b949e;margin-top:1px}
+.tbl .pcell{min-width:280px;max-width:520px}
+.tbl .kws{font-size:11px;color:#79c0ff;max-width:240px}
+.tbl .grant{color:#d2a8ff}
+.tbl a.ptitle{color:#e6edf3;text-decoration:none}
+.tbl a.ptitle:hover{color:#58a6ff;text-decoration:underline}
+.tbl tr.in-focus td{background:#1a1a2a}
+.tbl tr.highlighted td{background:#0d2510}
+.tbl tr.highlighted td:first-child{box-shadow:inset 2px 0 #3fb950}
+.tbl tr.excluded{opacity:.35}
+#orgTable tbody tr{cursor:pointer}
+#orgTable tr.selected td{background:#1a1a2a}
+#orgTable tr.selected td:first-child{box-shadow:inset 3px 0 #fb923c}
+.tbl-more{padding:8px 12px;font-size:11px;color:#484f58;text-align:center}
+
+.prog-badge{font-size:10px;padding:1px 5px;border-radius:3px;font-weight:600;white-space:nowrap}
+.prog-badge.nwo{background:#1a0a3a;color:#a78bfa}
+.prog-badge.erasmus{background:#0d2a10;color:#3fb950}
+.prog-badge.he{background:#0d1f3c;color:#79c0ff}
+.prog-badge.h2020{background:#0d1830;color:#58a6ff}
+.excl-cb{width:13px;height:13px;accent-color:#3fb950;cursor:pointer;margin-top:2px}
+.role-indicator{font-size:10px;padding:1px 5px;border-radius:3px;font-weight:600;white-space:nowrap}
+.ri-pi{background:#2a1a00;color:#e3b341}
+.ri-pt{background:#1a0a3a;color:#a371f7}
+.ri-both{background:#1a1a00;color:#d29922}
+
+/* ── Graph elements ──────────────────────────────────────────────────── */
+.link-pi{stroke:#e3b341;stroke-width:1.8;opacity:0.6}
+.link-partner{stroke:#3a4060;stroke-width:1;opacity:0.45}
+
+/* Project nodes — coloured by provenance */
+.node-nwo     {fill:#00ffff;stroke:#a78bfa;stroke-width:1.5}
+.node-erasmus {fill:#238636;stroke:#3fb950;stroke-width:1.5}
+.node-he      {fill:#1f6feb;stroke:#388bfd;stroke-width:1.5}
+.node-h2020   {fill:#0969da;stroke:#1f6feb;stroke-width:1.5}
+/* NL organisations → orange */
+.node-org-nl   {fill:#c2410c;stroke:#fb923c;stroke-width:1.5}
+/* Non-NL organisations → yellow/amber (warm, distinct from orange NL and cool project tones) */
+.node-org-other{fill:#facc15;stroke:#fbbf24;stroke-width:1}
+
+.node-proj{cursor:pointer}
+.node-org {cursor:pointer}
+.node-proj.dimmed,.node-org.dimmed,.link.dimmed{opacity:0.08}
+.node-proj.lit{stroke-width:3!important;filter:drop-shadow(0 0 6px #3fb950)}
+
+/* ── Hover / pin highlight ──────────────────────────────────────────── */
+.node-proj.h-dim,.node-org.h-dim{opacity:0.06!important;transition:opacity .15s}
+.link.h-dim                     {opacity:0.04!important;transition:opacity .15s}
+.node-proj.h-lit,.node-org.h-lit{opacity:1  !important;transition:opacity .15s}
+.link.h-lit                     {opacity:1  !important;stroke-width:2.5!important;transition:opacity .15s,stroke-width .1s}
+.node-proj.h-pin{stroke-width:3.5!important}
+.node-nwo.h-pin     {filter:drop-shadow(0 0 8px #a78bfa)!important}
+.node-erasmus.h-pin {filter:drop-shadow(0 0 8px #3fb950)!important}
+.node-he.h-pin      {filter:drop-shadow(0 0 8px #388bfd)!important}
+.node-h2020.h-pin   {filter:drop-shadow(0 0 8px #1f6feb)!important}
+.node-org-nl.h-pin   {stroke-width:3.5!important;filter:drop-shadow(0 0 8px #fb923c)!important}
+.node-org-other.h-pin{stroke-width:3.5!important;filter:drop-shadow(0 0 8px #fbbf24)!important}
+svg#graph-svg{cursor:default}
+.node-org-nl.org-glow   {stroke-width:3!important;filter:drop-shadow(0 0 7px #fb923c)}
+.node-org-other.org-glow{stroke-width:3!important;filter:drop-shadow(0 0 7px #fbbf24)}
+.link.link-hi{opacity:0.9!important;stroke-width:2.5!important}
+
+/* ── Tooltip ─────────────────────────────────────────────────────────── */
+#tt{position:fixed;pointer-events:none;background:#1c2128;border:1px solid #30363d;border-radius:6px;padding:8px 12px;font-size:11px;max-width:320px;line-height:1.5;z-index:100;display:none}
+#tt .tth{font-weight:600;color:#e6edf3;margin-bottom:3px}
+#tt .tts{color:#8b949e}
+#tt .ttg{color:#d2a8ff;font-weight:600}
+#tt a{color:#58a6ff;font-size:10px;text-decoration:none}
+
+/* ── Loading ─────────────────────────────────────────────────────────── */
+#loading{position:fixed;inset:0;background:#0d1117;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:14px}
+#loading h2{font-size:15px;color:#8b949e}
+.spinner{width:38px;height:38px;border:3px solid #21262d;border-top-color:#1f6feb;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#load-s{font-size:12px;color:#484f58}
+</style>
+</head>
+<body>
+
+<div id="viz">
+
+<!-- ═══ TOP BAR: title + stats ═══════════════════════════════════════════ -->
+<div id="topbar">
+  <a id="homeLink" href="../" title="Back to the TELL home page">← TELL</a>
+  <div class="vsep"></div>
+  <h1>🇳🇱 NL Textile Research Funding</h1>
+  <div class="vsep"></div>
+  <div class="btn-group" id="viewGroup">
+    <button class="tog-btn active" data-view="network" title="Projects and partners as a network">Network</button>
+    <button class="tog-btn" data-view="map" title="Dutch organisations on a map">Map</button>
+  </div>
+  <div class="vsep"></div>
+
+  <div class="stat s-count">Projects: <b id="s-matched">—</b></div>
+  <div class="stat s-fund">Funding: <b id="s-fund">—</b> <span style="color:#8b949e;font-size:10px">of <b id="s-fund-total">—</b></span> (<b id="s-fund-pct" style="color:#d2a8ff">—</b>)</div>
+  <div class="stat">Excluded: <b id="s-excluded" style="color:#f85149">0</b></div>
+  <div class="stat" id="s-pin-wrap" style="display:none;border-left:2px solid #3fb950;padding-left:7px">
+    📌 <b id="s-pin-name" style="color:#e6edf3;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom"></b>
+    <span style="color:#8b949e;font-size:10px">·</span>
+    <b id="s-pin-fund" style="color:#d2a8ff">—</b>
+    <span style="color:#8b949e;font-size:10px">of <b id="s-pin-total">—</b></span>
+    (<b id="s-pin-pct" style="color:#3fb950">—</b>)
+  </div>
+
+  <div class="bar-right net-only">
+    <label class="chk"><input type="checkbox" id="orgLabelsToggle" style="accent-color:#fb923c"> Partner labels</label>
+    <label class="chk"><input type="checkbox" id="projLabelsToggle" style="accent-color:#a78bfa"> Project labels</label>
+  </div>
+</div>
+
+<!-- ═══ FILTER BAR ═══════════════════════════════════════════════════════ -->
+<div id="filterbar">
+  <div class="btn-group" id="progGroup">
+    <button class="tog-btn prog-nwo active"     data-prog="nwo"     title="NWO / SIA">NWO</button>
+    <button class="tog-btn prog-erasmus active"  data-prog="erasmus" title="Erasmus+">E+</button>
+    <button class="tog-btn prog-he active"       data-prog="he"      title="Horizon Europe">HE</button>
+    <button class="tog-btn prog-h2020 active"    data-prog="h2020"   title="Horizon 2020">H2020</button>
+  </div>
+  <div class="vsep"></div>
+
+  <!-- Year range -->
+  <div class="yr-wrap">
+    <span class="yr-label">Years</span>
+    <div class="yr-track">
+      <div class="yr-fill" id="yrFill"></div>
+      <input type="range" id="yrFrom" min="2010" max="2027" value="2014" step="1">
+      <input type="range" id="yrTo"   min="2010" max="2027" value="2026" step="1">
+    </div>
+    <span class="yr-vals" id="yrVals">2014 – 2026</span>
+  </div>
+  <div class="vsep"></div>
+
+  <!-- Keywords: a dropdown with the checklist -->
+  <div class="kw-dd" id="kwDropdown">
+    <button class="tog-btn" id="kwBtn" aria-expanded="false" aria-controls="kw-section">Keywords <b id="kwBtnCount">—</b> ▾</button>
+    <div id="kw-section">
+      <div id="kw-hdr">
+        Keywords
+        <div style="display:flex;gap:3px">
+          <button class="kwab" id="btnAll">all</button>
+          <button class="kwab" id="btnNone">none</button>
+        </div>
+      </div>
+      <div id="kw-list"></div>
+      <div id="kw-add">
+        <input id="newKwIn" type="text" placeholder="Add keyword…">
+        <button id="addKwBtn">+</button>
+      </div>
+    </div>
+  </div>
+  <div class="vsep"></div>
+
+  <label class="chk" title="Only projects coordinated by a Dutch organisation: every NWO project, and EU projects with a Dutch coordinator. Untick to include EU projects where a Dutch organisation is a partner.">
+    <input type="checkbox" id="nlLedToggle" checked style="accent-color:#fb923c"> 🇳🇱 Dutch-led only
+  </label>
+  <div class="vsep"></div>
+
+  <input id="searchBox" type="search" placeholder="Search… (Enter to lock)">
+  <button id="searchClear" title="Clear search">✕</button>
+</div>
+
+<!-- ═══ NETWORK ══════════════════════════════════════════════════════════ -->
+<div id="canvas-wrap">
+  <svg id="graph-svg"></svg>
+  <div id="map" class="map-only"></div>
+  <svg id="map-svg" class="map-only"></svg>
+  <div id="map-info" class="map-only">Loading the map…</div>
+  <aside id="org-pop" hidden aria-label="Organisation details"></aside>
+  <details id="legend" open>
+    <summary>Legend</summary>
+    <div class="map-only">
+      <div class="lr"><div class="ldot" style="background:#c2410c;border:1.5px solid #fb923c"></div><div class="ll">Dutch organisation, at its main seat</div></div>
+      <div class="lr"><div class="lline" style="background:#8b949e"></div><div class="ll">Shared projects (thicker = more)</div></div>
+      <div class="ll" style="font-size:9px;color:#484f58;margin-top:2px">Circle size = number of projects · organisations in one city are spread around it · click one to list its projects</div>
+    </div>
+    <div class="leg-grid net-only">
+      <div>
+        <div class="lr"><div class="ldot" style="background:#0e7490;border:1.5px solid #a78bfa"></div><div class="ll">NWO / SIA project</div></div>
+        <div class="lr"><div class="ldot" style="background:#238636;border:1.5px solid #3fb950"></div><div class="ll">Erasmus+ project</div></div>
+        <div class="lr"><div class="ldot" style="background:#1f6feb;border:1.5px solid #388bfd"></div><div class="ll">Horizon Europe project</div></div>
+        <div class="lr"><div class="ldot" style="background:#0969da;border:1.5px solid #1f6feb"></div><div class="ll">Horizon 2020 project</div></div>
+      </div>
+      <div>
+        <div class="lr"><div class="ldot" style="background:#c2410c;border:1.5px solid #fb923c"></div><div class="ll" style="color:#fb923c">🇳🇱 NL organisation</div></div>
+        <div class="lr"><div class="ldot" style="background:#facc15;border:1px solid #fbbf24"></div><div class="ll">Non-NL organisation</div></div>
+        <div class="lr"><div class="lline" style="background:#e3b341"></div><div class="ll">PI / coordinator link</div></div>
+        <div class="lr"><div class="lline" style="background:#3a4060"></div><div class="ll">Partner link</div></div>
+      </div>
+    </div>
+    <div class="ll net-only" style="font-size:9px;color:#484f58;margin-top:2px">Circle size = funding amount · click a project to open its page</div>
+  </details>
+</div>
+
+</div><!-- /#viz -->
+
+<!-- ═══ TABLES ═══════════════════════════════════════════════════════════ -->
+<section id="tables">
+  <div id="panel-tabs">
+    <div class="ptab active" data-panel="proj">Projects <span class="cnt" id="proj-count">0</span></div>
+    <div class="ptab" data-panel="orgs">🇳🇱 NL organisations <span class="cnt" id="nl-org-count">0</span></div>
+    <div class="tab-actions">
+      <button id="downloadBtn">⬇ Download CSV</button>
+      <button id="resetExclBtn">Reset excluded</button>
+    </div>
+  </div>
+
+  <!-- Projects -->
+  <div id="proj-pane" class="pane">
+    <div class="tbl-toolbar">
+      <span>Click a title to open the project page · untick ✓ to exclude a wrong match · click a column to sort</span>
+      <span id="org-focus-note"></span>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" id="projTable">
+        <thead><tr>
+          <th title="Untick to exclude this project">✓</th>
+          <th data-sort="name">Project</th>
+          <th data-sort="prog">Programme</th>
+          <th data-sort="year" class="num">Year</th>
+          <th data-sort="grant" class="num">Grant</th>
+          <th data-sort="coord">Coordinator</th>
+          <th>Keywords</th>
+        </tr></thead>
+        <tbody id="proj-list"></tbody>
+      </table>
+    </div>
+    <div id="proj-more" class="tbl-more"></div>
+  </div>
+
+  <!-- NL organisations -->
+  <div id="orgs-pane" class="pane">
+    <div class="tbl-toolbar">
+      <input id="orgSearchIn" type="search" placeholder="Filter organisations…">
+      <span>Click an organisation to highlight its projects in the network or on the map</span>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" id="orgTable">
+        <thead><tr>
+          <th data-sort="name">Organisation</th>
+          <th data-sort="city">City</th>
+          <th data-sort="role">Role</th>
+          <th data-sort="total" class="num">Projects</th>
+          <th data-sort="pi" class="num">As coordinator</th>
+          <th data-sort="pt" class="num">As partner</th>
+          <th data-sort="fund" class="num">Funding share</th>
+          <th>Programmes</th>
+        </tr></thead>
+        <tbody id="orgs-list"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div id="tt"></div>
+<div id="loading">
+  <div class="spinner"></div>
+  <h2>Loading NWO + EU project data…</h2>
+  <div id="load-s"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════════════════════════════════════
+const NL_CODES = new Set(['NL','NLD','NETHERLANDS','THE NETHERLANDS']);
+const COORD_ROLES_EU  = new Set(['coordinator','lead','coordinating institution']);
+const COORD_ROLES_NWO = new Set(['main applicant','project leader']);
+
+const DEFAULT_KEYWORDS = [
+  'textile','textiel','fashion','garment',
+  'wool','wol','cotton','katoen',
+  'fiber','fibre','vezel','weven','kleding',
+  'zijde','polyester','denim','leather','fabric','dye',
+  'recycled textile','circular textile','circular fashion',
+  'circulair textiel','textiel recycling','smart textile',
+  'duurzame mode','textile lifecycle','textile value chain',
+  'hergebruik','wearable',
+  'textile supply chain','waardeketen','levenscyclus',
+  'hemp','hennep',
+  'footwear','shoes','clothing','cloth','yarn','thread','flax',
+];
+
+const MAX_PROJ_GRAPH  = 600;
+const MAX_PARTNERS_PP = 6;
+const ORG_LABEL_MIN   = 3;   // minimum weighted project count to show org label in main view
+
+// ══════════════════════════════════════════════════════════════════════════
+// ORGANISATION NAME NORMALISATION
+// ══════════════════════════════════════════════════════════════════════════
+// Explicit alias map: lowercased key → canonical display name
+// Handles word-order, abbreviation, and language variants that algorithmic
+// stripping cannot resolve.
+const ORG_ALIASES = new Map([
+  // === Universities ===
+  ['technische universiteit eindhoven', 'Technische Universiteit Eindhoven'],
+  ['technische universiteit eindhoven - eindhoven university of technology', 'Technische Universiteit Eindhoven'],
+  ['eindhoven university of technology', 'Technische Universiteit Eindhoven'],
+  ['wageningen university', 'Wageningen University & Research'],
+  ['wageningen university & research', 'Wageningen University & Research'],
+  ['stichting wageningen research', 'Wageningen University & Research'],
+  ['vrije universiteit amsterdam', 'Vrije Universiteit Amsterdam'],
+  ['stichting vu', 'Vrije Universiteit Amsterdam'],
+  ['universiteit van amsterdam', 'Universiteit van Amsterdam'],
+  ['academisch medisch centrum bij de universiteit van amsterdam', 'Amsterdam UMC'],
+  ['stichting amsterdam umc', 'Amsterdam UMC'],
+  ['amsterdam umc', 'Amsterdam UMC'],
+  ['radboud universiteit nijmegen', 'Radboud Universiteit'],
+  ['stichting radboud universiteit', 'Radboud Universiteit'],
+  ['radboud universitair medisch centrum', 'Radboud UMC'],
+  ['stichting radboud universitair medisch centrum', 'Radboud UMC'],
+  ['universiteit maastricht', 'Maastricht University'],
+  ['maastricht university', 'Maastricht University'],
+  ['tilburg university', 'Tilburg University'],
+  ['tilburg university- universiteit van tilburg', 'Tilburg University'],
+  ['erasmus universiteit rotterdam', 'Erasmus Universiteit Rotterdam'],
+  ['erasmus universitair medisch centrum rotterdam', 'Erasmus MC'],
+  ['universitair medisch centrum utrecht', 'UMC Utrecht'],
+  ['academisch ziekenhuis leiden', 'LUMC'],
+  // === TNO ===
+  ['nederlandse organisatie voor toegepast natuurwetenschappelijk onderzoek tno', 'TNO'],
+  ['tno', 'TNO'], ['tno leiden', 'TNO'], ['tno delft', 'TNO'], ['tno den haag', 'TNO'],
+  ['tno utrecht', 'TNO'], ['tno soesterberg', 'TNO'], ['tno rijswijk', 'TNO'],
+  ['tno helmond', 'TNO'], ['tno (former ecn)', 'TNO'],
+  // === Hogescholen ===
+  ['hogeschool van amsterdam', 'Hogeschool van Amsterdam'],
+  ['stichting hogeschool van amsterdam', 'Hogeschool van Amsterdam'],
+  ['hogeschool utrecht', 'Hogeschool Utrecht'],
+  ['stichting hogeschool utrecht', 'Hogeschool Utrecht'],
+  ['hanzehogeschool groningen', 'Hanzehogeschool Groningen'],
+  ['stichting hanzehogeschool groningen', 'Hanzehogeschool Groningen'],
+  ['saxion hogeschool', 'Saxion University of Applied Sciences'],
+  ['saxion hogescholen', 'Saxion University of Applied Sciences'],
+  ['stichting saxion', 'Saxion University of Applied Sciences'],
+  ['saxion university of applied sciences', 'Saxion University of Applied Sciences'],
+  ['fontys hogeschool', 'Fontys Hogeschool'],
+  ['stichting fontys', 'Fontys Hogeschool'],
+  ['fontys, greentechlab', 'Fontys Hogeschool'],
+  ['hogeschool rotterdam - rotterdam university of applied sciences', 'Hogeschool Rotterdam'],
+  ['stichting hogeschool rotterdam', 'Hogeschool Rotterdam'],
+  ['nhl stenden hogeschool', 'NHL Stenden Hogeschool'],
+  ['stichting nhl stenden hogeschool', 'NHL Stenden Hogeschool'],
+  ['hogeschool windesheim', 'Hogeschool Windesheim'],
+  ['stichting christelijke hogeschool windesheim', 'Hogeschool Windesheim'],
+  ['zuyd hogeschool', 'Zuyd Hogeschool'],
+  ['stichting zuyd hogeschool', 'Zuyd Hogeschool'],
+  ['hz university of applied sciences', 'HZ University of Applied Sciences'],
+  ['stichting hz university of applied sciences', 'HZ University of Applied Sciences'],
+  ['de haagse hogeschool (hhs)', 'De Haagse Hogeschool'],
+  ['breda university of applied sciences', 'Breda University of Applied Sciences'],
+  ['stichting breda university of applied sciences', 'Breda University of Applied Sciences'],
+  ['hogeschool leiden', 'Hogeschool Leiden'],
+  ['hogeschool voor de kunsten utrecht', 'HKU'],
+  ['stichting hogeschool voor de kunsten utrecht', 'HKU'],
+  ['amsterdamse hogeschool voor de kunsten', 'AHK'],
+  ['stichting amsterdamse hogeschool voor de kunsten', 'AHK'],
+  ['codarts rotterdam - hogeschool voor de kunsten', 'Codarts Rotterdam'],
+  ['stichting artez', 'ArtEZ'],
+  ['artez', 'ArtEZ'],
+  ['artez university of the arts', 'ArtEZ'],
+  ['stichting stc-group', 'STC-Group'],
+  // === Inholland (multiple locations → single org) ===
+  ['hogeschool inholland amsterdam (sluisbuurt)', 'Hogeschool Inholland'],
+  ['hogeschool inholland haarlem', 'Hogeschool Inholland'],
+  ['hogeschool inholland den haag', 'Hogeschool Inholland'],
+  ['hogeschool inholland alkmaar', 'Hogeschool Inholland'],
+  ['hogeschool inholland delft', 'Hogeschool Inholland'],
+  ['hogeschool inholland rotterdam', 'Hogeschool Inholland'],
+  ['hogeschool inholland dordrecht', 'Hogeschool Inholland'],
+  // === Research institutes & other ===
+  ['stichting deltares', 'Deltares'], ['deltares', 'Deltares'],
+  ['stichting naturalis biodiversity center', 'Naturalis'],
+  ['stichting ihe delft institute for water education', 'IHE Delft'],
+  ['ihe delft institute for water education', 'IHE Delft'],
+  ['seo economisch onderzoek', 'SEO Economisch Onderzoek'],
+  ['stichting seo economisch onderzoek', 'SEO Economisch Onderzoek'],
+  ['stichting aeres groep', 'Aeres Groep'], ['aeres groep', 'Aeres Groep'],
+  ['stichting new energy coalition', 'New Energy Coalition'],
+  ['new energy coalition', 'New Energy Coalition'],
+  ['stichting louis bolk instituut', 'Louis Bolk Instituut'],
+  ['louis bolk instituut', 'Louis Bolk Instituut'],
+  ['stichting roc midden nederland', 'ROC Midden Nederland'],
+  ['roc midden nederland', 'ROC Midden Nederland'],
+  ['gemeente amsterdam', 'Gemeente Amsterdam'],
+  ['rijksinstituut voor volksgezondheid en milieu', 'RIVM'],
+  ['ministerie van infrastructuur en waterstaat', 'Min. I&W'],
+]);
+
+// Algorithmic fallback: strip Dutch legal prefixes/suffixes, normalise case
+function normaliseOrgName(raw) {
+  if(!raw) return '';
+  // First try: exact match in alias map (case-insensitive)
+  const key = raw.toLowerCase().trim();
+  if(ORG_ALIASES.has(key)) return ORG_ALIASES.get(key);
+
+  let n = raw.trim();
+  // Strip common legal prefixes (case-insensitive check, preserve rest of casing)
+  const prefixes = ['Stichting ','STICHTING ','Coöperatie ','COÖPERATIE ',
+                    'Coöperatieve ','COÖPERATIEVE ','Vereniging ','VERENIGING '];
+  for(const pfx of prefixes){
+    if(n.startsWith(pfx) || n.toUpperCase().startsWith(pfx.toUpperCase())){
+      n = n.slice(pfx.length);
+      break;
+    }
+  }
+  // Strip legal suffixes
+  const lower = n.toLowerCase();
+  for(const sfx of [' b.v.',' bv',' b.v',' n.v.',' nv',' cv',' vof']){
+    if(lower.endsWith(sfx)){ n = n.slice(0, -sfx.length); break; }
+  }
+  // If ALL-CAPS (EU databases), convert to title case
+  if(n === n.toUpperCase() && n.length > 4){
+    n = n.replace(/\w\S*/g, w => {
+      // Keep short connectors lowercase
+      const lo = w.toLowerCase();
+      if(['van','de','het','der','voor','en','bij','te','tot','op','in','uit'].includes(lo))
+        return lo;
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    });
+  }
+  // Re-check alias map after stripping
+  const key2 = n.toLowerCase().trim();
+  if(ORG_ALIASES.has(key2)) return ORG_ALIASES.get(key2);
+  return n.trim();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════════════
+let allProjects  = [];
+let metaFunding  = { nwo:0, erasmus:0, he:0, h2020:0 };
+let activeKw     = new Set(['garment','clothing','textile','footwear','shoes','leather','fashion']);
+let activeProgs  = new Set(['nwo','erasmus','he','h2020']);
+let excludedIds  = new Set();     // project_ids manually excluded
+let searchTerm   = '';
+let searchLocked = false;
+let highlightSet = new Set();
+let orgFocusSet  = new Set();
+let selectedOrg  = null;
+let simulation   = null;
+let activePanel  = 'proj';
+let orgFilter    = '';
+let showOrgLabels  = false;
+let showProjLabels = false;
+let pinnedNode   = null;
+let neighborMap  = new Map();
+let yearMin      = 2014;
+let yearMax      = 2026;
+let nlLedOnly    = true;          // only projects coordinated by a Dutch organisation
+let projSort     = {key:'name', dir:1};
+let orgSort      = {key:'total', dir:-1};
+
+// ══════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════════════════
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+function fmtEuro(v) {
+  v=+v||0;
+  if(v>=1e9) return `€${(v/1e9).toFixed(2)}B`;
+  if(v>=1e6) return `€${(v/1e6).toFixed(1)}M`;
+  if(v>=1e3) return `€${(v/1e3).toFixed(0)}K`;
+  return `€${v.toFixed(0)}`;
+}
+
+function progKey(p) {
+  if(p._src==='nwo') return 'nwo';
+  const pg=(p.programme||'').toLowerCase();
+  if(p._src==='erasmus'||pg.includes('erasmus')) return 'erasmus';
+  if(pg.includes('2020')||pg.includes('h2020'))  return 'h2020';
+  return 'he';
+}
+
+function isNLProject(p) {
+  // NWO projects are inherently NL
+  if(p._src==='nwo') return true;
+  if(NL_CODES.has((p._pi_country||'').toUpperCase())) return true;
+  for(const m of(p.project_members||[]))
+    if(NL_CODES.has((m.country||'').toUpperCase())) return true;
+  return false;
+}
+
+// Led from the Netherlands: every NWO project, and EU projects whose
+// coordinator is Dutch.
+function isNLLed(p) {
+  if(p._src==='nwo') return true;
+  if(NL_CODES.has((p._pi_country||'').toUpperCase())) return true;
+  return (p.project_members||[]).some(m=>
+    isCoord(m.role,p._src) && NL_CODES.has((m.country||'').toUpperCase()));
+}
+
+function isCoord(role, src) {
+  const r=(role||'').toLowerCase().replace(/[_-]/g,' ').trim();
+  if(src==='nwo') return COORD_ROLES_NWO.has(r);
+  return COORD_ROLES_EU.has(r);
+}
+
+function computeDisplayName(p) {
+  if(p._src==='nwo') {
+    const t=(p.title||p.title_en||'').trim();
+    return t.slice(0,55) || '(no title)';
+  }
+  if(p._src==='cordis') {
+    const acr=(p.acronym||'').trim();
+    if(acr) return acr;
+  }
+  const title=(p.title_en||'').trim();
+  const dashIdx=title.indexOf(' - ');
+  if(dashIdx>0 && dashIdx<=22) {
+    const prefix=title.slice(0,dashIdx).trim();
+    if(prefix.length>=2 && /^[A-Z0-9][A-Z0-9\s\-\.]{0,21}$/i.test(prefix)
+        && (prefix===prefix.toUpperCase() || prefix.replace(/\s/g,'').length<=12))
+      return prefix;
+  }
+  return title.slice(0,55) || '(no title)';
+}
+
+function projectYear(p) {
+  if(p._src==='erasmus') {
+    const cy=parseInt(p.call_year); return isNaN(cy)?null:cy;
+  }
+  const sd=String(p.start_date||'');
+  if(sd.length>=4){ const yr=parseInt(sd.slice(0,4)); return isNaN(yr)?null:yr; }
+  return null;
+}
+
+function extractYear(dateStr) {
+  if(!dateStr) return null;
+  const s=String(dateStr).trim();
+  if(s.length>=4){ const y=parseInt(s.slice(0,4)); return isNaN(y)?null:y; }
+  return null;
+}
+
+function projectActiveInRange(p, rangeMin, rangeMax) {
+  if(p._src==='erasmus') {
+    const cy=parseInt(p.call_year);
+    if(isNaN(cy)) return true;
+    return cy>=rangeMin && cy<=rangeMax;
+  }
+  const startYr=extractYear(p.start_date);
+  const endYr  =extractYear(p.end_date);
+  if(startYr===null && endYr===null) return true;
+  const projStart=startYr!==null ? startYr : 0;
+  const projEnd  =endYr  !==null ? endYr   : 9999;
+  return projStart<=rangeMax && projEnd>=rangeMin;
+}
+
+// The link a project dot (or list item) opens: the funder's project page, else
+// the project's own website. Only http(s), since the URLs come from scraped data.
+function projectUrl(p) {
+  for(const u of [p.project_page_url, p.project_website]){
+    if(/^https?:\/\//i.test(String(u||'').trim())) return String(u).trim();
+  }
+  return '';
+}
+
+function getPIName(p) {
+  if(p._pi_name) return p._pi_name;
+  const members=p.project_members||[];
+  for(const m of members) {
+    const r=(m.role||'').toLowerCase().replace(/[_-]/g,' ').trim();
+    if(COORD_ROLES_NWO.has(r) || COORD_ROLES_EU.has(r)) {
+      if(m.first_name||m.last_name) return `${m.first_name||''} ${m.last_name||''}`.trim();
+      if(m.name) return m.name;
+    }
+  }
+  return '';
+}
+
+function getPIInstitution(p) {
+  if(p._pi_institution) return normaliseOrgName(p._pi_institution);
+  const members=p.project_members||[];
+  for(const m of members) {
+    const r=(m.role||'').toLowerCase().replace(/[_-]/g,' ').trim();
+    if(COORD_ROLES_NWO.has(r) || COORD_ROLES_EU.has(r)) {
+      return normaliseOrgName((m.organisation||'').split('||')[0].trim());
+    }
+  }
+  return '';
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// DATA LOADING
+// ══════════════════════════════════════════════════════════════════════════
+async function loadData() {
+  const setS = s => document.getElementById('load-s').textContent=s;
+  await loadOrgLocations();
+
+  // --- NWO ---
+  setS('Loading nwo_textile_raw.json…');
+  try {
+    const r=await fetch('data/nwo_textile_raw.json');
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const raw=await r.json();
+    const projects=Array.isArray(raw)?raw:(raw.projects||[]);
+    projects.forEach(p=>{
+      p._src='nwo';
+      p.title_en=p.title||'';
+      // Estimate NWO grant amount from funding scheme name
+      // Official SIA/NWO typical award levels (approximate).
+      // db/mysql/import_funding.py (NWO_ESTIMATES) uses the same rule - change both together.
+      const scheme=(p.funding_scheme||'').toLowerCase();
+      if     (scheme.startsWith('raak-pro'))    p.ec_grant_num=700000;
+      else if(scheme.startsWith('raak-mkb'))    p.ec_grant_num=400000;
+      else if(scheme.startsWith('raak-publiek'))p.ec_grant_num=300000;
+      else if(scheme.startsWith('kiem'))         p.ec_grant_num=40000;
+      else                                       p.ec_grant_num=300000;
+      p._grant_estimated = true;  // all NWO amounts are estimated
+      const members=p.project_members||[];
+      const pi=members.find(m=>/main applicant/i.test(m.role||''))
+              ||members.find(m=>/project leader/i.test(m.role||''))
+              ||members[0]||null;
+      p._pi_name=pi? `${pi.first_name||''} ${pi.last_name||''}`.trim() :'';
+      p._pi_institution=pi? (pi.organisation||'').split('||')[0].trim() :'';
+      p.project_page_url=`https://www.nwo.nl/projecten/${p.project_id}`;
+      p._progKey=progKey(p);
+      p._isNL=true;  // All NWO projects are NL
+      p._nlLed=true;
+      p._display_name=computeDisplayName(p);
+      const hay=((p.title_en||'')+' '+(p.summary_nl||'')+' '+(p.summary_en||'')).toLowerCase();
+      p._hay=hay;
+      p._matched_terms=DEFAULT_KEYWORDS.filter(k=>hay.includes(k.toLowerCase()));
+    });
+    allProjects.push(...projects);
+  } catch(e){ console.warn('Failed to load NWO:',e); }
+
+  // --- EU sources ---
+  for(const {file,src} of [
+    {file:'data/erasmus_textile_projects.json',src:'erasmus'},
+    {file:'data/cordis_textile_projects.json', src:'cordis'},
+  ]) {
+    setS(`Loading ${file}…`);
+    try {
+      const r=await fetch(file);
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data=await r.json();
+      const projects=data.projects||(Array.isArray(data)?data:[]);
+      projects.forEach(p=>{
+        p._src=src;
+        if(p.ec_grant_num===undefined){
+          const raw=String(p.ec_grant||'0').replace(/\s/g,'').replace(',','.');
+          p.ec_grant_num=parseFloat(raw)||0;
+        }
+        p._progKey=progKey(p);
+        p._isNL=isNLProject(p);
+        p._nlLed=isNLLed(p);
+        p._display_name=computeDisplayName(p);
+        const hay=((p.title_en||'')+' '+(p.objective||'')+' '+(p.topics||'')).toLowerCase();
+        p._hay=hay;
+        p._matched_terms=DEFAULT_KEYWORDS.filter(k=>hay.includes(k.toLowerCase()));
+      });
+      // Only keep EU projects with NL partner
+      allProjects.push(...projects.filter(p=>p._isNL));
+    } catch(e){ console.warn(`Failed to load ${file}:`,e); }
+  }
+
+  // Compute total funding per programme across ALL loaded projects
+  for(const p of allProjects){
+    const f=p.ec_grant_num||0;
+    const pk=p._progKey;
+    if(pk==='nwo')        metaFunding.nwo    +=f;
+    else if(pk==='erasmus') metaFunding.erasmus+=f;
+    else if(pk==='he')      metaFunding.he     +=f;
+    else if(pk==='h2020')   metaFunding.h2020  +=f;
+  }
+
+  document.getElementById('loading').style.display='none';
+  renderKeywords();
+  render();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// FILTERING
+// ══════════════════════════════════════════════════════════════════════════
+function filteredProjects() {
+  return allProjects.filter(p=>{
+    if(excludedIds.has(p.project_id)) return false;
+    if(!activeProgs.has(p._progKey)) return false;
+    if(nlLedOnly && !p._nlLed) return false;
+    if(activeKw.size>0 && !(p._matched_terms||[]).some(t=>activeKw.has(t))) return false;
+    if(!projectActiveInRange(p, yearMin, yearMax)) return false;
+    return true;
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// KEYWORD PANEL
+// ══════════════════════════════════════════════════════════════════════════
+function allKwSet() {
+  const s=new Set(DEFAULT_KEYWORDS);
+  allProjects.forEach(p=>(p._matched_terms||[]).forEach(k=>s.add(k)));
+  return s;
+}
+function buildKwCounts() {
+  const m=new Map();
+  allProjects.forEach(p=>{
+    if(excludedIds.has(p.project_id)) return;
+    if(!activeProgs.has(p._progKey)) return;
+    if(nlLedOnly && !p._nlLed) return;
+    (p._matched_terms||[]).forEach(k=>m.set(k,(m.get(k)||0)+1));
+  });
+  return m;
+}
+function renderKeywords() {
+  const counts=buildKwCounts();
+  const kws=[...allKwSet()].sort((a,b)=>(counts.get(b)||0)-(counts.get(a)||0));
+  document.getElementById('kwBtnCount').textContent=`${activeKw.size} of ${kws.length}`;
+  const list=document.getElementById('kw-list');
+  list.innerHTML='';
+  for(const kw of kws){
+    const cnt=counts.get(kw)||0;
+    const div=document.createElement('div');
+    div.className='kw-item';
+    div.innerHTML=`
+      <input type="checkbox" ${activeKw.has(kw)?'checked':''} data-kw="${esc(kw)}">
+      <span class="kw-label" title="${esc(kw)}">${esc(kw)}</span>
+      <span class="kw-cnt">${cnt}</span>
+      <span class="kw-rm" data-kw="${esc(kw)}">×</span>`;
+    list.appendChild(div);
+  }
+  list.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.addEventListener('change',e=>{
+    const kw=e.target.dataset.kw;
+    e.target.checked?activeKw.add(kw):activeKw.delete(kw);
+    render();
+  }));
+  list.querySelectorAll('.kw-rm').forEach(b=>b.addEventListener('click',e=>{
+    const kw=e.target.dataset.kw;
+    activeKw.delete(kw);
+    allProjects.forEach(p=>{if(p._matched_terms)p._matched_terms=p._matched_terms.filter(t=>t!==kw);});
+    renderKeywords(); render();
+  }));
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// STATS
+// ══════════════════════════════════════════════════════════════════════════
+function updateStats(projects) {
+  const fund=projects.reduce((s,p)=>s+(p.ec_grant_num||0),0);
+  let totalFund=0;
+  for(const pk of activeProgs) totalFund += metaFunding[pk]||0;
+  const fundPct=totalFund>0?(fund/totalFund*100).toFixed(1):'—';
+
+  document.getElementById('s-matched').textContent  =projects.length.toLocaleString();
+  document.getElementById('s-fund').textContent     =fmtEuro(fund);
+  document.getElementById('s-fund-total').textContent=fmtEuro(totalFund);
+  document.getElementById('s-fund-pct').textContent =`${fundPct}%`;
+  document.getElementById('s-excluded').textContent =excludedIds.size.toString();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// PINNED NODE FUNDING STAT
+// ══════════════════════════════════════════════════════════════════════════
+function updatePinStats(focusDatum) {
+  const wrap = document.getElementById('s-pin-wrap');
+  if(!focusDatum){ wrap.style.display='none'; return; }
+
+  // Total funding across all currently visible (filtered) projects
+  const visibleProjects = filteredProjects();
+  const totalFund = visibleProjects.reduce((s,p)=>s+(p.ec_grant_num||0), 0);
+
+  let pinFund = 0;
+  let pinName = '';
+  let hasEstimate = false;
+
+  if(focusDatum.type === 'project'){
+    const p = focusDatum.data;
+    pinFund = p.ec_grant_num || 0;
+    hasEstimate = !!p._grant_estimated;
+    pinName = p._display_name || p.title_en || '';
+  } else if(focusDatum.type === 'org'){
+    // Sum funding from all visible projects this org is connected to
+    pinName = focusDatum.label || '';
+    const orgLabel = focusDatum.label;
+    for(const p of visibleProjects){
+      const members = p.project_members || [];
+      const inProject = members.some(m => {
+        const raw = (m.organisation||m.name||'').split('||')[0].trim();
+        return normaliseOrgName(raw) === orgLabel;
+      });
+      if(inProject){
+        pinFund += p.ec_grant_num || 0;
+        if(p._grant_estimated) hasEstimate = true;
+      }
+    }
+  }
+
+  const pct = totalFund > 0 ? (pinFund/totalFund*100).toFixed(1) : '—';
+  const fundStr = (hasEstimate ? '~' : '') + fmtEuro(pinFund);
+
+  document.getElementById('s-pin-name').textContent = pinName.slice(0,30);
+  document.getElementById('s-pin-fund').textContent = fundStr;
+  document.getElementById('s-pin-total').textContent = fmtEuro(totalFund);
+  document.getElementById('s-pin-pct').textContent = `${pct}%`;
+  wrap.style.display = '';
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// NL ORGS BUILDER
+// ══════════════════════════════════════════════════════════════════════════
+function buildNLOrgs(projects) {
+  const orgs = new Map();
+  for(const p of projects){
+    for(const m of (p.project_members||[])){
+      // For NWO: all orgs are NL. For EU: check country
+      const isNLOrg = p._src==='nwo' || NL_CODES.has((m.country||'').toUpperCase());
+      if(!isNLOrg) continue;
+      const raw=(m.organisation||m.name||'').split('||')[0].trim();
+      if(!raw) continue;
+      const name=normaliseOrgName(raw);
+      if(!orgs.has(name)) orgs.set(name,{piCount:0,ptCount:0,progs:new Set(),pids:new Set(),totalFund:0});
+      const o=orgs.get(name);
+      isCoord(m.role,p._src) ? o.piCount++ : o.ptCount++;
+      o.progs.add(p._progKey);
+      o.pids.add(p.project_id);
+      o.totalFund += (p.ec_grant_num||0) / Math.max(1,(p.project_members||[]).length); // approx share
+      if(p._grant_estimated) o.estimated=true;
+    }
+  }
+  return orgs;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// NL ORGS PANEL
+// ══════════════════════════════════════════════════════════════════════════
+const ORG_SORT={
+  name: ([n])=>n.toLowerCase(),
+  city: ([n])=>(orgCity(n)||'\uffff').toLowerCase(),   // unknown last
+  role: ([,i])=>(i.piCount>0?2:0)+(i.ptCount>0?1:0),
+  total:([,i])=>i.piCount+i.ptCount,
+  pi:   ([,i])=>i.piCount,
+  pt:   ([,i])=>i.ptCount,
+  fund: ([,i])=>i.totalFund,
+};
+
+function renderNLOrgs(projects) {
+  const orgs=buildNLOrgs(projects);
+  const key=ORG_SORT[orgSort.key];
+  const sorted=[...orgs.entries()].sort((a,b)=>cmpVals(key(a),key(b))*orgSort.dir);
+  markSorted('orgTable', orgSort);
+
+  document.getElementById('nl-org-count').textContent=sorted.length.toLocaleString();
+
+  const list=document.getElementById('orgs-list');
+  list.innerHTML='';
+
+  const q=orgFilter.toLowerCase();
+  const visible=q?sorted.filter(([n])=>n.toLowerCase().includes(q)):sorted;
+
+  for(const [name,info] of visible){
+    const isPI=info.piCount>0, isPT=info.ptCount>0, isBoth=isPI&&isPT;
+    const ri=isBoth?'ri-both':isPI?'ri-pi':'ri-pt';
+    const rl=isBoth?'Coordinator + partner':isPI?'Coordinator':'Partner';
+
+    const tr=document.createElement('tr');
+    if(selectedOrg===name) tr.className='selected';
+    tr.innerHTML=`
+      <td style="color:${isPI?'#e3b341':'#c9d1d9'}">${esc(name)}</td>
+      <td>${esc(orgCity(name)||'')}</td>
+      <td><span class="role-indicator ${ri}">${rl}</span></td>
+      <td class="num">${info.piCount+info.ptCount}</td>
+      <td class="num">${info.piCount||''}</td>
+      <td class="num">${info.ptCount||''}</td>
+      <td class="num grant">${info.estimated?'~':''}${fmtEuro(info.totalFund)}</td>
+      <td>${[...info.progs].map(k=>`<span class="prog-badge ${k}">${PROG_SHORT[k]}</span>`).join(' ')}</td>`;
+
+    tr.addEventListener('click',()=>toggleOrgFocus(name, info.pids));
+    list.appendChild(tr);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// PROJECT LIST PANEL
+// ══════════════════════════════════════════════════════════════════════════
+const PROG_SHORT={nwo:'NWO',erasmus:'E+',he:'HE',h2020:'H2020'};
+const PROJ_SORT={
+  name: p=>(p.title_en||p.title||p._display_name||'').toLowerCase(),
+  prog: p=>p._progKey,
+  year: p=>projectYear(p)||0,
+  grant:p=>p.ec_grant_num||0,
+  coord:p=>(getPIInstitution(p)||'').toLowerCase(),
+};
+const cmpVals=(a,b)=>typeof a==='string'?a.localeCompare(b):a-b;
+
+// Show which column a table is sorted on (arrow in the header)
+function markSorted(tableId, sort){
+  document.querySelectorAll(`#${tableId} th[data-sort]`).forEach(th=>{
+    const on=th.dataset.sort===sort.key;
+    th.classList.toggle('sorted',on);
+    if(on) th.dataset.dir=sort.dir; else delete th.dataset.dir;
+  });
+}
+
+// Ids of the shown projects an organisation takes part in
+function orgPids(name){
+  return new Set(currentProjects.filter(p=>(p.project_members||[]).some(m=>
+    normaliseOrgName((m.organisation||m.name||'').split('||')[0].trim())===name)).map(p=>p.project_id));
+}
+
+// Select an organisation: its projects go to the top of the table, light up in
+// the network or on the map, and its panel opens
+function setOrgFocus(name, pids=orgPids(name)){
+  selectedOrg=name; orgFocusSet=new Set(pids);
+  updateProjList(currentProjects); renderNLOrgs(currentProjects); applyGraphHighlight();
+  syncNetworkPin();
+  renderOrgPanel();
+}
+
+// Network view: pin the selected organisation's dot (its connections stay lit),
+// or unpin when nothing is selected
+function syncNetworkPin(){
+  if(view!=='network' || !_nodeSel) return;
+  pinnedNode=selectedOrg ? _nodeSel.data().find(n=>n.type==='org'&&n.label===selectedOrg)||null : null;
+  applyHoverHighlight(pinnedNode);
+}
+function toggleOrgFocus(name, pids){
+  if(selectedOrg===name) clearOrgFocus(); else setOrgFocus(name, pids);
+}
+
+function clearOrgFocus(){
+  selectedOrg=null; orgFocusSet.clear();
+  const projs=filteredProjects();
+  updateProjList(projs); renderNLOrgs(projs); applyGraphHighlight();
+  syncNetworkPin();
+  renderOrgPanel();
+}
+
+// A project's title, with its acronym in front when the title doesn't start with it
+function projTitleHtml(p){
+  const full=(p.title_en||p.title||'').trim();
+  const dn=p._display_name||'';
+  const short=dn && !full.startsWith(dn) ? dn : '';   // e.g. a CORDIS acronym
+  return `${short?`<b>${esc(short)}</b> · `:''}${esc(full||dn)}`;
+}
+
+function updateProjList(projects) {
+  document.getElementById('proj-count').textContent=projects.length.toLocaleString();
+  const list=document.getElementById('proj-list');
+  list.innerHTML='';
+
+  // Projects of the selected organisation, or matching the search, come first
+  const focus = orgFocusSet.size>0 ? orgFocusSet : highlightSet;
+  const key=PROJ_SORT[projSort.key];
+  const sorted=[...projects].sort((a,b)=>{
+    const am=focus.has(a.project_id), bm=focus.has(b.project_id);
+    if(am&&!bm) return -1; if(!am&&bm) return 1;
+    return cmpVals(key(a),key(b))*projSort.dir;
+  });
+  markSorted('projTable', projSort);
+
+  const note=document.getElementById('org-focus-note');
+  note.innerHTML=selectedOrg
+    ? `Projects of <b>${esc(selectedOrg)}</b> are listed first. <button class="linkbtn" id="clearOrgFocus">Clear</button>`
+    : '';
+  if(selectedOrg) document.getElementById('clearOrgFocus').addEventListener('click',clearOrgFocus);
+
+  const MAX=800;
+  sorted.slice(0,MAX).forEach(p=>{
+    const tr=document.createElement('tr');
+    if(highlightSet.size>0&&highlightSet.has(p.project_id)) tr.classList.add('highlighted');
+    else if(orgFocusSet.has(p.project_id)) tr.classList.add('in-focus');
+
+    const pk=p._progKey;
+    const url=projectUrl(p);
+    const yr=projectYear(p);
+    const piName=getPIName(p);
+    const piInst=getPIInstitution(p);
+    const kws=(p._matched_terms||[]).filter(k=>activeKw.has(k));
+    const grant=p.ec_grant_num
+      ? `<span title="${p._grant_estimated?'Estimated from the NWO funding scheme':'Stated by the funder'}">${p._grant_estimated?'~':''}${fmtEuro(p.ec_grant_num)}</span>`
+      : '';
+    const titleHtml=projTitleHtml(p);
+
+    tr.innerHTML=`
+      <td><input type="checkbox" class="excl-cb" checked title="Untick to exclude this project"></td>
+      <td class="pcell">${url?`<a class="ptitle" href="${esc(url)}" target="_blank" rel="noopener">${titleHtml}</a>`:titleHtml}</td>
+      <td><span class="prog-badge ${pk}">${PROG_SHORT[pk]}</span></td>
+      <td class="num">${yr||''}</td>
+      <td class="num grant">${grant}</td>
+      <td>${esc(piInst)}${piName?`<div class="sub">${esc(piName)}</div>`:''}</td>
+      <td class="kws">${kws.map(esc).join(' · ')}</td>`;
+
+    const cb=tr.querySelector('.excl-cb');
+    cb.addEventListener('change',()=>{
+      cb.checked ? excludedIds.delete(p.project_id) : excludedIds.add(p.project_id);
+      tr.classList.toggle('excluded',!cb.checked);
+      // Update stats but don't full re-render (expensive)
+      updateStats(filteredProjects());
+    });
+    list.appendChild(tr);
+  });
+  document.getElementById('proj-more').textContent = sorted.length>MAX
+    ? `+${(sorted.length-MAX).toLocaleString()} more — refine the filters` : '';
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// SEARCH
+// ══════════════════════════════════════════════════════════════════════════
+function applySearch(projects) {
+  if(!searchTerm){highlightSet.clear();return;}
+  const q=searchTerm.toLowerCase();
+  highlightSet=new Set(
+    projects.filter(p=>
+      (p._display_name||'').toLowerCase().includes(q)||
+      (p.title_en||'').toLowerCase().includes(q)||
+      (p._pi_institution||'').toLowerCase().includes(q)||
+      (p._pi_name||'').toLowerCase().includes(q)||
+      (p.objective||p.summary_en||'').toLowerCase().includes(q)
+    ).map(p=>p.project_id)
+  );
+  document.getElementById('searchBox').classList.toggle('has-match',highlightSet.size>0);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// D3 GRAPH
+// ══════════════════════════════════════════════════════════════════════════
+const svg=d3.select('#graph-svg');
+const g  =svg.append('g');
+const zoomBehavior=d3.zoom().scaleExtent([0.02,12])
+  .on('zoom',e=>g.attr('transform',e.transform));
+svg.call(zoomBehavior);
+
+svg.on('click',()=>{
+  if(pinnedNode){ pinnedNode=null; applyHoverHighlight(null); }
+  if(selectedOrg) clearOrgFocus();
+});
+
+let _nodeSel=null, _linkSel=null, _labelSel=null, _projLabelSel=null;
+
+function getWH(){ const el=document.getElementById('canvas-wrap'); return [el.clientWidth,el.clientHeight]; }
+
+function fitView(nodes){
+  if(!nodes||!nodes.length) return;
+  const [W,H]=getWH();
+  const xs=nodes.map(n=>n.x),ys=nodes.map(n=>n.y);
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  const ew=x1-x0||1,eh=y1-y0||1;
+  const sc=Math.min(0.86*W/ew,0.86*H/eh,5);
+  svg.transition().duration(700)
+    .call(zoomBehavior.transform,d3.zoomIdentity
+      .translate(W/2-sc*(x0+ew/2), H/2-sc*(y0+eh/2)).scale(sc));
+}
+
+function applyGraphHighlight(){
+  if(view==='map'){ applyMapHighlight(); return; }
+  if(!_nodeSel||!_linkSel) return;
+  const focus=orgFocusSet.size>0?orgFocusSet:highlightSet;
+  const hasHL=focus.size>0;
+
+  _nodeSel.classed('dimmed', d=>{
+    if(!hasHL) return false;
+    if(d.type==='project') return !focus.has(d.data?.project_id);
+    return false;
+  }).classed('lit', d=>{
+    if(d.type!=='project') return false;
+    return hasHL && highlightSet.has(d.data?.project_id);
+  }).classed('org-glow', d=>{
+    if(d.type!=='org') return false;
+    return hasHL && orgFocusSet.size>0 && d.label===selectedOrg;
+  });
+
+  _linkSel.classed('dimmed', d=>{
+    if(!hasHL) return false;
+    const srcId=d.source.data?.project_id||d.source.id;
+    return !focus.has(srcId);
+  }).classed('link-hi', d=>{
+    if(!hasHL) return false;
+    const srcId=d.source.data?.project_id||d.source.id;
+    return focus.has(srcId);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// NODE SIZING — projects by funding, orgs by attracted funding
+// ══════════════════════════════════════════════════════════════════════════
+function projectRadius(p) {
+  const f=p.ec_grant_num||0;
+  if(f<=0) return 4;  // NWO or no-funding default
+  // sqrt scale: €100K=5, €1M=8, €10M=14, €100M=22
+  return Math.max(3, Math.min(2.5 + Math.sqrt(f/50000), 26));
+}
+
+function orgRadius(totalFund, count) {
+  if(totalFund<=0) return Math.min(3 + Math.sqrt(count)*1.2, 14);
+  return Math.max(3, Math.min(2.5 + Math.sqrt(totalFund/40000), 28));
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// GRAPH BUILDER
+// ══════════════════════════════════════════════════════════════════════════
+function buildGraph(projects){
+  const [W,H]=getWH();
+  const nodes=[],links=[];
+  const nm=new Map();
+  const orgFunding=new Map(); // orgName → total funding share
+  const capped=projects.slice(0,MAX_PROJ_GRAPH);
+
+  // First pass: accumulate org funding (using normalised names)
+  capped.forEach(p=>{
+    const members=p.project_members||[];
+    const share=(p.ec_grant_num||0)/Math.max(1,members.length);
+    members.forEach(m=>{
+      const raw=(m.organisation||m.name||'').split('||')[0].trim();
+      if(!raw) return;
+      const orgName=normaliseOrgName(raw);
+      orgFunding.set(orgName, (orgFunding.get(orgName)||0) + share);
+    });
+  });
+
+  capped.forEach(p=>{
+    const pid=`proj:${p.project_id||p.title_en}`;
+    if(!nm.has(pid)){
+      const n={id:pid,type:'project',pk:p._progKey,data:p,
+        r:projectRadius(p),
+        x:W/2+(Math.random()-.5)*240,y:H/2+(Math.random()-.5)*240};
+      nodes.push(n); nm.set(pid,n);
+    }
+    const members=p.project_members||[];
+    const coord=members.find(m=>isCoord(m.role, p._src));
+    const partners=members.filter(m=>!isCoord(m.role, p._src));
+
+    const addOrg=(orgRaw,role,country)=>{
+      const raw=(orgRaw||'').split('||')[0].trim();
+      if(!raw) return null;
+      const orgName=normaliseOrgName(raw);
+      const oid=`org:${orgName}`;
+      const orgIsNL= p._src==='nwo' || NL_CODES.has((country||'').toUpperCase());
+      if(!nm.has(oid)){
+        const tf=orgFunding.get(orgName)||0;
+        const on={id:oid,type:'org',label:orgName,isCoord:role==='coord',
+          isNL:orgIsNL,count:0,wcount:0,totalFund:tf,
+          r:orgRadius(tf,1),
+          x:W/2+(Math.random()-.5)*320,y:H/2+(Math.random()-.5)*320};
+        nodes.push(on); nm.set(oid,on);
+      }
+      const on=nm.get(oid);
+      on.count++;
+      // Weighted count: EU projects (erasmus/he/h2020) count double, NWO counts single
+      on.wcount += (p._src==='nwo') ? 1 : 2;
+      on.r=orgRadius(on.totalFund, on.count);
+      if(role==='coord') on.isCoord=true;
+      if(orgIsNL) on.isNL=true;
+      return oid;
+    };
+
+    if(coord){
+      const oid=addOrg(coord.organisation||coord.name,'coord',coord.country);
+      if(oid) links.push({source:pid,target:oid,role:'pi'});
+    }
+    for(const pt of partners){
+      const oid=addOrg(pt.organisation||pt.name,'partner',pt.country);
+      if(oid) links.push({source:pid,target:oid,role:'partner'});
+    }
+  });
+  return {nodes,links};
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// HOVER / PIN HIGHLIGHT
+// ══════════════════════════════════════════════════════════════════════════
+function buildAdjacency(links){
+  neighborMap=new Map();
+  links.forEach(l=>{
+    const s=typeof l.source==='object'?l.source.id:l.source;
+    const t=typeof l.target==='object'?l.target.id:l.target;
+    if(!neighborMap.has(s)) neighborMap.set(s,new Set());
+    if(!neighborMap.has(t)) neighborMap.set(t,new Set());
+    neighborMap.get(s).add(t);
+    neighborMap.get(t).add(s);
+  });
+}
+
+// 2-level neighbourhood: given a node id, return all ids within 2 hops
+function getNeighbours2(fid){
+  const level1=neighborMap.get(fid)||new Set();
+  const all=new Set(level1);
+  all.add(fid);
+  for(const n1 of level1){
+    const level2=neighborMap.get(n1)||new Set();
+    for(const n2 of level2) all.add(n2);
+  }
+  return all;
+}
+
+// Links that connect any two nodes in a set
+function isLinkInSet(d, nodeSet){
+  const s=typeof d.source==='object'?d.source.id:d.source;
+  const t=typeof d.target==='object'?d.target.id:d.target;
+  return nodeSet.has(s) && nodeSet.has(t);
+}
+
+function applyHoverPreview(focusDatum){
+  if(!_nodeSel||!_linkSel) return;
+  if(!focusDatum){
+    _linkSel.classed('h-lit',false);
+    _nodeSel.classed('h-pin',false);
+    return;
+  }
+  const fid=focusDatum.id;
+  _linkSel.classed('h-lit',d=>{
+    const s=typeof d.source==='object'?d.source.id:d.source;
+    const t=typeof d.target==='object'?d.target.id:d.target;
+    return s===fid||t===fid;
+  });
+  _nodeSel.classed('h-pin', d=> d===focusDatum);
+}
+
+function updatePinLabels(focusDatum){
+  if(!_labelSel||!_projLabelSel) return;
+  if(!focusDatum){
+    // No pin — revert to toggle state with wcount threshold
+    _labelSel.style('display', d=>{
+      if(!showOrgLabels) return 'none';
+      return (d.wcount||0)>=ORG_LABEL_MIN ? null : 'none';
+    });
+    _projLabelSel.style('display', showProjLabels ? null : 'none');
+    return;
+  }
+  // 2-level neighbourhood for labels
+  const visible=getNeighbours2(focusDatum.id);
+  // Org labels: in pinned mode show ALL visible neighbours (no threshold)
+  _labelSel.style('display', d=>{
+    if(showOrgLabels) return (d.wcount||0)>=ORG_LABEL_MIN ? null : 'none';  // toggle: respect threshold
+    return visible.has(d.id) ? null : 'none';  // pinned: show all in neighbourhood
+  });
+  // Project labels: show for visible project nodes in neighbourhood (or all if toggle on)
+  _projLabelSel.style('display', d=>{
+    if(showProjLabels) return null;
+    return visible.has(d.id) ? null : 'none';
+  });
+}
+
+function applyHoverHighlight(focusDatum){
+  if(!_nodeSel||!_linkSel) return;
+  if(!focusDatum){
+    _nodeSel.classed('h-dim',false).classed('h-lit',false).classed('h-pin',false);
+    _linkSel.classed('h-dim',false).classed('h-lit',false);
+    updatePinLabels(null);
+    updatePinStats(null);
+    return;
+  }
+  // 2-level expansion: show the clicked node + its neighbours + THEIR neighbours
+  const visible=getNeighbours2(focusDatum.id);
+  _nodeSel
+    .classed('h-lit', d=> visible.has(d.id))
+    .classed('h-dim', d=> !visible.has(d.id))
+    .classed('h-pin', d=> d===pinnedNode);
+  _linkSel.classed('h-lit',d=> isLinkInSet(d, visible))
+          .classed('h-dim',d=> !isLinkInSet(d, visible));
+  updatePinLabels(focusDatum);
+  updatePinStats(focusDatum);
+}
+
+function clearHoverHighlight(){
+  if(pinnedNode) return;
+  applyHoverPreview(null);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════════════════════════════════
+function render(){
+  const projects=filteredProjects();
+  applySearch(projects);
+  updateStats(projects);
+  updateProjList(projects);
+  renderKeywords();
+  renderNLOrgs(projects);
+  currentProjects=projects;
+  if(view!=='map') renderOrgPanel();
+
+  if(view==='map'){
+    if(simulation) simulation.stop();
+    renderMap(projects);
+    return;
+  }
+
+  if(simulation) simulation.stop();
+  g.selectAll('*').remove();
+  _nodeSel=null; _linkSel=null;
+  pinnedNode=null;
+  neighborMap=new Map();
+  if(!projects.length) return;
+
+  const [W,H]=getWH();
+  const {nodes,links}=buildGraph(projects);
+  if(!nodes.length) return;
+
+  buildAdjacency(links);
+
+  const linkSel=g.append('g').selectAll('line').data(links).enter()
+    .append('line')
+    .attr('class',d=>`link ${d.role==='pi'?'link-pi':'link-partner'}`);
+
+  const nodeSel=g.append('g').selectAll('circle').data(nodes).enter()
+    .append('circle')
+    .attr('r', d=> d.r || 5)
+    .attr('class',d=>{
+      if(d.type==='project'){
+        const nc=d.pk==='nwo'?'node-nwo':d.pk==='erasmus'?'node-erasmus':d.pk==='h2020'?'node-h2020':'node-he';
+        return `node-proj ${nc}`;
+      }
+      return `node-org ${d.isNL?'node-org-nl':'node-org-other'}`;
+    })
+    .call(d3.drag()
+      .on('start',(e,d)=>{if(!e.active)simulation.alphaTarget(0.2).restart();d.fx=d.x;d.fy=d.y;})
+      .on('drag', (e,d)=>{d.fx=e.x;d.fy=e.y;})
+      .on('end',  (e,d)=>{if(!e.active)simulation.alphaTarget(0);d.fx=null;d.fy=null;})
+    )
+    .on('mouseover',(e,d)=>{
+      showTT(e,d);
+      if(!pinnedNode) applyHoverPreview(d);
+    })
+    .on('mousemove', moveTT)
+    .on('mouseout', ()=>{
+      hideTT();
+      clearHoverHighlight();
+    })
+    .on('click',(e,d)=>{
+      e.stopPropagation();
+      if(d.type==='project'){
+        const url=projectUrl(d.data);
+        if(url) window.open(url,'_blank','noopener');
+        return;
+      }
+      // Organisation: pin its connections and open its panel; again to close
+      hideTT();
+      selectedOrg===d.label ? clearOrgFocus() : setOrgFocus(d.label);
+    });
+
+  // Org labels — font size scaled by weighted project count, hidden if wcount < 3 in main view
+  const labelSel=g.append('g').selectAll('text')
+    .data(nodes.filter(d=>d.type!=='project'))
+    .enter().append('text')
+    .text(d=>(d.label||d.id).slice(0,38))
+    .attr('font-size',d=> Math.min(7 + Math.sqrt(d.wcount||0)*1.4, 18))
+    .attr('fill',d=>d.isNL?'#fb923c':'#fbbf24')
+    .attr('text-anchor','middle')
+    .attr('dy',d=>-(d.r+3))
+    .style('pointer-events','none')
+    .style('user-select','none')
+    .style('display', d=> showOrgLabels && (d.wcount||0)>=ORG_LABEL_MIN ? null : 'none');
+
+  // Project labels
+  const projLabelSel=g.append('g').selectAll('text')
+    .data(nodes.filter(d=>d.type==='project'))
+    .enter().append('text')
+    .text(d=>(d.data?._display_name||d.data?.title_en||'').slice(0,36))
+    .attr('font-size',8)
+    .attr('fill',d=>{
+      const pk=d.pk;
+      if(pk==='nwo') return '#a78bfa';
+      if(pk==='erasmus') return '#3fb950';
+      if(pk==='h2020') return '#58a6ff';
+      return '#79c0ff';
+    })
+    .attr('text-anchor','middle')
+    .attr('dy',d=>-(d.r+3))
+    .style('pointer-events','none')
+    .style('user-select','none')
+    .style('display', showProjLabels ? null : 'none');
+
+  _nodeSel=nodeSel; _linkSel=linkSel; _labelSel=labelSel; _projLabelSel=projLabelSel;
+  applyGraphHighlight();
+  syncNetworkPin();   // the graph was rebuilt: re-pin the selected organisation
+
+  simulation=d3.forceSimulation(nodes)
+    .force('link',d3.forceLink(links).id(d=>d.id)
+      .distance(d=>d.source.type==='project'?60:45).strength(0.3))
+    .force('charge',d3.forceManyBody()
+      .strength(d=>d.type==='project'?-60:-40).distanceMax(350))
+    .force('collide',d3.forceCollide(d=>(d.r||5)+2))
+    .force('center',d3.forceCenter(W/2,H/2).strength(0.05))
+    .force('x',d3.forceX(W/2).strength(0.04))
+    .force('y',d3.forceY(H/2).strength(0.04))
+    .alphaDecay(0.022)
+    .on('tick',()=>{
+      linkSel.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
+             .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+      nodeSel.attr('cx',d=>d.x).attr('cy',d=>d.y);
+      labelSel.attr('x',d=>d.x).attr('y',d=>d.y);
+      projLabelSel.attr('x',d=>d.x).attr('y',d=>d.y);
+    })
+    .on('end',()=>fitView(nodes));
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TOOLTIP
+// ══════════════════════════════════════════════════════════════════════════
+const ttEl=document.getElementById('tt');
+function showTT(e,d){
+  let h='';
+  if(d.type==='project'){
+    const p=d.data;
+    const members=p.project_members||[];
+    const coord=members.find(m=>isCoord(m.role,p._src));
+    const partners=members.filter(m=>!isCoord(m.role,p._src)).slice(0,4);
+    const nlParts=members.filter(m=> p._src==='nwo' || NL_CODES.has((m.country||'').toUpperCase()));
+    const grant=p.ec_grant_num?fmtEuro(p.ec_grant_num):'';
+    const kws=(p._matched_terms||[]).filter(k=>activeKw.has(k));
+    const pyr=projectYear(p);
+    const dn=p._display_name||p.title_en||'';
+    const fullTitle=(dn!==p.title_en&&p.title_en)?p.title_en.slice(0,110):'';
+    const piName=getPIName(p);
+    const piInst=getPIInstitution(p);
+    const srcLabel=p._src==='nwo'?'NWO/SIA':(p.programme||p._src);
+    h=`<div class="tth">${esc(dn)}</div>
+       ${fullTitle?`<div class="tts" style="font-style:italic;margin-bottom:2px">${esc(fullTitle)}</div>`:''}
+       <div class="tts">${esc(srcLabel)} ${pyr?`· <b style="color:#e6edf3">${pyr}</b>`:''} ${grant?`· <span class="ttg">${grant}</span>`:''}</div>
+       ${piName?`<div class="tts" style="margin-top:3px">PI: <b style="color:#e3b341">${esc(piName)}</b>${piInst?' — '+esc(piInst.slice(0,45)):''}</div>`:''}
+       ${coord&&!piName?`<div class="tts" style="margin-top:3px">Coord: <b style="color:#e3b341">${esc(normaliseOrgName((coord.organisation||coord.name||'').split('||')[0]).slice(0,55))}</b></div>`:''}
+       ${partners.length?`<div class="tts">Partners: ${partners.map(m=>esc(normaliseOrgName((m.organisation||m.name||'').split('||')[0]).slice(0,28))).join(', ')}</div>`:''}
+       ${kws.length?`<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:3px">${kws.map(k=>`<span style="background:#1a2040;color:#79c0ff;font-size:9px;padding:1px 5px;border-radius:10px;border:1px solid #2d3a6b">${esc(k)}</span>`).join('')}</div>`:''}
+       ${projectUrl(p)?`<div class="tts" style="margin-top:5px;color:#58a6ff">Click to open the project page ↗</div>`:''}`;
+  } else {
+    h=`<div class="tth" style="color:${d.isNL?'#fb923c':'#fbbf24'}">${esc(d.label)}</div>
+       <div class="tts">${d.isNL?'🇳🇱 NL org':'🌍 Non-NL org'} · ${d.isCoord?'PI/Coordinator':'Partner'} · ${d.count} project${d.count!==1?'s':''}</div>
+       <div class="tts" style="color:#d2a8ff">${fmtEuro(d.totalFund||0)} funding share</div>
+       <div class="tts" style="margin-top:5px;color:#58a6ff">Click for its projects and keywords</div>`;
+  }
+  ttEl.innerHTML=h; ttEl.style.display='block'; moveTT(e);
+}
+function moveTT(e){
+  ttEl.style.left=Math.min(e.clientX+14,window.innerWidth-330)+'px';
+  ttEl.style.top =Math.min(e.clientY-10,window.innerHeight-150)+'px';
+}
+function hideTT(){ ttEl.style.display='none'; }
+
+// ══════════════════════════════════════════════════════════════════════════
+// MAP VIEW — Dutch organisations at their main seat, lines for shared projects
+// ══════════════════════════════════════════════════════════════════════════
+// Locations: data/nl_org_locations.json (organisation -> city, city -> lat/lon).
+// MapLibre and the tiles load the first time the map is opened.
+const MAPLIBRE='https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min';
+const MAP_BOUNDS=[[3.3,50.72],[7.25,53.56]];   // the Netherlands
+let view='network', currentProjects=[];
+let orgLoc=null, orgLocRe=null;
+let mapObj=null, mapReady=false, mapLoading=null;
+let mapNodes=[], mapEdges=[], mapHover=null, mapLit=null;
+const mapSvg=d3.select('#map-svg');
+const mEdgeG=mapSvg.append('g'), mNodeG=mapSvg.append('g'), mLabelG=mapSvg.append('g');
+
+async function loadOrgLocations(){
+  try{
+    const r=await fetch('data/nl_org_locations.json');
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    orgLoc=await r.json();
+    const alt=orgLoc.name_cities.map(c=>c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
+    orgLocRe=new RegExp(`(?:^|[^\\p{L}])(${alt})(?![\\p{L}])`,'iu');
+  }catch(e){ console.warn('Failed to load organisation locations:',e); }
+}
+
+// City of an organisation's main seat: from the lookup, else a city in its name
+function orgCity(name){
+  if(!orgLoc) return null;
+  if(orgLoc.organisations[name]) return orgLoc.organisations[name];
+  const m=orgLocRe && name.match(orgLocRe);
+  return m ? orgLoc.name_cities.find(c=>c.toLowerCase()===m[1].toLowerCase()) : null;
+}
+
+// One node per Dutch organisation with a known city, one edge per pair of
+// organisations that share projects. Others are counted for the info box.
+function buildMapData(projects){
+  const nodes=new Map(), edges=new Map(), unplaced=new Map(), abroad=new Map();
+  for(const p of projects){
+    const here=new Set();
+    for(const m of (p.project_members||[])){
+      const raw=(m.organisation||m.name||'').split('||')[0].trim();
+      if(!raw) continue;
+      const name=normaliseOrgName(raw);
+      if(!(p._src==='nwo' || NL_CODES.has((m.country||'').toUpperCase()))){
+        const c=(m.country||'?').toUpperCase();
+        if(!abroad.has(c)) abroad.set(c,new Set());
+        abroad.get(c).add(name);
+        continue;
+      }
+      const city=orgCity(name);
+      if(!city || !orgLoc.cities[city]){
+        if(!here.has(name)) unplaced.set(name,(unplaced.get(name)||0)+1);
+        here.add(name);
+        continue;
+      }
+      if(!nodes.has(name)){
+        const [lat,lon]=orgLoc.cities[city];
+        nodes.set(name,{name,city,lat,lon,pids:new Set(),pi:0,pt:0,fund:0,estimated:false,ox:0,oy:0,x:0,y:0});
+      }
+      const n=nodes.get(name);
+      if(n.pids.has(p.project_id)) continue;   // listed twice in one project
+      n.pids.add(p.project_id);
+      isCoord(m.role,p._src) ? n.pi++ : n.pt++;
+      n.fund += (p.ec_grant_num||0)/Math.max(1,(p.project_members||[]).length);
+      if(p._grant_estimated) n.estimated=true;
+      here.add(name);
+    }
+    const names=[...here].filter(n=>nodes.has(n)).sort();
+    for(let i=0;i<names.length;i++) for(let j=i+1;j<names.length;j++){
+      const k=names[i]+'\u0000'+names[j];
+      if(!edges.has(k)) edges.set(k,{a:nodes.get(names[i]),b:nodes.get(names[j]),pids:new Set()});
+      edges.get(k).pids.add(p.project_id);
+    }
+  }
+  for(const n of nodes.values()) n.r=Math.min(4+Math.sqrt(n.pids.size)*3.2, 34);
+  return {nodes:[...nodes.values()], edges:[...edges.values()], unplaced, abroad};
+}
+
+// Spread the organisations of a city around it so none overlap: each takes
+// the first free spot on a spiral out from its city, biggest first. Offsets are
+// in pixels, so they hold while panning; zooming recomputes them.
+function layoutMap(){
+  if(!mapReady) return;
+  const placed=[];
+  const groups=[...d3.group(mapNodes,n=>n.city).values()]
+    .sort((a,b)=>d3.sum(b,n=>n.pids.size)-d3.sum(a,n=>n.pids.size));
+  for(const grp of groups){
+    grp.sort((a,b)=>b.r-a.r);
+    for(const n of grp){
+      const c=mapObj.project([n.lon,n.lat]);
+      for(let t=0;t<4000;t++){
+        const x=c.x+t*0.35*Math.cos(t*0.4), y=c.y+t*0.35*Math.sin(t*0.4);
+        if(placed.every(q=>Math.hypot(q.x-x,q.y-y)>=q.r+n.r+1.5)){
+          n.ox=x-c.x; n.oy=y-c.y; placed.push({x,y,r:n.r}); break;
+        }
+      }
+    }
+  }
+  positionMap();
+  updateMapLabels();
+}
+
+function positionMap(){
+  if(!mapReady) return;
+  for(const n of mapNodes){
+    const c=mapObj.project([n.lon,n.lat]);
+    n.x=c.x+n.ox; n.y=c.y+n.oy;
+  }
+  mNodeG.selectAll('circle').attr('cx',n=>n.x).attr('cy',n=>n.y);
+  mLabelG.selectAll('text').attr('x',n=>n.x).attr('y',n=>n.y+n.r+11);
+  mEdgeG.selectAll('path').attr('d',e=>{
+    const {x:x1,y:y1}=e.a, {x:x2,y:y2}=e.b;
+    // A slight bend keeps lines between nearby cities apart
+    const mx=(x1+x2)/2-(y2-y1)*0.18, my=(y1+y2)/2+(x2-x1)*0.18;
+    return `M${x1},${y1}Q${mx},${my} ${x2},${y2}`;
+  });
+}
+
+function renderMap(projects){
+  if(!mapReady) return;   // drawn once the map has loaded
+  const {nodes,edges,unplaced,abroad}=buildMapData(projects);
+  mapNodes=nodes; mapEdges=edges; mapHover=null;
+  edges.sort((a,b)=>a.pids.size-b.pids.size);   // strongest drawn last, on top
+  nodes.sort((a,b)=>b.r-a.r);                    // small circles on top of big ones
+  mEdgeG.selectAll('path').data(edges).join('path')
+    .attr('class','m-edge').attr('stroke-width',e=>0.6+Math.sqrt(e.pids.size)*0.9);
+  mNodeG.selectAll('circle').data(nodes,n=>n.name).join('circle')
+    .attr('class','m-node').attr('r',n=>n.r)
+    .on('mouseover',(e,n)=>{ mapHover=n; showMapTT(e,n); applyMapHighlight(); })
+    .on('mousemove',moveTT)
+    .on('mouseout',()=>{ mapHover=null; hideTT(); applyMapHighlight(); })
+    .on('click',(e,n)=>{ e.stopPropagation(); hideTT(); toggleOrgFocus(n.name,n.pids); });
+  mLabelG.selectAll('text').data(nodes,n=>n.name).join('text')
+    .attr('class','m-label')
+    .text(n=>n.name.length>34?n.name.slice(0,32)+'…':n.name);
+  renderMapInfo(nodes,unplaced,abroad);
+  layoutMap();
+  applyMapHighlight();
+  renderOrgPanel();   // filters changed: refresh the open panel
+}
+
+// Labels: the biggest organisations, more as you zoom in; when something is
+// highlighted, the highlighted ones
+function updateMapLabels(){
+  if(!mapReady) return;
+  const z=mapObj.getZoom();
+  const limit= z>=9 ? Infinity : z>=8 ? 30 : 12;
+  const ranked=[...mapNodes].sort((a,b)=>b.pids.size-a.pids.size);
+  const wanted=mapLit ? ranked.filter(n=>mapLit.has(n.name)) : ranked.slice(0,limit);
+  // Biggest first; a label that would overlap one already placed is left out
+  const boxes=[], show=new Set();
+  for(const n of wanted){
+    const w=Math.min(n.name.length,33)*5.4+6, b={x0:n.x-w/2, x1:n.x+w/2, y0:n.y+n.r+1, y1:n.y+n.r+14};
+    if(boxes.some(o=>b.x0<o.x1&&b.x1>o.x0&&b.y0<o.y1&&b.y1>o.y0)) continue;
+    boxes.push(b); show.add(n.name);
+  }
+  mLabelG.selectAll('text').style('display',n=>show.has(n.name)?null:'none');
+}
+
+// Hover: an organisation and its partners. Otherwise the selected organisation's
+// projects, or the search matches.
+function applyMapHighlight(){
+  if(!mapReady) return;
+  let lit=null, litEdge=null, center=null;
+  if(mapHover){
+    center=mapHover.name;
+    lit=new Set([center]);
+    litEdge=e=>e.a===mapHover||e.b===mapHover;
+    for(const e of mapEdges) if(litEdge(e)){ lit.add(e.a.name); lit.add(e.b.name); }
+  } else {
+    const focus=orgFocusSet.size>0?orgFocusSet:highlightSet;
+    if(focus.size>0){
+      center=selectedOrg;
+      lit=new Set(mapNodes.filter(n=>[...n.pids].some(id=>focus.has(id))).map(n=>n.name));
+      litEdge=e=>[...e.pids].some(id=>focus.has(id));
+    }
+  }
+  mNodeG.selectAll('circle')
+    .classed('dim',n=>!!lit&&!lit.has(n.name))
+    .classed('center',n=>n.name===center);
+  mEdgeG.selectAll('path')
+    .classed('dim',e=>!!litEdge&&!litEdge(e))
+    .classed('lit',e=>!!litEdge&&litEdge(e));
+  mapLit=lit;
+  updateMapLabels();
+}
+
+function showMapTT(e,n){
+  const partners=mapEdges.filter(x=>x.a===n||x.b===n)
+    .sort((a,b)=>b.pids.size-a.pids.size).slice(0,5)
+    .map(x=>`${esc((x.a===n?x.b:x.a).name)} (${x.pids.size})`);
+  ttEl.innerHTML=`<div class="tth" style="color:#fb923c">${esc(n.name)}</div>
+    <div class="tts">${esc(n.city)} · ${n.pids.size} project${n.pids.size!==1?'s':''}${n.pi?` · coordinator of ${n.pi}`:''}</div>
+    <div class="tts" style="color:#d2a8ff">${n.estimated?'~':''}${fmtEuro(n.fund)} funding share</div>
+    ${partners.length?`<div class="tts" style="margin-top:4px">Most projects shared with: ${partners.join(', ')}</div>`:''}
+    <div class="tts" style="margin-top:5px;color:#58a6ff">Click for its projects and keywords</div>`;
+  ttEl.style.display='block'; moveTT(e);
+}
+
+// Panel for the selected organisation, in both views: its keywords, its
+// projects with its role in each, and the organisations it shares most projects
+// with. Stays open until closed, another organisation is picked or the
+// background is clicked.
+function orgPanelData(name){
+  const projs=[], roles=new Map(), partners=new Map();
+  let pi=0, pt=0, fund=0, estimated=false, country='';
+  const orgOf=m=>normaliseOrgName((m.organisation||m.name||'').split('||')[0].trim());
+  for(const p of currentProjects){
+    const members=p.project_members||[];
+    const mine=members.filter(m=>orgOf(m)===name);
+    if(!mine.length) continue;
+    projs.push(p);
+    const coord=mine.some(m=>isCoord(m.role,p._src));
+    roles.set(p.project_id, coord?'Coordinator':'Partner');
+    coord ? pi++ : pt++;
+    fund += (p.ec_grant_num||0)/Math.max(1,members.length);
+    if(p._grant_estimated) estimated=true;
+    if(!country) country=(mine.find(m=>m.country)||{}).country||'';
+    const seen=new Set();
+    for(const m of members){
+      const o=orgOf(m);
+      if(!o || o===name || seen.has(o)) continue;
+      seen.add(o);
+      const e=partners.get(o)||{name:o, count:0, country:''};
+      e.count++;
+      if(!e.country) e.country=p._src==='nwo'?'NL':(m.country||'');
+      partners.set(o,e);
+    }
+  }
+  projs.sort((a,b)=>(projectYear(b)||0)-(projectYear(a)||0)
+                    || (a.title_en||a.title||'').localeCompare(b.title_en||b.title||''));
+  return {projs, roles, pi, pt, fund, estimated, country,
+          partners:[...partners.values()].sort((a,b)=>b.count-a.count).slice(0,8)};
+}
+
+function renderOrgPanel(){
+  const el=document.getElementById('org-pop');
+  const wrap=document.getElementById('canvas-wrap');
+  const d=selectedOrg ? orgPanelData(selectedOrg) : null;
+  const open=!!(d && d.projs.length);
+  wrap.classList.toggle('pop-open',open);
+  if(!open){ el.hidden=true; el.innerHTML=''; return; }
+
+  const name=selectedOrg;
+  const place=orgCity(name) || d.country;
+  const kw=new Map();
+  d.projs.forEach(p=>(p._matched_terms||[]).forEach(k=>kw.set(k,(kw.get(k)||0)+1)));
+  const kws=[...kw].sort((a,b)=>(activeKw.has(b[0])-activeKw.has(a[0])) || b[1]-a[1]);
+  const n=d.projs.length;
+
+  el.innerHTML=`
+    <div class="mp-head">
+      <button class="mp-close" title="Close (Esc)" aria-label="Close">✕</button>
+      <div class="mp-name">${esc(name)}</div>
+      <div class="mp-meta">${[esc(place), `${n} project${n!==1?'s':''}`,
+        d.pi?`coordinator of ${d.pi}`:'', d.pt?`partner in ${d.pt}`:''].filter(Boolean).join(' · ')}</div>
+      <div class="mp-meta" style="color:#d2a8ff">${d.estimated?'~':''}${fmtEuro(d.fund)} funding share</div>
+    </div>
+    <div class="mp-body">
+      ${kws.length?`<div class="mp-sec">Keywords</div>
+        <div class="mp-chips">${kws.map(([k,c])=>`<span class="mp-chip${activeKw.has(k)?'':' off'}" title="${c} project${c!==1?'s':''}">${esc(k)} · ${c}</span>`).join('')}</div>`:''}
+      <div class="mp-sec">Projects</div>
+      ${d.projs.map(p=>{
+        const url=projectUrl(p), yr=projectYear(p);
+        const pkws=(p._matched_terms||[]).filter(k=>activeKw.has(k));
+        const grant=p.ec_grant_num?`<span class="grant">${p._grant_estimated?'~':''}${fmtEuro(p.ec_grant_num)}</span>`:'';
+        return `<div class="mp-proj">
+          ${url?`<a href="${esc(url)}" target="_blank" rel="noopener">${projTitleHtml(p)}</a>`:`<span class="mp-title">${projTitleHtml(p)}</span>`}
+          <div class="mp-pmeta"><span class="prog-badge ${p._progKey}">${PROG_SHORT[p._progKey]}</span>${yr?`<span>${yr}</span>`:''}${grant}<span class="mp-role">${d.roles.get(p.project_id)}</span></div>
+          ${pkws.length?`<div class="mp-pkw">${pkws.map(esc).join(' · ')}</div>`:''}
+        </div>`;
+      }).join('')}
+      ${d.partners.length?`<div class="mp-sec">Most projects shared with</div>
+        ${d.partners.map(o=>`<button class="mp-partner" data-org="${esc(o.name)}">${esc(o.name)} <span>· ${o.count} project${o.count!==1?'s':''}${(orgCity(o.name)||o.country)?', '+esc(orgCity(o.name)||o.country):''}</span></button>`).join('')}`:''}
+    </div>`;
+  el.hidden=false;
+
+  // Keep the organisation in view: pan if the panel would cover it
+  const free=wrap.clientWidth-el.offsetWidth-30;
+  const node=view==='map' && mapNodes.find(x=>x.name===name);
+  if(node && node.x+node.r>free) mapObj.panBy([node.x+node.r-free+40,0]);
+  if(view==='network' && pinnedNode && pinnedNode.label===name){
+    const t=d3.zoomTransform(svg.node()), sx=t.applyX(pinnedNode.x);
+    if(sx>free) svg.transition().duration(400).call(zoomBehavior.translateBy,-(sx-free+60)/t.k,0);
+  }
+  el.querySelector('.mp-close').addEventListener('click',clearOrgFocus);
+  el.querySelectorAll('.mp-partner').forEach(b=>b.addEventListener('click',()=>setOrgFocus(b.dataset.org)));
+}
+
+function renderMapInfo(nodes,unplaced,abroad){
+  const miss=[...unplaced].sort((a,b)=>b[1]-a[1]);
+  const abroadOrgs=[...abroad.values()].reduce((s,v)=>s+v.size,0);
+  document.getElementById('map-info').innerHTML=
+    `<b>${nodes.length}</b> Dutch organisations on the map
+    ${miss.length?`<details><summary>${miss.length} without a known location</summary>
+      <div class="mi-list">${miss.map(([n,c])=>`${esc(n)} <span>(${c})</span>`).join('<br>')}</div></details>`:''}
+    ${abroadOrgs?`<div>${abroadOrgs} partners abroad, in ${abroad.size} countries: see the network</div>`:''}`;
+}
+
+function loadMapLibre(){
+  return mapLoading ||= new Promise((resolve,reject)=>{
+    const css=document.createElement('link');
+    css.rel='stylesheet'; css.href=MAPLIBRE+'.css';
+    document.head.appendChild(css);
+    const js=document.createElement('script');
+    js.src=MAPLIBRE+'.js';
+    js.onload=resolve;
+    js.onerror=()=>{ mapLoading=null; reject(new Error('MapLibre did not load')); };
+    document.head.appendChild(js);
+  }).then(()=>new Promise(resolve=>{
+    mapObj=new maplibregl.Map({
+      container:'map',
+      style:{version:8,
+        // OpenStreetMap's standard tiles, as on the company map, made dark in
+        // CSS (#map canvas). Muted here so the organisations stand out.
+        sources:{osm:{type:'raster', tileSize:256,
+          tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+          attribution:'© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'}},
+        layers:[{id:'osm', type:'raster', source:'osm',
+                 paint:{'raster-saturation':-0.85, 'raster-contrast':-0.15}}]},
+      bounds:MAP_BOUNDS, fitBoundsOptions:{padding:20},
+      minZoom:5.5, maxZoom:13, dragRotate:false, pitchWithRotate:false,
+      attributionControl:{compact:true},
+    });
+    mapObj.touchZoomRotate.disableRotation();
+    mapObj.addControl(new maplibregl.NavigationControl({showCompass:false}),'bottom-right');
+    mapObj.on('move',positionMap);
+    mapObj.on('zoomend',layoutMap);
+    mapObj.on('resize',layoutMap);
+    mapObj.on('click',()=>{ if(selectedOrg) clearOrgFocus(); });
+    mapObj.on('load',()=>{ mapReady=true; resolve(); });
+  }));
+}
+
+function setView(v){
+  view=v;
+  document.body.classList.toggle('view-map',v==='map');
+  document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
+  hideTT(); mapHover=null; pinnedNode=null; updatePinStats(null);
+  renderOrgPanel();
+  if(v==='map'){
+    loadMapLibre()
+      .then(()=>{ mapObj.resize(); render(); })
+      .catch(e=>{ document.getElementById('map-info').textContent='The map could not be loaded ('+e.message+').'; });
+  }
+  render();
+}
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+
+// ══════════════════════════════════════════════════════════════════════════
+// CSV DOWNLOAD
+// ══════════════════════════════════════════════════════════════════════════
+document.getElementById('downloadBtn').addEventListener('click',()=>{
+  const projs=filteredProjects();
+  const cols=['project_id','title_en','_src','programme','funding_scheme','start_date','end_date',
+              '_pi_name','_pi_institution','ec_grant','status','project_page_url','_matched_terms'];
+  const rows=[cols.join(',')];
+  projs.forEach(p=>rows.push(
+    cols.map(c=>`"${(c==='_matched_terms'?(p[c]||[]).join('|'):String(p[c]||'')).replace(/"/g,'""')}"`).join(',')
+  ));
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv'}));
+  a.download=`nl_textile_funding_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+});
+
+// Reset excluded
+document.getElementById('resetExclBtn').addEventListener('click',()=>{
+  excludedIds.clear();
+  render();
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// PANEL TABS
+// ══════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('.ptab').forEach(tab=>tab.addEventListener('click',()=>{
+  document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));
+  tab.classList.add('active');
+  activePanel=tab.dataset.panel;
+  document.getElementById('proj-pane').style.display=activePanel==='proj'?'flex':'none';
+  const op=document.getElementById('orgs-pane');
+  op.style.display=activePanel==='orgs'?'flex':'none';
+}));
+
+// Sortable columns: click to sort, click again to reverse. Numbers start
+// high-to-low, text A-Z.
+function wireSort(tableId, getSort, rerender){
+  document.querySelectorAll(`#${tableId} th[data-sort]`).forEach(th=>th.addEventListener('click',()=>{
+    const sort=getSort(), k=th.dataset.sort;
+    if(sort.key===k) sort.dir=-sort.dir;
+    else { sort.key=k; sort.dir=['year','grant','total','pi','pt','fund','role'].includes(k)?-1:1; }
+    rerender(filteredProjects());
+  }));
+}
+wireSort('projTable', ()=>projSort, updateProjList);
+wireSort('orgTable',  ()=>orgSort,  renderNLOrgs);
+
+// ══════════════════════════════════════════════════════════════════════════
+// CONTROLS
+// ══════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('[data-prog]').forEach(btn=>btn.addEventListener('click',()=>{
+  const p=btn.dataset.prog;
+  activeProgs.has(p)?(activeProgs.delete(p),btn.classList.remove('active')):(activeProgs.add(p),btn.classList.add('active'));
+  render();
+}));
+
+document.getElementById('btnAll').addEventListener('click',()=>{allKwSet().forEach(k=>activeKw.add(k));renderKeywords();render();});
+document.getElementById('btnNone').addEventListener('click',()=>{activeKw.clear();renderKeywords();render();});
+
+// Dutch-led only
+document.getElementById('nlLedToggle').addEventListener('change',e=>{
+  nlLedOnly=e.target.checked;
+  render();
+});
+
+// Keyword dropdown: opens under its button, closes on a click elsewhere or Escape.
+// composedPath() is taken when the click happens, so a click on a list item
+// that re-rendering has since removed still counts as inside.
+const kwDd=document.getElementById('kwDropdown');
+const kwBtn=document.getElementById('kwBtn');
+const kwSec=document.getElementById('kw-section');
+function setKwOpen(open){
+  kwSec.classList.toggle('open',open);
+  kwBtn.classList.toggle('open',open);
+  kwBtn.setAttribute('aria-expanded',open);
+}
+kwBtn.addEventListener('click',()=>setKwOpen(!kwSec.classList.contains('open')));
+document.addEventListener('click',e=>{ if(!e.composedPath().includes(kwDd)) setKwOpen(false); });
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape') return;
+  setKwOpen(false);
+  if(selectedOrg && document.activeElement!==document.getElementById('searchBox')) clearOrgFocus();
+});
+
+const newKwIn=document.getElementById('newKwIn');
+document.getElementById('addKwBtn').addEventListener('click',()=>{
+  const kw=newKwIn.value.trim().toLowerCase();
+  if(!kw) return; newKwIn.value='';
+  activeKw.add(kw); DEFAULT_KEYWORDS.push(kw);
+  allProjects.forEach(p=>{
+    const t=(p._hay||'').toLowerCase();
+    if(t.includes(kw)&&!(p._matched_terms||[]).includes(kw))
+      p._matched_terms=[...(p._matched_terms||[]),kw];
+  });
+  renderKeywords(); render();
+});
+newKwIn.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('addKwBtn').click();});
+
+// Search
+const sbEl=document.getElementById('searchBox');
+const scEl=document.getElementById('searchClear');
+let searchTimer;
+sbEl.addEventListener('input',e=>{
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>{
+    searchTerm=e.target.value.trim();
+    searchLocked=false;
+    scEl.classList.toggle('visible',!!searchTerm);
+    const projs=filteredProjects();
+    applySearch(projs);
+    updateProjList(projs);
+    applyGraphHighlight();
+  },250);
+});
+sbEl.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    searchTerm=sbEl.value.trim(); searchLocked=true;
+    scEl.classList.toggle('visible',!!searchTerm);
+    render();
+  }
+  if(e.key==='Escape') scEl.click();
+});
+scEl.addEventListener('click',()=>{
+  sbEl.value=''; searchTerm=''; searchLocked=false;
+  highlightSet.clear(); scEl.classList.remove('visible');
+  sbEl.classList.remove('has-match');
+  applyGraphHighlight();
+  updateProjList(filteredProjects());
+});
+
+// ── Year range sliders ──────────────────────────────────────────────────
+(function(){
+  const fromEl=document.getElementById('yrFrom');
+  const toEl  =document.getElementById('yrTo');
+  const fillEl=document.getElementById('yrFill');
+  const valsEl=document.getElementById('yrVals');
+  const MIN=2010, MAX=2027;
+
+  function updateFill(){
+    const lo=(fromEl.value-MIN)/(MAX-MIN)*100;
+    const hi=(toEl.value  -MIN)/(MAX-MIN)*100;
+    fillEl.style.left  = lo+'%';
+    fillEl.style.width = (hi-lo)+'%';
+    valsEl.textContent = `${fromEl.value} – ${toEl.value}`;
+  }
+  function onSlider(){
+    if(+fromEl.value > +toEl.value){
+      if(this===fromEl) fromEl.value=toEl.value;
+      else              toEl.value=fromEl.value;
+    }
+    yearMin=+fromEl.value;
+    yearMax=+toEl.value;
+    updateFill();
+    render();
+  }
+  fromEl.addEventListener('input', onSlider);
+  toEl  .addEventListener('input', onSlider);
+  updateFill();
+})();
+
+// Label toggles
+document.getElementById('orgLabelsToggle').addEventListener('change',e=>{
+  showOrgLabels=e.target.checked;
+  if(pinnedNode){
+    updatePinLabels(pinnedNode);
+  } else {
+    if(_labelSel) _labelSel.style('display', d=>{
+      if(!showOrgLabels) return 'none';
+      return (d.wcount||0)>=ORG_LABEL_MIN ? null : 'none';
+    });
+  }
+});
+document.getElementById('projLabelsToggle').addEventListener('change',e=>{
+  showProjLabels=e.target.checked;
+  if(pinnedNode){
+    updatePinLabels(pinnedNode);
+  } else {
+    if(_projLabelSel) _projLabelSel.style('display', showProjLabels ? null : 'none');
+  }
+});
+
+// Org search filter
+document.getElementById('orgSearchIn').addEventListener('input',e=>{
+  orgFilter=e.target.value.trim();
+  renderNLOrgs(filteredProjects());
+});
+
+window.addEventListener('resize',()=>{ if(simulation) fitView(simulation.nodes()); });
+
+// ══════════════════════════════════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════════════════════════════════
+document.getElementById('orgs-pane').style.display='none';
+loadData();
+</script>
+</body>
+</html>

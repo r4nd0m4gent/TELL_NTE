@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Textile Ecosystem Living Lab (TELL) – NewTexEco</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: #f7f7f5; color: #2c2c2c;
+           min-height: 100vh; display: flex; flex-direction: column; }
+
+    header {
+      background: #513773; padding: 18px 40px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    header img { height: 44px; object-fit: contain; }
+    header .site-label {
+      color: rgba(255,255,255,0.75); font-size: 12px; font-weight: 600;
+      letter-spacing: 1.5px; text-transform: uppercase;
+    }
+
+    main { flex: 1; }
+    .intro { max-width: 860px; margin: 0 auto; padding: 52px 40px 36px; }
+    .intro h1 { font-size: 2rem; font-weight: 700; color: #513773; line-height: 1.25; margin-bottom: 18px; }
+    .intro p  { font-size: 1rem; line-height: 1.75; color: #444; }
+
+    /* ── Perspective cards ───────────────────────────────── */
+    .perspectives {
+      max-width: 860px; margin: 0 auto; padding: 0 40px 60px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;
+    }
+    .card {
+      display: flex; flex-direction: column; gap: 10px;
+      background: #fff; border: 1px solid #e9e6ef; border-radius: 12px; padding: 28px;
+      box-shadow: 0 1px 2px rgba(30,20,50,0.04), 0 4px 16px rgba(30,20,50,0.05);
+      color: inherit; text-decoration: none;
+      transition: border-color .15s, box-shadow .15s, transform .15s;
+    }
+    .card:hover, .card:focus-visible {
+      border-color: #513773; transform: translateY(-2px);
+      box-shadow: 0 2px 4px rgba(30,20,50,0.06), 0 10px 28px rgba(30,20,50,0.10);
+    }
+    .card:focus-visible { outline: 2px solid #513773; outline-offset: 2px; }
+    .card .kicker {
+      font-size: 12px; font-weight: 600; letter-spacing: 1.2px;
+      text-transform: uppercase; color: #54639E;
+    }
+    .card h2 { font-size: 1.35rem; font-weight: 700; color: #513773; }
+    .card p  { font-size: 0.95rem; line-height: 1.65; color: #444; flex: 1; }
+    .card .open { font-size: 0.95rem; font-weight: 600; color: #513773; margin-top: 6px; }
+
+    footer {
+      text-align: center; padding: 24px 40px; font-size: 12px;
+      color: #999; border-top: 1px solid #e5e5e5;
+    }
+    footer a { color: #54639E; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── Mobile ──────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      header { padding: 14px 20px; }
+      .intro { padding: 32px 20px 24px; }
+      .intro h1 { font-size: 1.5rem; margin-bottom: 14px; }
+      .intro p { font-size: 0.95rem; line-height: 1.65; }
+      .perspectives { padding: 0 20px 40px; gap: 16px; }
+      .card { padding: 22px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <img src="https://newtexeco.nl/wp-content/uploads/2023/12/logo_2x.png" alt="NewTexEco" />
+    <span class="site-label">NewTexEco</span>
+  </header>
+
+  <main>
+    <div class="intro">
+      <h1>Textile Ecosystem Living Lab</h1>
+      <p>
+The TELL aims to improve the visibility of the companies operating in the Textile, Clothing,
+Leather, and Footwear (TCLF) sector in the Netherlands. Explore where more than 11,000 active
+companies are and what they specialise in, or look at the research projects and funding that
+connect organisations across the sector.
+      </p>
+    </div>
+
+    <div class="perspectives">
+      <a class="card" href="dashboard/">
+        <span class="kicker">Companies</span>
+        <h2>Company map</h2>
+        <p>
+          The geographic distribution and market specializations of TCLF companies, through
+          keywords (or tags). Search and filter more than 11,000 companies from the
+          Modint-KvK (2021) dataset.
+        </p>
+        <span class="open">Open the map →</span>
+      </a>
+
+      <a class="card" href="network/">
+        <span class="kicker">Research funding</span>
+        <h2>Funding network</h2>
+        <p>
+          Textile research projects with Dutch partners funded by NWO, Erasmus+, Horizon Europe
+          and Horizon 2020, and the organisations they bring together.
+        </p>
+        <span class="open">Open the network →</span>
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <a href="https://newtexeco.nl" target="_blank">newtexeco.nl</a>
+    &nbsp;·&nbsp;
+    Textile Ecosystem Living Lab &copy; 2026 NewTexEco
+  </footer>
+
+</body>
+</html>

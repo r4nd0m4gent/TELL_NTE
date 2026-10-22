@@ -53,11 +53,7 @@ systemctl daemon-reload
 systemctl enable  tell_nte tell-form
 systemctl restart tell_nte tell-form
 
-# ── 8. Landing page (Nginx serves it from ${APP_DIR}/tell_embed.html) ─────────
-cp "${APP_DIR}/deploy/tell_embed.html" "${APP_DIR}/tell_embed.html"
-chown ${APP_USER}:${APP_USER} "${APP_DIR}/tell_embed.html"
-
-# ── 9. nginx ──────────────────────────────────────────────────────────────────
+# ── 8. nginx ──────────────────────────────────────────────────────────────────
 cp "${APP_DIR}/deploy/nginx_tell.conf" /etc/nginx/sites-available/tell
 ln -sf /etc/nginx/sites-available/tell /etc/nginx/sites-enabled/tell
 rm -f /etc/nginx/sites-enabled/default
