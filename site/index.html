@@ -42,6 +42,12 @@
       box-shadow: 0 2px 4px rgba(30,20,50,0.06), 0 10px 28px rgba(30,20,50,0.10);
     }
     .card:focus-visible { outline: 2px solid #513773; outline-offset: 2px; }
+    /* Preview image: a static screenshot across the top of the card */
+    .card .preview {
+      display: block; width: calc(100% + 56px); height: auto; aspect-ratio: 1.6;
+      margin: -28px -28px 8px; object-fit: cover;
+      border-radius: 11px 11px 0 0; border-bottom: 1px solid #e9e6ef; background: #eeecf2;
+    }
     .card .kicker {
       font-size: 12px; font-weight: 600; letter-spacing: 1.2px;
       text-transform: uppercase; color: #54639E;
@@ -65,6 +71,7 @@
       .intro p { font-size: 0.95rem; line-height: 1.65; }
       .perspectives { padding: 0 20px 40px; gap: 16px; }
       .card { padding: 22px; }
+      .card .preview { width: calc(100% + 44px); margin: -22px -22px 6px; }
     }
   </style>
 </head>
@@ -79,32 +86,37 @@
     <div class="intro">
       <h1>Textile Ecosystem Living Lab</h1>
       <p>
-          The TELL provides a multi-perspective representation of the sector, 
-          from the geographical and semantic (or thematic) to the relational networks through 
-          which knowledge is shared. To facilitate collaboration and innovation, 
+          The TELL provides a multi-perspective representation of the Textile, Clothing, Leather,
+          and Footwear sector, from the geographical and semantic (or thematic) to the relational 
+          networks through which knowledge is shared. To facilitate collaboration and innovation, 
           you can navigate across different fields of expertise (keywords) and find 
-          research institutions and businesses that are advancing knowledge development.
+          research institutions and businesses that are advancing knowledge across the sector.
       </p>
     </div>
 
     <div class="perspectives">
       <a class="card" href="dashboard/">
-        <span class="kicker">Companies</span>
-        <h2>Company map</h2>
+        <img class="preview" src="img/business-map.webp" width="780" height="488"
+             alt="Map of the Netherlands covered in purple circles, one per city with textile companies">
+        <h2>Business specialization</h2>
         <p>
-          The geographic distribution and market specializations of TCLF companies, through
-          keywords (or tags). Search and filter more than 11,000 companies from the
-          Modint-KvK (2021) dataset.
+          Textile activity spreads across the Netherlands in a variety of business specializations.
+          We aim to provide one of the most thorough representations of the sector by collecting 
+          keywords from public websites and facilitating business localization 
+          through search engines and filtering.
         </p>
         <span class="open">Open the map →</span>
       </a>
 
       <a class="card" href="network/">
-        <span class="kicker">Research funding</span>
-        <h2>Funding network</h2>
+        <img class="preview" src="img/research-network.webp" width="780" height="488"
+             alt="Network of research projects and the organisations taking part in them, as coloured dots joined by lines">
+        <h2>Research network</h2>
         <p>
-          Textile research projects with Dutch partners funded by NWO, Erasmus+, Horizon Europe
-          and Horizon 2020, and the organisations they bring together.
+          The research and business innovation network tends to cluster around organizations 
+          with extensive experience in specific research themes. By retrieving research 
+          project data (i.e NWO, Erasmus+, Horizon Europe and Horizon 2020), we display 
+          the network of collaboration across the Netherlands and the EU.
         </p>
         <span class="open">Open the network →</span>
       </a>
