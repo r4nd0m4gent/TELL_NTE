@@ -88,8 +88,6 @@ body:not(.view-map) .map-only{display:none!important}
 
 /* ── Map view ─────────────────────────────────────────────────────────── */
 #map{position:absolute;inset:0;background:#0d1117}
-/* Light tiles turned dark: invert, then rotate the hues back (water stays blue-ish) */
-#map canvas{filter:invert(1) hue-rotate(180deg) brightness(.82) contrast(.9)}
 #legend .map-only{max-width:270px}
 /* Organisation panel: opens on a click and stays until closed */
 #org-pop{position:absolute;top:10px;right:10px;bottom:10px;width:370px;max-width:calc(100% - 20px);z-index:6;background:rgba(22,27,34,.97);border:1px solid #30363d;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden}
@@ -121,8 +119,10 @@ body:not(.view-map) .map-only{display:none!important}
 #canvas-wrap.pop-open .maplibregl-ctrl-bottom-right{right:390px}
 #map-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
 .m-node{fill:#c2410c;stroke:#fb923c;stroke-width:1.5;fill-opacity:.85;pointer-events:all;cursor:pointer;transition:opacity .15s}
+.m-node.eu{fill:#ca8a04;stroke:#facc15}
 .m-node.dim{opacity:.15}
 .m-node.center{stroke:#fff;stroke-width:2.5;filter:drop-shadow(0 0 8px #fb923c)}
+.m-label.eu{fill:#fde68a}
 .m-edge{fill:none;stroke:#8b949e;stroke-opacity:.22;transition:stroke-opacity .15s}
 .m-edge.dim{stroke-opacity:.03}
 .m-edge.lit{stroke:#fb923c;stroke-opacity:.85}
@@ -337,6 +337,9 @@ svg#graph-svg{cursor:default}
   <label class="chk" title="Only projects coordinated by a Dutch organisation: every NWO project, and EU projects with a Dutch coordinator. Untick to include EU projects where a Dutch organisation is a partner.">
     <input type="checkbox" id="nlLedToggle" checked style="accent-color:#fb923c"> 🇳🇱 Dutch-led only
   </label>
+  <label class="chk map-only" title="Also put the European universities and research organisations these projects work with on the map">
+    <input type="checkbox" id="euToggle" style="accent-color:#facc15"> 🇪🇺 European research partners
+  </label>
   <div class="vsep"></div>
 
   <input id="searchBox" type="search" placeholder="Search… (Enter to lock)">
@@ -354,6 +357,7 @@ svg#graph-svg{cursor:default}
     <summary>Legend</summary>
     <div class="map-only">
       <div class="lr"><div class="ldot" style="background:#c2410c;border:1.5px solid #fb923c"></div><div class="ll">Dutch organisation, at its main seat</div></div>
+      <div class="lr"><div class="ldot" style="background:#ca8a04;border:1.5px solid #facc15"></div><div class="ll">European university or research organisation</div></div>
       <div class="lr"><div class="lline" style="background:#8b949e"></div><div class="ll">Shared projects (thicker = more)</div></div>
       <div class="ll" style="font-size:9px;color:#484f58;margin-top:2px">Circle size = number of projects · organisations in one city are spread around it · click one to list its projects</div>
     </div>
@@ -848,6 +852,7 @@ async function loadData() {
     else if(pk==='h2020')   metaFunding.h2020  +=f;
   }
 
+  indexOrgPlaces();
   document.getElementById('loading').style.display='none';
   renderKeywords();
   render();
@@ -1616,6 +1621,17 @@ function hideTT(){ ttEl.style.display='none'; }
 // MapLibre and the tiles load the first time the map is opened.
 const MAPLIBRE='https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min';
 const MAP_BOUNDS=[[3.3,50.72],[7.25,53.56]];   // the Netherlands
+// Base map: OpenFreeMap's dark style (vector tiles, no key), without the layers
+// for roads, railways, ferry routes, airports and buildings
+const MAP_STYLE='https://tiles.openfreemap.org/styles/dark';
+const MAP_DROP_LAYERS=new Set(['transportation','transportation_name','aeroway','building']);
+// "European research partners": universities (HES) and research organisations
+// (REC) in these countries
+const EUROPE=new Set(['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','EL','GR','HU','IE','IT',
+  'LV','LT','LU','MT','PL','PT','RO','SK','SI','ES','SE','NO','IS','LI','CH','UK','GB',
+  'RS','ME','MK','AL','BA','XK','UA','MD']);
+const RESEARCH_TYPES=new Set(['HES','REC']);
+let euOnMap=false;
 let view='network', currentProjects=[];
 let orgLoc=null, orgLocRe=null;
 let mapObj=null, mapReady=false, mapLoading=null;
@@ -1625,47 +1641,80 @@ const mEdgeG=mapSvg.append('g'), mNodeG=mapSvg.append('g'), mLabelG=mapSvg.appen
 
 async function loadOrgLocations(){
   try{
-    const r=await fetch('data/nl_org_locations.json');
-    if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    orgLoc=await r.json();
+    const [r1,r2]=await Promise.all([fetch('data/nl_org_locations.json'), fetch('data/org_locations.json')]);
+    if(!r1.ok||!r2.ok) throw new Error(`HTTP ${r1.status}/${r2.status}`);
+    orgLoc=await r1.json();
+    orgLoc.cordis=(await r2.json()).organisations;
     const alt=orgLoc.name_cities.map(c=>c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
     orgLocRe=new RegExp(`(?:^|[^\\p{L}])(${alt})(?![\\p{L}])`,'iu');
   }catch(e){ console.warn('Failed to load organisation locations:',e); }
 }
 
-// City of an organisation's main seat: from the lookup, else a city in its name
-function orgCity(name){
-  if(!orgLoc) return null;
+// Seat of a Dutch organisation from our own list (data/nl_org_locations.json),
+// else a city in its name
+function nlSeat(name){
   if(orgLoc.organisations[name]) return orgLoc.organisations[name];
   const m=orgLocRe && name.match(orgLocRe);
   return m ? orgLoc.name_cities.find(c=>c.toLowerCase()===m[1].toLowerCase()) : null;
 }
 
-// One node per Dutch organisation with a known city, one edge per pair of
-// organisations that share projects. Others are counted for the info box.
+// Where every organisation in the data is, by the name the page shows:
+// {city, lat, lon, country, type, isNL}. Dutch ones by their main seat first,
+// then everyone by CORDIS (data/org_locations.json, by name and country).
+const orgPlaces=new Map();
+function indexOrgPlaces(){
+  if(!orgLoc) return;
+  for(const p of allProjects){
+    for(const m of (p.project_members||[])){
+      const raw=(m.organisation||m.name||'').split('||')[0].trim();
+      if(!raw) continue;
+      const name=normaliseOrgName(raw);
+      if(orgPlaces.has(name)) continue;
+      const country=(p._src==='nwo' ? 'NL' : (m.country||'')).toUpperCase();
+      const isNL=NL_CODES.has(country);
+      const seat=isNL && nlSeat(name);
+      if(seat && orgLoc.cities[seat]){
+        const [lat,lon]=orgLoc.cities[seat];
+        orgPlaces.set(name,{city:seat, lat, lon, country:'NL', type:'', isNL});
+        continue;
+      }
+      const c=orgLoc.cordis[raw.toUpperCase().split(/\s+/).join(' ')+'|'+(isNL?'NL':country)];
+      if(c) orgPlaces.set(name,{city:c[0], lat:c[1], lon:c[2], country:isNL?'NL':country, type:c[3], isNL});
+    }
+  }
+}
+
+// City of an organisation (tables, panel)
+function orgCity(name){
+  const pl=orgPlaces.get(name);
+  return pl ? pl.city : null;
+}
+
+// One node per placed organisation: the Dutch ones, plus European universities
+// and research organisations when that is switched on. Edges join organisations
+// that share projects, only where a Dutch one is involved. The rest is counted
+// for the info box.
 function buildMapData(projects){
-  const nodes=new Map(), edges=new Map(), unplaced=new Map(), abroad=new Map();
+  const nodes=new Map(), edges=new Map(), unplaced=new Map(), abroad=new Set();
   for(const p of projects){
     const here=new Set();
     for(const m of (p.project_members||[])){
       const raw=(m.organisation||m.name||'').split('||')[0].trim();
       if(!raw) continue;
       const name=normaliseOrgName(raw);
-      if(!(p._src==='nwo' || NL_CODES.has((m.country||'').toUpperCase()))){
-        const c=(m.country||'?').toUpperCase();
-        if(!abroad.has(c)) abroad.set(c,new Set());
-        abroad.get(c).add(name);
-        continue;
-      }
-      const city=orgCity(name);
-      if(!city || !orgLoc.cities[city]){
+      const isNL=p._src==='nwo' || NL_CODES.has((m.country||'').toUpperCase());
+      const pl=orgPlaces.get(name);
+      if(!isNL){
+        if(!(euOnMap && pl && EUROPE.has(pl.country) && RESEARCH_TYPES.has(pl.type))){ abroad.add(name); continue; }
+      } else if(!pl){
         if(!here.has(name)) unplaced.set(name,(unplaced.get(name)||0)+1);
         here.add(name);
         continue;
       }
       if(!nodes.has(name)){
-        const [lat,lon]=orgLoc.cities[city];
-        nodes.set(name,{name,city,lat,lon,pids:new Set(),pi:0,pt:0,fund:0,estimated:false,ox:0,oy:0,x:0,y:0});
+        nodes.set(name,{name, city:pl.city, country:pl.country, isNL:pl.isNL||isNL, lat:pl.lat, lon:pl.lon,
+          group:`${pl.country}|${pl.city.toLowerCase()}`,
+          pids:new Set(),pi:0,pt:0,fund:0,estimated:false,ox:0,oy:0,x:0,y:0});
       }
       const n=nodes.get(name);
       if(n.pids.has(p.project_id)) continue;   // listed twice in one project
@@ -1677,13 +1726,21 @@ function buildMapData(projects){
     }
     const names=[...here].filter(n=>nodes.has(n)).sort();
     for(let i=0;i<names.length;i++) for(let j=i+1;j<names.length;j++){
+      const a=nodes.get(names[i]), b=nodes.get(names[j]);
+      if(!a.isNL && !b.isNL) continue;   // Dutch perspective: no lines between two foreign partners
       const k=names[i]+'\u0000'+names[j];
-      if(!edges.has(k)) edges.set(k,{a:nodes.get(names[i]),b:nodes.get(names[j]),pids:new Set()});
+      if(!edges.has(k)) edges.set(k,{a,b,pids:new Set()});
       edges.get(k).pids.add(p.project_id);
     }
   }
-  for(const n of nodes.values()) n.r=Math.min(4+Math.sqrt(n.pids.size)*3.2, 34);
-  return {nodes:[...nodes.values()], edges:[...edges.values()], unplaced, abroad};
+  const list=[...nodes.values()];
+  // Organisations of one city share a centre: the middle of their addresses
+  for(const grp of d3.group(list,n=>n.group).values()){
+    const clat=d3.mean(grp,n=>n.lat), clon=d3.mean(grp,n=>n.lon);
+    grp.forEach(n=>{ n.clat=clat; n.clon=clon; });
+  }
+  for(const n of list) n.r=Math.min(4+Math.sqrt(n.pids.size)*3.2, 34);
+  return {nodes:list, edges:[...edges.values()], unplaced, abroad};
 }
 
 // Spread the organisations of a city around it so none overlap: each takes
@@ -1691,17 +1748,21 @@ function buildMapData(projects){
 // in pixels, so they hold while panning; zooming recomputes them.
 function layoutMap(){
   if(!mapReady) return;
+  // Smaller circles when zoomed out (Europe), full size from about zoom 7.5
+  const f=Math.max(0.4, Math.min(1, (mapObj.getZoom()-3)/4.5));
+  for(const n of mapNodes) n.rr=n.r*f;
+  mNodeG.selectAll('circle').attr('r',n=>n.rr);
   const placed=[];
-  const groups=[...d3.group(mapNodes,n=>n.city).values()]
+  const groups=[...d3.group(mapNodes,n=>n.group).values()]
     .sort((a,b)=>d3.sum(b,n=>n.pids.size)-d3.sum(a,n=>n.pids.size));
   for(const grp of groups){
     grp.sort((a,b)=>b.r-a.r);
     for(const n of grp){
-      const c=mapObj.project([n.lon,n.lat]);
+      const c=mapObj.project([n.clon,n.clat]);
       for(let t=0;t<4000;t++){
         const x=c.x+t*0.35*Math.cos(t*0.4), y=c.y+t*0.35*Math.sin(t*0.4);
-        if(placed.every(q=>Math.hypot(q.x-x,q.y-y)>=q.r+n.r+1.5)){
-          n.ox=x-c.x; n.oy=y-c.y; placed.push({x,y,r:n.r}); break;
+        if(placed.every(q=>Math.hypot(q.x-x,q.y-y)>=q.r+n.rr+1.5)){
+          n.ox=x-c.x; n.oy=y-c.y; placed.push({x,y,r:n.rr}); break;
         }
       }
     }
@@ -1713,11 +1774,11 @@ function layoutMap(){
 function positionMap(){
   if(!mapReady) return;
   for(const n of mapNodes){
-    const c=mapObj.project([n.lon,n.lat]);
+    const c=mapObj.project([n.clon,n.clat]);
     n.x=c.x+n.ox; n.y=c.y+n.oy;
   }
   mNodeG.selectAll('circle').attr('cx',n=>n.x).attr('cy',n=>n.y);
-  mLabelG.selectAll('text').attr('x',n=>n.x).attr('y',n=>n.y+n.r+11);
+  mLabelG.selectAll('text').attr('x',n=>n.x).attr('y',n=>n.y+n.rr+11);
   mEdgeG.selectAll('path').attr('d',e=>{
     const {x:x1,y:y1}=e.a, {x:x2,y:y2}=e.b;
     // A slight bend keeps lines between nearby cities apart
@@ -1735,18 +1796,26 @@ function renderMap(projects){
   mEdgeG.selectAll('path').data(edges).join('path')
     .attr('class','m-edge').attr('stroke-width',e=>0.6+Math.sqrt(e.pids.size)*0.9);
   mNodeG.selectAll('circle').data(nodes,n=>n.name).join('circle')
-    .attr('class','m-node').attr('r',n=>n.r)
+    .attr('class',n=>n.isNL?'m-node':'m-node eu').attr('r',n=>n.r)
     .on('mouseover',(e,n)=>{ mapHover=n; showMapTT(e,n); applyMapHighlight(); })
     .on('mousemove',moveTT)
     .on('mouseout',()=>{ mapHover=null; hideTT(); applyMapHighlight(); })
     .on('click',(e,n)=>{ e.stopPropagation(); hideTT(); toggleOrgFocus(n.name,n.pids); });
   mLabelG.selectAll('text').data(nodes,n=>n.name).join('text')
-    .attr('class','m-label')
+    .attr('class',n=>n.isNL?'m-label':'m-label eu')
     .text(n=>n.name.length>34?n.name.slice(0,32)+'…':n.name);
   renderMapInfo(nodes,unplaced,abroad);
   layoutMap();
   applyMapHighlight();
   renderOrgPanel();   // filters changed: refresh the open panel
+}
+
+// Fit the map to what is on it: the Netherlands, or Europe with the partners
+function fitMapToNodes(){
+  if(!mapReady) return;
+  if(!euOnMap || !mapNodes.length){ mapObj.fitBounds(MAP_BOUNDS,{padding:20}); return; }
+  const lons=mapNodes.map(n=>n.clon), lats=mapNodes.map(n=>n.clat);
+  mapObj.fitBounds([[d3.min(lons),d3.min(lats)],[d3.max(lons),d3.max(lats)]],{padding:60, maxZoom:7});
 }
 
 // Labels: the biggest organisations, more as you zoom in; when something is
@@ -1760,7 +1829,7 @@ function updateMapLabels(){
   // Biggest first; a label that would overlap one already placed is left out
   const boxes=[], show=new Set();
   for(const n of wanted){
-    const w=Math.min(n.name.length,33)*5.4+6, b={x0:n.x-w/2, x1:n.x+w/2, y0:n.y+n.r+1, y1:n.y+n.r+14};
+    const w=Math.min(n.name.length,33)*5.4+6, b={x0:n.x-w/2, x1:n.x+w/2, y0:n.y+n.rr+1, y1:n.y+n.rr+14};
     if(boxes.some(o=>b.x0<o.x1&&b.x1>o.x0&&b.y0<o.y1&&b.y1>o.y0)) continue;
     boxes.push(b); show.add(n.name);
   }
@@ -1799,8 +1868,8 @@ function showMapTT(e,n){
   const partners=mapEdges.filter(x=>x.a===n||x.b===n)
     .sort((a,b)=>b.pids.size-a.pids.size).slice(0,5)
     .map(x=>`${esc((x.a===n?x.b:x.a).name)} (${x.pids.size})`);
-  ttEl.innerHTML=`<div class="tth" style="color:#fb923c">${esc(n.name)}</div>
-    <div class="tts">${esc(n.city)} · ${n.pids.size} project${n.pids.size!==1?'s':''}${n.pi?` · coordinator of ${n.pi}`:''}</div>
+  ttEl.innerHTML=`<div class="tth" style="color:${n.isNL?'#fb923c':'#facc15'}">${esc(n.name)}</div>
+    <div class="tts">${esc(n.city)}${n.isNL?'':', '+esc(n.country)} · ${n.pids.size} project${n.pids.size!==1?'s':''}${n.pi?` · coordinator of ${n.pi}`:''}</div>
     <div class="tts" style="color:#d2a8ff">${n.estimated?'~':''}${fmtEuro(n.fund)} funding share</div>
     ${partners.length?`<div class="tts" style="margin-top:4px">Most projects shared with: ${partners.join(', ')}</div>`:''}
     <div class="tts" style="margin-top:5px;color:#58a6ff">Click for its projects and keywords</div>`;
@@ -1888,7 +1957,7 @@ function renderOrgPanel(){
   // Keep the organisation in view: pan if the panel would cover it
   const free=wrap.clientWidth-el.offsetWidth-30;
   const node=view==='map' && mapNodes.find(x=>x.name===name);
-  if(node && node.x+node.r>free) mapObj.panBy([node.x+node.r-free+40,0]);
+  if(node && node.x+node.rr>free) mapObj.panBy([node.x+node.rr-free+40,0]);
   if(view==='network' && pinnedNode && pinnedNode.label===name){
     const t=d3.zoomTransform(svg.node()), sx=t.applyX(pinnedNode.x);
     if(sx>free) svg.transition().duration(400).call(zoomBehavior.translateBy,-(sx-free+60)/t.k,0);
@@ -1899,12 +1968,23 @@ function renderOrgPanel(){
 
 function renderMapInfo(nodes,unplaced,abroad){
   const miss=[...unplaced].sort((a,b)=>b[1]-a[1]);
-  const abroadOrgs=[...abroad.values()].reduce((s,v)=>s+v.size,0);
+  const nl=nodes.filter(n=>n.isNL).length, eu=nodes.length-nl;
   document.getElementById('map-info').innerHTML=
-    `<b>${nodes.length}</b> Dutch organisations on the map
-    ${miss.length?`<details><summary>${miss.length} without a known location</summary>
+    `<b>${nl}</b> Dutch organisations${euOnMap?` · <b>${eu}</b> European research partners`:''} on the map
+    ${miss.length?`<details><summary>${miss.length} Dutch without a known location</summary>
       <div class="mi-list">${miss.map(([n,c])=>`${esc(n)} <span>(${c})</span>`).join('<br>')}</div></details>`:''}
-    ${abroadOrgs?`<div>${abroadOrgs} partners abroad, in ${abroad.size} countries: see the network</div>`:''}`;
+    ${abroad.size?`<div>${abroad.size} ${euOnMap?'other ':''}partners abroad${euOnMap
+      ?' (companies, outside Europe or unknown location): see the network'
+      :': tick “European research partners” to add universities and research organisations'}</div>`:''}`;
+}
+
+// The base map's style, without roads, railways, ferry routes, airports and buildings
+async function mapStyle(){
+  const r=await fetch(MAP_STYLE);
+  if(!r.ok) throw new Error(`map style HTTP ${r.status}`);
+  const style=await r.json();
+  style.layers=style.layers.filter(l=>!MAP_DROP_LAYERS.has(l['source-layer']));
+  return style;
 }
 
 function loadMapLibre(){
@@ -1917,19 +1997,11 @@ function loadMapLibre(){
     js.onload=resolve;
     js.onerror=()=>{ mapLoading=null; reject(new Error('MapLibre did not load')); };
     document.head.appendChild(js);
-  }).then(()=>new Promise(resolve=>{
+  }).then(mapStyle).then(style=>new Promise(resolve=>{
     mapObj=new maplibregl.Map({
-      container:'map',
-      style:{version:8,
-        // OpenStreetMap's standard tiles, as on the company map, made dark in
-        // CSS (#map canvas). Muted here so the organisations stand out.
-        sources:{osm:{type:'raster', tileSize:256,
-          tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-          attribution:'© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'}},
-        layers:[{id:'osm', type:'raster', source:'osm',
-                 paint:{'raster-saturation':-0.85, 'raster-contrast':-0.15}}]},
+      container:'map', style,
       bounds:MAP_BOUNDS, fitBoundsOptions:{padding:20},
-      minZoom:5.5, maxZoom:13, dragRotate:false, pitchWithRotate:false,
+      minZoom:3, maxZoom:13, dragRotate:false, pitchWithRotate:false,
       attributionControl:{compact:true},
     });
     mapObj.touchZoomRotate.disableRotation();
@@ -1951,7 +2023,7 @@ function setView(v){
   if(v==='map'){
     loadMapLibre()
       .then(()=>{ mapObj.resize(); render(); })
-      .catch(e=>{ document.getElementById('map-info').textContent='The map could not be loaded ('+e.message+').'; });
+      .catch(e=>{ mapLoading=null; document.getElementById('map-info').textContent='The map could not be loaded ('+e.message+').'; });
   }
   render();
 }
@@ -2016,6 +2088,13 @@ document.querySelectorAll('[data-prog]').forEach(btn=>btn.addEventListener('clic
 
 document.getElementById('btnAll').addEventListener('click',()=>{allKwSet().forEach(k=>activeKw.add(k));renderKeywords();render();});
 document.getElementById('btnNone').addEventListener('click',()=>{activeKw.clear();renderKeywords();render();});
+
+// European research partners on the map
+document.getElementById('euToggle').addEventListener('change',e=>{
+  euOnMap=e.target.checked;
+  render();
+  fitMapToNodes();
+});
 
 // Dutch-led only
 document.getElementById('nlLedToggle').addEventListener('change',e=>{
