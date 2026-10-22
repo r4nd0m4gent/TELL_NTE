@@ -360,7 +360,7 @@ svg#graph-svg{cursor:default}
     <div class="map-only">
       <div class="lr"><div class="ldot" style="background:#c2410c;border:1.5px solid #fb923c"></div><div class="ll">Dutch organisation, at its main seat</div></div>
       <div class="lr"><div class="ldot" style="background:#ca8a04;border:1.5px solid #facc15"></div><div class="ll">European university or research organisation</div></div>
-      <div class="lr"><div class="lline" style="background:#8b949e"></div><div class="ll">Shared projects (thicker = more)</div></div>
+      <div class="lr"><div class="lline" style="background:#fb923c"></div><div class="ll">Shared projects of the organisation you click (thicker = more)</div></div>
       <div class="ll" style="font-size:9px;color:#484f58;margin-top:2px">Circle size = number of projects · organisations in one city are spread around it · click one to list its projects</div>
     </div>
     <div class="leg-grid net-only">
@@ -1788,13 +1788,17 @@ function positionMap(){
   }
   mNodeG.selectAll('circle').attr('cx',n=>n.x).attr('cy',n=>n.y);
   mLabelG.selectAll('text').attr('x',n=>n.x).attr('y',n=>n.y+n.rr+11);
+  positionEdges();
+  overlayRest();   // positions now match the map exactly
+}
+
+function positionEdges(){
   mEdgeG.selectAll('path').attr('d',e=>{
     const {x:x1,y:y1}=e.a, {x:x2,y:y2}=e.b;
     // A slight bend keeps lines between nearby cities apart
     const mx=(x1+x2)/2-(y2-y1)*0.18, my=(y1+y2)/2+(x2-x1)*0.18;
     return `M${x1},${y1}Q${mx},${my} ${x2},${y2}`;
   });
-  overlayRest();   // positions now match the map exactly
 }
 
 function renderMap(projects){
@@ -1803,8 +1807,6 @@ function renderMap(projects){
   mapNodes=nodes; mapEdges=edges; mapHover=null;
   edges.sort((a,b)=>a.pids.size-b.pids.size);   // strongest drawn last, on top
   nodes.sort((a,b)=>b.r-a.r);                    // small circles on top of big ones
-  mEdgeG.selectAll('path').data(edges).join('path')
-    .attr('class','m-edge').attr('stroke-width',e=>0.6+Math.sqrt(e.pids.size)*0.9);
   mNodeG.selectAll('circle').data(nodes,n=>n.name).join('circle')
     .attr('class',n=>n.isNL?'m-node':'m-node eu').attr('r',n=>n.r)
     .on('mouseover',(e,n)=>{ mapHover=n; showMapTT(e,n); applyMapHighlight(); })
@@ -1848,6 +1850,8 @@ function updateMapLabels(){
 
 // Hover: an organisation and its partners. Otherwise the selected organisation's
 // projects, or the search matches.
+// Lines are only drawn for the selected organisation (to the partners it shares
+// projects with): all of them at once made the map slow and busy.
 function applyMapHighlight(){
   if(!mapReady) return;
   let lit=null, litEdge=null, center=null;
@@ -1867,9 +1871,13 @@ function applyMapHighlight(){
   mNodeG.selectAll('circle')
     .classed('dim',n=>!!lit&&!lit.has(n.name))
     .classed('center',n=>n.name===center);
-  mEdgeG.selectAll('path')
-    .classed('dim',e=>!!litEdge&&!litEdge(e))
-    .classed('lit',e=>!!litEdge&&litEdge(e));
+  const sel=selectedOrg && mapNodes.find(n=>n.name===selectedOrg);
+  const shown=!selectedOrg ? []
+    : sel ? mapEdges.filter(e=>e.a===sel||e.b===sel)
+    : mapEdges.filter(e=>[...e.pids].some(id=>orgFocusSet.has(id)));   // selected, but not on the map
+  mEdgeG.selectAll('path').data(shown).join('path')
+    .attr('class','m-edge lit').attr('stroke-width',e=>0.8+Math.sqrt(e.pids.size)*1.1);
+  positionEdges();
   mapLit=lit;
   updateMapLabels();
 }
