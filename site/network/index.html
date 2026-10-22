@@ -117,7 +117,9 @@ body:not(.view-map) .map-only{display:none!important}
 .mp-partner span{color:#484f58}
 /* While the panel is open, the zoom buttons move to its left */
 #canvas-wrap.pop-open .maplibregl-ctrl-bottom-right{right:390px}
-#map-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+#map-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;
+         overflow:visible;transform-origin:0 0;will-change:transform}
+#map-svg.zooming .m-label{display:none}   /* labels would scale along while zooming */
 .m-node{fill:#c2410c;stroke:#fb923c;stroke-width:1.5;fill-opacity:.85;pointer-events:all;cursor:pointer;transition:opacity .15s}
 .m-node.eu{fill:#ca8a04;stroke:#facc15}
 .m-node.dim{opacity:.15}
@@ -1622,9 +1624,15 @@ function hideTT(){ ttEl.style.display='none'; }
 const MAPLIBRE='https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min';
 const MAP_BOUNDS=[[3.3,50.72],[7.25,53.56]];   // the Netherlands
 // Base map: OpenFreeMap's dark style (vector tiles, no key), without the layers
-// for roads, railways, ferry routes, airports and buildings
+// for roads, railways, ferry routes, airports, buildings, land use and rivers,
+// and without the shaded relief images. That leaves land, water, borders and
+// place names: less to download and to draw.
 const MAP_STYLE='https://tiles.openfreemap.org/styles/dark';
-const MAP_DROP_LAYERS=new Set(['transportation','transportation_name','aeroway','building']);
+const MAP_DROP_LAYERS=new Set(['transportation','transportation_name','aeroway','building',
+  'landcover','landuse','park','waterway']);
+// Tiles get no more detailed than this zoom: without streets nothing is gained,
+// and zooming in further just enlarges them, without new downloads
+const MAP_TILE_MAXZOOM=7;
 // "European research partners": universities (HES) and research organisations
 // (REC) in these countries
 const EUROPE=new Set(['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','EL','GR','HU','IE','IT',
@@ -1748,6 +1756,7 @@ function buildMapData(projects){
 // in pixels, so they hold while panning; zooming recomputes them.
 function layoutMap(){
   if(!mapReady) return;
+  layoutZoom=mapObj.getZoom();
   // Smaller circles when zoomed out (Europe), full size from about zoom 7.5
   const f=Math.max(0.4, Math.min(1, (mapObj.getZoom()-3)/4.5));
   for(const n of mapNodes) n.rr=n.r*f;
@@ -1785,6 +1794,7 @@ function positionMap(){
     const mx=(x1+x2)/2-(y2-y1)*0.18, my=(y1+y2)/2+(x2-x1)*0.18;
     return `M${x1},${y1}Q${mx},${my} ${x2},${y2}`;
   });
+  overlayRest();   // positions now match the map exactly
 }
 
 function renderMap(projects){
@@ -1983,8 +1993,32 @@ async function mapStyle(){
   const r=await fetch(MAP_STYLE);
   if(!r.ok) throw new Error(`map style HTTP ${r.status}`);
   const style=await r.json();
-  style.layers=style.layers.filter(l=>!MAP_DROP_LAYERS.has(l['source-layer']));
+  // Our own copy of the tile source, so its zoom can be capped
+  const tiles=await (await fetch(style.sources.openmaptiles.url)).json();
+  style.sources={openmaptiles:{type:'vector', tiles:tiles.tiles, minzoom:0,
+    maxzoom:MAP_TILE_MAXZOOM, attribution:tiles.attribution}};
+  style.layers=style.layers.filter(l=>l.source!=='ne2_shaded' && !MAP_DROP_LAYERS.has(l['source-layer']));
   return style;
+}
+
+// While the map moves, the overlay is slid and scaled as one picture, which
+// costs the browser almost nothing, instead of redrawing every circle and line
+// on each frame. When the map stops, it is laid out again for the new view.
+let overlayRef=null, layoutZoom=null;
+function overlayRest(){
+  const c=mapObj.getContainer();
+  overlayRef={tl:mapObj.unproject([0,0]), br:mapObj.unproject([c.clientWidth,c.clientHeight]), w:c.clientWidth};
+  mapSvg.style('transform',null).classed('zooming',false);
+}
+function overlayMove(){
+  if(!overlayRef) return;
+  // The map only pans and zooms, so the overlay moves by a shift and a scale
+  const a=mapObj.project(overlayRef.tl), b=mapObj.project(overlayRef.br);
+  const k=(b.x-a.x)/overlayRef.w;
+  // Zoomed in or out by more than half again: redraw at true size, so circles
+  // don't balloon or shrink during a long zoom
+  if(k>1.5 || k<0.67){ positionMap(); return; }
+  mapSvg.style('transform',`translate(${a.x}px,${a.y}px) scale(${k})`).classed('zooming',Math.abs(k-1)>0.01);
 }
 
 function loadMapLibre(){
@@ -2003,11 +2037,12 @@ function loadMapLibre(){
       bounds:MAP_BOUNDS, fitBoundsOptions:{padding:20},
       minZoom:3, maxZoom:13, dragRotate:false, pitchWithRotate:false,
       attributionControl:{compact:true},
+      fadeDuration:0,   // place names appear at once instead of fading in
     });
     mapObj.touchZoomRotate.disableRotation();
     mapObj.addControl(new maplibregl.NavigationControl({showCompass:false}),'bottom-right');
-    mapObj.on('move',positionMap);
-    mapObj.on('zoomend',layoutMap);
+    mapObj.on('move',overlayMove);
+    mapObj.on('moveend',()=>{ mapObj.getZoom()!==layoutZoom ? layoutMap() : positionMap(); });
     mapObj.on('resize',layoutMap);
     mapObj.on('click',()=>{ if(selectedOrg) clearOrgFocus(); });
     mapObj.on('load',()=>{ mapReady=true; resolve(); });
