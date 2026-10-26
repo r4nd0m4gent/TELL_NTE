@@ -800,10 +800,9 @@ app.layout = html.Div([
     # The same markup and styles as the funding network's (site/network/index.html):
     # change both together.
     html.Header([
-        html.A([
-            html.Img(src='https://newtexeco.nl/wp-content/uploads/2023/12/logo_2x.png', alt='NewTexEco'),
-            html.Span('NewTexEco · Textile Ecosystem Living Lab', className='site-label'),
-        ], href='../', className='tell-brand', title='Back to the TELL home page'),
+        html.A(html.Img(src='https://newtexeco.nl/wp-content/uploads/2023/12/logo_2x.png', alt='NewTexEco'),
+               href='../', className='tell-brand', title='Back to the TELL home page'),
+        html.Div('Business activity and specializations', className='tell-page-title'),
         html.A([html.Span('←', **{'aria-hidden': 'true'}), ' Back to Home'],
                href='../', className='tell-home'),
     ], className='tell-header'),

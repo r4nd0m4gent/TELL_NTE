@@ -6,11 +6,13 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
     display: flex; align-items: center; gap: 16px;
     font-family: 'Inter', sans-serif;
 }
-.tell-header .tell-brand { display: flex; align-items: center; gap: 16px; text-decoration: none; min-width: 0; }
-.tell-header img { height: 44px; object-fit: contain; }
-.tell-header .site-label {
-    color: rgba(255,255,255,0.75); font-size: 12px; font-weight: 600;
-    letter-spacing: 1.5px; text-transform: uppercase;
+.tell-header .tell-brand { display: flex; align-items: center; flex-shrink: 0; }
+.tell-header img { display: block; height: 44px; object-fit: contain; }
+/* The page's name, beside the logo after a thin divider */
+.tell-header .tell-page-title {
+    margin: 0; padding-left: 16px; border-left: 1px solid rgba(255,255,255,0.35);
+    display: flex; align-items: center; min-height: 32px;
+    color: #fff; font-size: 20px; font-weight: 600; line-height: 1.2;
 }
 .tell-header .tell-home {
     margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
@@ -196,7 +198,8 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
 @media (max-width: 768px) {
     .tell-header { padding: 14px 20px; }
     .tell-header img { height: 36px; }
-    .tell-header .site-label { display: none; }   /* no room beside the button */
+    .tell-header { gap: 12px; }
+    .tell-header .tell-page-title { font-size: 15px; padding-left: 12px; }
     /* Tighter outer padding to reclaim screen width */
     .tell-app { padding: 12px !important; }
 
