@@ -812,7 +812,6 @@ app.layout = html.Div([
 
     # ── Intro ─────────────────────────────────────────────────────────────────
     html.Div([
-        html.H1('Textile Ecosystem Living Lab'),
         html.P('The TELL aims to improve the visibility of the companies operating in the '
                'Textile, Clothing, Leather, and Footwear (TCLF) sector by showing geographic '
                'distribution and market specializations through keywords (or tags). In this '
