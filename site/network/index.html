@@ -2,61 +2,98 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>NL Textile Research Funding Network — All Sources</title>
+<title>Textile Research Funding Network – TELL</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
 /* The network fills the first screen; the tables follow below it. Their tab
    row peeks out at the bottom so it is clear the page scrolls. */
-#viz{height:calc(100vh - 44px);min-height:520px;display:flex;flex-direction:column}
+#viz{height:calc(100vh - 44px);min-height:600px;display:flex;flex-direction:column}
 
-/* ── Top bar ─────────────────────────────────────────────────────────── */
-#topbar,#filterbar{display:flex;align-items:center;gap:9px;padding:7px 12px;background:#161b22;border-bottom:1px solid #30363d;flex-shrink:0;flex-wrap:wrap}
-#filterbar{background:#11161d}
-.bar-right{margin-left:auto;display:flex;align-items:center;gap:9px}
-.chk{display:flex;align-items:center;gap:4px;font-size:11px;color:#8b949e;cursor:pointer;white-space:nowrap;user-select:none}
-.chk input{width:12px;height:12px}
-#topbar h1{font-size:13px;font-weight:700;color:#58a6ff;white-space:nowrap;letter-spacing:.02em}
-#homeLink{font-size:11px;font-weight:600;color:#8b949e;text-decoration:none;white-space:nowrap}
-#homeLink:hover{color:#e6edf3}
-.vsep{width:1px;height:20px;background:#30363d;flex-shrink:0}
+/* ── Header: the TELL brand bar, as on the home page and the dashboard ── */
+#topbar{display:flex;align-items:center;gap:16px;padding:10px 20px;background:#513773;flex-shrink:0;flex-wrap:wrap}
+#homeLink{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;
+  background:#fff;color:#513773;font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap;
+  box-shadow:0 1px 3px rgba(0,0,0,.25);transition:background .15s,transform .15s}
+#homeLink:hover,#homeLink:focus-visible{background:#efe9f7;transform:translateX(-2px)}
+#homeLink:focus-visible{outline:2px solid #fff;outline-offset:2px}
+#brandLogo{height:30px;object-fit:contain}
+#topbar h1{font-size:17px;font-weight:700;color:#fff;white-space:nowrap}
+.bar-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+/* Network / map switch: white on the purple bar */
+#viewGroup{display:flex;border:1px solid rgba(255,255,255,.5);border-radius:8px;overflow:hidden}
+.view-btn{padding:7px 16px;font-size:13px;font-weight:600;font-family:inherit;background:transparent;color:rgba(255,255,255,.85);border:none;cursor:pointer;transition:background .15s}
+.view-btn+.view-btn{border-left:1px solid rgba(255,255,255,.5)}
+.view-btn:hover{background:rgba(255,255,255,.12)}
+.view-btn.active{background:#fff;color:#513773}
 
-.btn-group{display:flex;gap:3px}
-.tog-btn{padding:3px 9px;font-size:11px;border-radius:4px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer;transition:all .15s;white-space:nowrap}
+/* ── Filter panel: a labelled control per filter, like the dashboard ─── */
+#filterbar{display:flex;align-items:flex-end;gap:14px 22px;padding:10px 20px 12px;background:#161b22;border-bottom:1px solid #30363d;flex-shrink:0;flex-wrap:wrap}
+.fgroup{display:flex;flex-direction:column;gap:5px;min-width:0}
+.flabel{font-size:11px;font-weight:600;color:#9da7b3;letter-spacing:.02em;white-space:nowrap}
+.fsearch{flex:1;min-width:240px;max-width:460px}
+.fscope{display:flex;flex-direction:column;gap:4px;justify-content:center;min-height:32px}
+.chk{display:flex;align-items:center;gap:6px;font-size:12px;color:#c9d1d9;cursor:pointer;white-space:nowrap;user-select:none}
+.chk input{width:14px;height:14px}
+
+@media (max-width:640px){
+  #topbar{gap:10px;padding:10px 16px}
+  #brandLogo{display:none}
+  #topbar h1{font-size:15px;white-space:normal;flex:1 1 100%;order:3}
+  #filterbar{padding:10px 16px}
+  .fsearch{min-width:100%}
+  #statbar{padding:6px 16px}
+}
+
+/* ── Status strip: counts, and the label switches of the network ───── */
+#statbar{display:flex;align-items:center;gap:6px 16px;padding:6px 20px;background:#11161d;border-bottom:1px solid #30363d;flex-shrink:0;flex-wrap:wrap;min-height:32px}
+#statbar .chk{font-size:11px;color:#8b949e}
+
+.btn-group{display:flex;gap:4px}
+.tog-btn{height:32px;padding:0 12px;font-size:12px;font-weight:600;font-family:inherit;border-radius:6px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer;transition:all .15s;white-space:nowrap}
+.tog-btn:hover{color:#e6edf3;border-color:#8b949e}
 .tog-btn.active{border-color:#388bfd;background:#1f6feb;color:#fff}
-.tog-btn.prog-nwo.active    {background:#00ffff;border-color:#a78bfa}
+.tog-btn.prog-nwo.active    {background:#00ffff;border-color:#a78bfa;color:#0d1117}
 .tog-btn.prog-erasmus.active{background:#238636;border-color:#3fb950}
 .tog-btn.prog-he.active     {background:#1f6feb;border-color:#388bfd}
 .tog-btn.prog-h2020.active  {background:#0969da;border-color:#1f6feb}
 
-.stat{font-size:11px;color:#8b949e;white-space:nowrap}
+.stat{font-size:12px;color:#8b949e;white-space:nowrap}
 .stat b{font-weight:700}
 .s-count b{color:#e6edf3}
 .s-pct   b{color:#3fb950}
 .s-fund  b{color:#d2a8ff}
 
 /* ── Year range ──────────────────────────────────────────────────────── */
-.yr-wrap{display:flex;align-items:center;gap:5px;white-space:nowrap}
-.yr-label{font-size:11px;color:#8b949e}
-.yr-track{position:relative;width:140px;height:20px;display:flex;align-items:center}
+.yr-wrap{display:flex;align-items:center;gap:8px;white-space:nowrap;height:32px;padding:0 10px;border:1px solid #30363d;border-radius:6px;background:#0d1117}
+.yr-track{position:relative;width:150px;height:20px;display:flex;align-items:center}
 .yr-track input[type=range]{position:absolute;width:100%;pointer-events:none;-webkit-appearance:none;appearance:none;height:3px;border-radius:2px;background:transparent;outline:none}
 .yr-track input[type=range]::-webkit-slider-thumb{pointer-events:all;-webkit-appearance:none;appearance:none;width:13px;height:13px;border-radius:50%;cursor:pointer;border:1.5px solid #30363d}
 #yrFrom::-webkit-slider-thumb{background:#58a6ff}
 #yrTo::-webkit-slider-thumb  {background:#3fb950}
 .yr-fill{position:absolute;height:3px;border-radius:2px;background:linear-gradient(90deg,#58a6ff,#3fb950);pointer-events:none}
-.yr-vals{font-size:11px;color:#e6edf3;font-weight:600;min-width:68px;text-align:center}
+.yr-vals{font-size:12px;color:#e6edf3;font-weight:600;min-width:76px;text-align:center}
 
-#searchBox{padding:3px 9px;font-size:11px;border-radius:5px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;width:150px;transition:border-color .15s}
-#searchBox:focus{outline:none;border-color:#58a6ff}
+/* Search: a full-size field with a magnifier, like the dashboard's dropdowns */
+.search-wrap{position:relative;display:flex;align-items:center}
+.search-wrap svg{position:absolute;left:10px;width:15px;height:15px;color:#8b949e;pointer-events:none}
+#searchBox{width:100%;height:32px;padding:0 32px 0 32px;font-size:13px;font-family:inherit;border-radius:6px;border:1px solid #484f58;background:#0d1117;color:#e6edf3;transition:border-color .15s,box-shadow .15s}
+#searchBox:focus{outline:none;border-color:#58a6ff;box-shadow:0 0 0 3px rgba(56,139,253,.25)}
 #searchBox.has-match{border-color:#3fb950}
-#searchBox::placeholder{color:#484f58}
-#searchClear{font-size:11px;padding:3px 6px;border-radius:4px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer;display:none}
+#searchBox::placeholder{color:#6e7681}
+#searchBox::-webkit-search-cancel-button{display:none}
+#searchClear{position:absolute;right:5px;width:22px;height:22px;font-size:12px;border-radius:4px;border:none;background:none;color:#8b949e;cursor:pointer;display:none}
+#searchClear:hover{background:#21262d;color:#e6edf3}
 #searchClear.visible{display:block}
+#searchHint{font-weight:400;color:#6e7681}
 
 /* ── Keyword filter (dropdown) ────────────────────────────────────── */
 .kw-dd{position:relative}
+#kwBtn{min-width:170px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0d1117;color:#e6edf3;font-weight:400;border-color:#484f58}
+#kwBtn b{color:#79c0ff}
 .tog-btn.open{border-color:#58a6ff;color:#e6edf3}
 #kw-section{display:none;position:absolute;top:calc(100% + 6px);left:0;width:270px;max-height:min(440px,70vh);background:#161b22;border:1px solid #30363d;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:50;flex-direction:column;overflow:hidden}
 #kw-section.open{display:flex}
@@ -89,8 +126,11 @@ body:not(.view-map) .map-only{display:none!important}
 /* ── Map view ─────────────────────────────────────────────────────────── */
 #map{position:absolute;inset:0;background:#0d1117}
 #legend .map-only{max-width:270px}
-/* Organisation panel: opens on a click and stays until closed */
+/* Profile panel of an organisation or a project: opens on a click and stays
+   until closed. It sits in the network or map; once they are scrolled out of
+   view (reading the tables), it floats at the side of the window instead. */
 #org-pop{position:absolute;top:10px;right:10px;bottom:10px;width:370px;max-width:calc(100% - 20px);z-index:6;background:rgba(22,27,34,.97);border:1px solid #30363d;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden}
+#org-pop.floating{position:fixed;top:12px;bottom:12px;right:12px;z-index:60;width:400px;max-width:calc(100vw - 24px);box-shadow:0 12px 40px rgba(0,0,0,.6)}
 #org-pop[hidden]{display:none}
 .mp-head{padding:12px 14px 10px;border-bottom:1px solid #30363d;position:relative;flex-shrink:0}
 .mp-name{font-size:14px;font-weight:700;color:#fb923c;padding-right:26px;line-height:1.3}
@@ -115,6 +155,31 @@ body:not(.view-map) .map-only{display:none!important}
 .mp-partner{display:block;width:100%;background:none;border:none;color:#c9d1d9;cursor:pointer;font-size:11px;padding:3px 0;text-align:left}
 .mp-partner:hover{color:#fb923c}
 .mp-partner span{color:#484f58}
+/* Project titles in a panel open that project's profile; ↗ opens its page */
+.mp-plink{display:inline;background:none;border:none;padding:0;font:inherit;font-size:12px;line-height:1.35;color:#e6edf3;text-align:left;cursor:pointer}
+.mp-plink:hover{color:#58a6ff;text-decoration:underline}
+.mp-ext{color:#58a6ff;text-decoration:none;font-size:11px;margin-left:4px;white-space:nowrap}
+.mp-ext:hover{text-decoration:underline}
+/* Project profile */
+.mp-kicker{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:#8b949e;margin-bottom:6px;padding-right:26px}
+.mp-name.proj{color:#e6edf3}
+.mp-full{font-size:12px;color:#c9d1d9;line-height:1.4;margin-top:4px}
+.mp-open{display:inline-flex;align-items:center;gap:5px;margin-top:9px;padding:5px 11px;border-radius:6px;border:1px solid #388bfd;color:#79c0ff;font-size:12px;font-weight:600;text-decoration:none}
+.mp-open:hover{background:#1f6feb;color:#fff}
+.mp-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px}
+.mp-stat{background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:6px 8px;min-width:0}
+.mp-stat span{display:block;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#8b949e}
+.mp-stat b{display:block;font-size:13px;color:#e6edf3;margin-top:2px;overflow-wrap:anywhere}
+.mp-stat b.grant{color:#d2a8ff}
+.mp-summary{font-size:12px;line-height:1.55;color:#c9d1d9;white-space:pre-line}
+.mp-summary.clamped{display:-webkit-box;-webkit-line-clamp:7;line-clamp:7;-webkit-box-orient:vertical;overflow:hidden}
+.mp-more{background:none;border:none;color:#58a6ff;font-size:11px;cursor:pointer;padding:3px 0 0}
+.mp-org{display:flex;gap:8px;align-items:baseline;padding:5px 0;border-top:1px solid #21262d}
+.mp-org .mp-partner{width:auto;flex:1;padding:0;font-size:12px}
+.mp-org .mp-partner.nl{color:#fb923c}
+.mp-org .mp-partner:hover{text-decoration:underline}
+.mp-org .mp-where{font-size:10px;color:#8b949e;white-space:nowrap}
+.mp-people{font-size:10px;color:#8b949e;margin-top:1px}
 /* While the panel is open, the zoom buttons move to its left */
 #canvas-wrap.pop-open .maplibregl-ctrl-bottom-right{right:390px}
 #map-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;
@@ -188,8 +253,13 @@ body:not(.view-map) .map-only{display:none!important}
 .tbl .pcell{min-width:280px;max-width:520px}
 .tbl .kws{font-size:11px;color:#79c0ff;max-width:240px}
 .tbl .grant{color:#d2a8ff}
-.tbl a.ptitle{color:#e6edf3;text-decoration:none}
-.tbl a.ptitle:hover{color:#58a6ff;text-decoration:underline}
+.tbl .ptitle{color:#e6edf3}
+#projTable tbody tr{cursor:pointer}
+#projTable tbody tr:hover .ptitle{color:#58a6ff;text-decoration:underline}
+#projTable tr.selected td{background:#1a1a2a}
+#projTable tr.selected td:first-child{box-shadow:inset 3px 0 #58a6ff}
+.tbl a.ext{color:#58a6ff;text-decoration:none;margin-left:5px}
+.tbl a.ext:hover{text-decoration:underline}
 .tbl tr.in-focus td{background:#1a1a2a}
 .tbl tr.highlighted td{background:#0d2510}
 .tbl tr.highlighted td:first-child{box-shadow:inset 2px 0 #3fb950}
@@ -265,18 +335,90 @@ svg#graph-svg{cursor:default}
 
 <div id="viz">
 
-<!-- ═══ TOP BAR: title + stats ═══════════════════════════════════════════ -->
-<div id="topbar">
-  <a id="homeLink" href="../" title="Back to the TELL home page">← TELL</a>
-  <div class="vsep"></div>
-  <h1>🇳🇱 NL Textile Research Funding</h1>
-  <div class="vsep"></div>
-  <div class="btn-group" id="viewGroup">
-    <button class="tog-btn active" data-view="network" title="Projects and partners as a network">Network</button>
-    <button class="tog-btn" data-view="map" title="Dutch organisations on a map">Map</button>
+<!-- ═══ HEADER: back to TELL, title, view switch ═══════════════════════════ -->
+<header id="topbar">
+  <a id="homeLink" href="../" title="Back to the TELL home page"><span aria-hidden="true">←</span> Back to TELL</a>
+  <img id="brandLogo" src="https://newtexeco.nl/wp-content/uploads/2023/12/logo_2x.png" alt="NewTexEco">
+  <h1>Textile Research Funding Network</h1>
+  <div class="bar-right">
+    <div id="viewGroup" role="group" aria-label="View">
+      <button class="view-btn active" data-view="network" title="Projects and partners as a network">Network</button>
+      <button class="view-btn" data-view="map" title="Dutch organisations on a map">Map</button>
+    </div>
   </div>
-  <div class="vsep"></div>
+</header>
 
+<!-- ═══ FILTER PANEL ═════════════════════════════════════════════════════ -->
+<div id="filterbar">
+  <div class="fgroup">
+    <span class="flabel">Funding programme</span>
+    <div class="btn-group" id="progGroup">
+      <button class="tog-btn prog-nwo active"     data-prog="nwo"     title="NWO / SIA">NWO</button>
+      <button class="tog-btn prog-erasmus active"  data-prog="erasmus" title="Erasmus+">Erasmus+</button>
+      <button class="tog-btn prog-he active"       data-prog="he"      title="Horizon Europe">Horizon Europe</button>
+      <button class="tog-btn prog-h2020 active"    data-prog="h2020"   title="Horizon 2020">H2020</button>
+    </div>
+  </div>
+
+  <!-- Year range -->
+  <div class="fgroup">
+    <span class="flabel">Years active</span>
+    <div class="yr-wrap">
+      <div class="yr-track">
+        <div class="yr-fill" id="yrFill"></div>
+        <input type="range" id="yrFrom" min="2010" max="2027" value="2014" step="1" aria-label="From year">
+        <input type="range" id="yrTo"   min="2010" max="2027" value="2026" step="1" aria-label="To year">
+      </div>
+      <span class="yr-vals" id="yrVals">2014 – 2026</span>
+    </div>
+  </div>
+
+  <!-- Keywords: a dropdown with the checklist -->
+  <div class="fgroup">
+    <span class="flabel">Keywords</span>
+    <div class="kw-dd" id="kwDropdown">
+      <button class="tog-btn" id="kwBtn" aria-expanded="false" aria-controls="kw-section"><span><b id="kwBtnCount">—</b> selected</span> ▾</button>
+      <div id="kw-section">
+        <div id="kw-hdr">
+          Keywords
+          <div style="display:flex;gap:3px">
+            <button class="kwab" id="btnAll">all</button>
+            <button class="kwab" id="btnNone">none</button>
+          </div>
+        </div>
+        <div id="kw-list"></div>
+        <div id="kw-add">
+          <input id="newKwIn" type="text" placeholder="Add keyword…">
+          <button id="addKwBtn">+</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fgroup">
+    <span class="flabel">Projects</span>
+    <div class="fscope">
+      <label class="chk" title="Only projects coordinated by a Dutch organisation: every NWO project, and EU projects with a Dutch coordinator. Untick to include EU projects where a Dutch organisation is a partner.">
+        <input type="checkbox" id="nlLedToggle" checked style="accent-color:#fb923c"> Dutch-led only
+      </label>
+      <label class="chk map-only" title="Also put the European universities and research organisations these projects work with on the map">
+        <input type="checkbox" id="euToggle" style="accent-color:#facc15"> European research partners
+      </label>
+    </div>
+  </div>
+
+  <div class="fgroup fsearch">
+    <label class="flabel" for="searchBox">Search <span id="searchHint">· projects, organisations, people</span></label>
+    <div class="search-wrap">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5" stroke-linecap="round"/></svg>
+      <input id="searchBox" type="search" placeholder="Type to search…" autocomplete="off">
+      <button id="searchClear" title="Clear search" aria-label="Clear search">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ STATUS STRIP: counts ═════════════════════════════════════════════ -->
+<div id="statbar">
   <div class="stat s-count">Projects: <b id="s-matched">—</b></div>
   <div class="stat s-fund">Funding: <b id="s-fund">—</b> <span style="color:#8b949e;font-size:10px">of <b id="s-fund-total">—</b></span> (<b id="s-fund-pct" style="color:#d2a8ff">—</b>)</div>
   <div class="stat">Excluded: <b id="s-excluded" style="color:#f85149">0</b></div>
@@ -294,67 +436,13 @@ svg#graph-svg{cursor:default}
   </div>
 </div>
 
-<!-- ═══ FILTER BAR ═══════════════════════════════════════════════════════ -->
-<div id="filterbar">
-  <div class="btn-group" id="progGroup">
-    <button class="tog-btn prog-nwo active"     data-prog="nwo"     title="NWO / SIA">NWO</button>
-    <button class="tog-btn prog-erasmus active"  data-prog="erasmus" title="Erasmus+">E+</button>
-    <button class="tog-btn prog-he active"       data-prog="he"      title="Horizon Europe">HE</button>
-    <button class="tog-btn prog-h2020 active"    data-prog="h2020"   title="Horizon 2020">H2020</button>
-  </div>
-  <div class="vsep"></div>
-
-  <!-- Year range -->
-  <div class="yr-wrap">
-    <span class="yr-label">Years</span>
-    <div class="yr-track">
-      <div class="yr-fill" id="yrFill"></div>
-      <input type="range" id="yrFrom" min="2010" max="2027" value="2014" step="1">
-      <input type="range" id="yrTo"   min="2010" max="2027" value="2026" step="1">
-    </div>
-    <span class="yr-vals" id="yrVals">2014 – 2026</span>
-  </div>
-  <div class="vsep"></div>
-
-  <!-- Keywords: a dropdown with the checklist -->
-  <div class="kw-dd" id="kwDropdown">
-    <button class="tog-btn" id="kwBtn" aria-expanded="false" aria-controls="kw-section">Keywords <b id="kwBtnCount">—</b> ▾</button>
-    <div id="kw-section">
-      <div id="kw-hdr">
-        Keywords
-        <div style="display:flex;gap:3px">
-          <button class="kwab" id="btnAll">all</button>
-          <button class="kwab" id="btnNone">none</button>
-        </div>
-      </div>
-      <div id="kw-list"></div>
-      <div id="kw-add">
-        <input id="newKwIn" type="text" placeholder="Add keyword…">
-        <button id="addKwBtn">+</button>
-      </div>
-    </div>
-  </div>
-  <div class="vsep"></div>
-
-  <label class="chk" title="Only projects coordinated by a Dutch organisation: every NWO project, and EU projects with a Dutch coordinator. Untick to include EU projects where a Dutch organisation is a partner.">
-    <input type="checkbox" id="nlLedToggle" checked style="accent-color:#fb923c"> 🇳🇱 Dutch-led only
-  </label>
-  <label class="chk map-only" title="Also put the European universities and research organisations these projects work with on the map">
-    <input type="checkbox" id="euToggle" style="accent-color:#facc15"> 🇪🇺 European research partners
-  </label>
-  <div class="vsep"></div>
-
-  <input id="searchBox" type="search" placeholder="Search… (Enter to lock)">
-  <button id="searchClear" title="Clear search">✕</button>
-</div>
-
 <!-- ═══ NETWORK ══════════════════════════════════════════════════════════ -->
 <div id="canvas-wrap">
   <svg id="graph-svg"></svg>
   <div id="map" class="map-only"></div>
   <svg id="map-svg" class="map-only"></svg>
   <div id="map-info" class="map-only">Loading the map…</div>
-  <aside id="org-pop" hidden aria-label="Organisation details"></aside>
+  <aside id="org-pop" hidden aria-label="Profile"></aside>
   <details id="legend" open>
     <summary>Legend</summary>
     <div class="map-only">
@@ -377,7 +465,7 @@ svg#graph-svg{cursor:default}
         <div class="lr"><div class="lline" style="background:#3a4060"></div><div class="ll">Partner link</div></div>
       </div>
     </div>
-    <div class="ll net-only" style="font-size:9px;color:#484f58;margin-top:2px">Circle size = funding amount · click a project to open its page</div>
+    <div class="ll net-only" style="font-size:9px;color:#484f58;margin-top:2px">Circle size = funding amount · click a project or organisation for its profile</div>
   </details>
 </div>
 
@@ -387,7 +475,7 @@ svg#graph-svg{cursor:default}
 <section id="tables">
   <div id="panel-tabs">
     <div class="ptab active" data-panel="proj">Projects <span class="cnt" id="proj-count">0</span></div>
-    <div class="ptab" data-panel="orgs">🇳🇱 NL organisations <span class="cnt" id="nl-org-count">0</span></div>
+    <div class="ptab" data-panel="orgs">Organisations <span class="cnt" id="nl-org-count">0</span></div>
     <div class="tab-actions">
       <button id="downloadBtn">⬇ Download CSV</button>
       <button id="resetExclBtn">Reset excluded</button>
@@ -397,7 +485,7 @@ svg#graph-svg{cursor:default}
   <!-- Projects -->
   <div id="proj-pane" class="pane">
     <div class="tbl-toolbar">
-      <span>Click a title to open the project page · untick ✓ to exclude a wrong match · click a column to sort</span>
+      <span>Click a project for its profile · ↗ opens the project page · untick ✓ to exclude a wrong match · click a column to sort</span>
       <span id="org-focus-note"></span>
     </div>
     <div class="tbl-wrap">
@@ -421,7 +509,7 @@ svg#graph-svg{cursor:default}
   <div id="orgs-pane" class="pane">
     <div class="tbl-toolbar">
       <input id="orgSearchIn" type="search" placeholder="Filter organisations…">
-      <span>Click an organisation to highlight its projects in the network or on the map</span>
+      <span>Click an organisation for its profile and to highlight its projects in the network or on the map</span>
     </div>
     <div class="tbl-wrap">
       <table class="tbl" id="orgTable">
@@ -626,6 +714,7 @@ let searchLocked = false;
 let highlightSet = new Set();
 let orgFocusSet  = new Set();
 let selectedOrg  = null;
+let selectedProj = null;          // project whose profile is open
 let simulation   = null;
 let activePanel  = 'proj';
 let orgFilter    = '';
@@ -1090,29 +1179,43 @@ function orgPids(name){
 // Select an organisation: its projects go to the top of the table, light up in
 // the network or on the map, and its panel opens
 function setOrgFocus(name, pids=orgPids(name)){
-  selectedOrg=name; orgFocusSet=new Set(pids);
+  selectedOrg=name; selectedProj=null; orgFocusSet=new Set(pids);
   updateProjList(currentProjects); renderNLOrgs(currentProjects); applyGraphHighlight();
   syncNetworkPin();
-  renderOrgPanel();
+  renderPanel();
 }
 
-// Network view: pin the selected organisation's dot (its connections stay lit),
-// or unpin when nothing is selected
+// Select a project: its profile opens, and its partners light up in the network
+// or on the map. The table keeps its order, so a click there doesn't move rows.
+function setProjFocus(p){
+  selectedProj=p; selectedOrg=null; orgFocusSet.clear();
+  updateProjList(currentProjects); renderNLOrgs(currentProjects); applyGraphHighlight();
+  syncNetworkPin();
+  renderPanel();
+}
+function toggleProjFocus(p){
+  if(selectedProj===p) clearFocus(); else setProjFocus(p);
+}
+
+// Network view: pin the selected organisation's or project's dot (its
+// connections stay lit), or unpin when nothing is selected
 function syncNetworkPin(){
   if(view!=='network' || !_nodeSel) return;
-  pinnedNode=selectedOrg ? _nodeSel.data().find(n=>n.type==='org'&&n.label===selectedOrg)||null : null;
+  pinnedNode = selectedOrg ? _nodeSel.data().find(n=>n.type==='org'&&n.label===selectedOrg)||null
+             : selectedProj ? _nodeSel.data().find(n=>n.type==='project'&&n.data===selectedProj)||null
+             : null;
   applyHoverHighlight(pinnedNode);
 }
 function toggleOrgFocus(name, pids){
-  if(selectedOrg===name) clearOrgFocus(); else setOrgFocus(name, pids);
+  if(selectedOrg===name) clearFocus(); else setOrgFocus(name, pids);
 }
 
-function clearOrgFocus(){
-  selectedOrg=null; orgFocusSet.clear();
+function clearFocus(){
+  selectedOrg=null; selectedProj=null; orgFocusSet.clear();
   const projs=filteredProjects();
   updateProjList(projs); renderNLOrgs(projs); applyGraphHighlight();
   syncNetworkPin();
-  renderOrgPanel();
+  renderPanel();
 }
 
 // A project's title, with its acronym in front when the title doesn't start with it
@@ -1140,14 +1243,15 @@ function updateProjList(projects) {
 
   const note=document.getElementById('org-focus-note');
   note.innerHTML=selectedOrg
-    ? `Projects of <b>${esc(selectedOrg)}</b> are listed first. <button class="linkbtn" id="clearOrgFocus">Clear</button>`
+    ? `Projects of <b>${esc(selectedOrg)}</b> are listed first. <button class="linkbtn" id="clearFocus">Clear</button>`
     : '';
-  if(selectedOrg) document.getElementById('clearOrgFocus').addEventListener('click',clearOrgFocus);
+  if(selectedOrg) document.getElementById('clearFocus').addEventListener('click',clearFocus);
 
   const MAX=800;
   sorted.slice(0,MAX).forEach(p=>{
     const tr=document.createElement('tr');
-    if(highlightSet.size>0&&highlightSet.has(p.project_id)) tr.classList.add('highlighted');
+    if(selectedProj===p) tr.classList.add('selected');
+    else if(highlightSet.size>0&&highlightSet.has(p.project_id)) tr.classList.add('highlighted');
     else if(orgFocusSet.has(p.project_id)) tr.classList.add('in-focus');
 
     const pk=p._progKey;
@@ -1163,7 +1267,7 @@ function updateProjList(projects) {
 
     tr.innerHTML=`
       <td><input type="checkbox" class="excl-cb" checked title="Untick to exclude this project"></td>
-      <td class="pcell">${url?`<a class="ptitle" href="${esc(url)}" target="_blank" rel="noopener">${titleHtml}</a>`:titleHtml}</td>
+      <td class="pcell"><span class="ptitle">${titleHtml}</span>${url?`<a class="ext" href="${esc(url)}" target="_blank" rel="noopener" title="Open the project page">↗</a>`:''}</td>
       <td><span class="prog-badge ${pk}">${PROG_SHORT[pk]}</span></td>
       <td class="num">${yr||''}</td>
       <td class="num grant">${grant}</td>
@@ -1176,6 +1280,11 @@ function updateProjList(projects) {
       tr.classList.toggle('excluded',!cb.checked);
       // Update stats but don't full re-render (expensive)
       updateStats(filteredProjects());
+    });
+    // Anywhere else on the row: the project's profile
+    tr.addEventListener('click',e=>{
+      if(e.target.closest('input,a')) return;
+      toggleProjFocus(p);
     });
     list.appendChild(tr);
   });
@@ -1212,7 +1321,7 @@ svg.call(zoomBehavior);
 
 svg.on('click',()=>{
   if(pinnedNode){ pinnedNode=null; applyHoverHighlight(null); }
-  if(selectedOrg) clearOrgFocus();
+  if(selectedOrg||selectedProj) clearFocus();
 });
 
 let _nodeSel=null, _linkSel=null, _labelSel=null, _projLabelSel=null;
@@ -1457,7 +1566,7 @@ function render(){
   renderKeywords();
   renderNLOrgs(projects);
   currentProjects=projects;
-  if(view!=='map') renderOrgPanel();
+  if(view!=='map') renderPanel();
 
   if(view==='map'){
     if(simulation) simulation.stop();
@@ -1508,14 +1617,10 @@ function render(){
     })
     .on('click',(e,d)=>{
       e.stopPropagation();
-      if(d.type==='project'){
-        const url=projectUrl(d.data);
-        if(url) window.open(url,'_blank','noopener');
-        return;
-      }
-      // Organisation: pin its connections and open its panel; again to close
+      // Pin the dot's connections and open its profile; click again to close
       hideTT();
-      selectedOrg===d.label ? clearOrgFocus() : setOrgFocus(d.label);
+      if(d.type==='project') toggleProjFocus(d.data);
+      else selectedOrg===d.label ? clearFocus() : setOrgFocus(d.label);
     });
 
   // Org labels — font size scaled by weighted project count, hidden if wcount < 3 in main view
@@ -1601,12 +1706,12 @@ function showTT(e,d){
        ${coord&&!piName?`<div class="tts" style="margin-top:3px">Coord: <b style="color:#e3b341">${esc(normaliseOrgName((coord.organisation||coord.name||'').split('||')[0]).slice(0,55))}</b></div>`:''}
        ${partners.length?`<div class="tts">Partners: ${partners.map(m=>esc(normaliseOrgName((m.organisation||m.name||'').split('||')[0]).slice(0,28))).join(', ')}</div>`:''}
        ${kws.length?`<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:3px">${kws.map(k=>`<span style="background:#1a2040;color:#79c0ff;font-size:9px;padding:1px 5px;border-radius:10px;border:1px solid #2d3a6b">${esc(k)}</span>`).join('')}</div>`:''}
-       ${projectUrl(p)?`<div class="tts" style="margin-top:5px;color:#58a6ff">Click to open the project page ↗</div>`:''}`;
+       <div class="tts" style="margin-top:5px;color:#58a6ff">Click for the project profile</div>`;
   } else {
     h=`<div class="tth" style="color:${d.isNL?'#fb923c':'#fbbf24'}">${esc(d.label)}</div>
        <div class="tts">${d.isNL?'🇳🇱 NL org':'🌍 Non-NL org'} · ${d.isCoord?'PI/Coordinator':'Partner'} · ${d.count} project${d.count!==1?'s':''}</div>
        <div class="tts" style="color:#d2a8ff">${fmtEuro(d.totalFund||0)} funding share</div>
-       <div class="tts" style="margin-top:5px;color:#58a6ff">Click for its projects and keywords</div>`;
+       <div class="tts" style="margin-top:5px;color:#58a6ff">Click for its profile: projects and keywords</div>`;
   }
   ttEl.innerHTML=h; ttEl.style.display='block'; moveTT(e);
 }
@@ -1819,7 +1924,7 @@ function renderMap(projects){
   renderMapInfo(nodes,unplaced,abroad);
   layoutMap();
   applyMapHighlight();
-  renderOrgPanel();   // filters changed: refresh the open panel
+  renderPanel();   // filters changed: refresh the open panel
 }
 
 // Fit the map to what is on it: the Netherlands, or Europe with the partners
@@ -1860,6 +1965,9 @@ function applyMapHighlight(){
     lit=new Set([center]);
     litEdge=e=>e.a===mapHover||e.b===mapHover;
     for(const e of mapEdges) if(litEdge(e)){ lit.add(e.a.name); lit.add(e.b.name); }
+  } else if(selectedProj){
+    const id=selectedProj.project_id;
+    lit=new Set(mapNodes.filter(n=>n.pids.has(id)).map(n=>n.name));
   } else {
     const focus=orgFocusSet.size>0?orgFocusSet:highlightSet;
     if(focus.size>0){
@@ -1872,7 +1980,8 @@ function applyMapHighlight(){
     .classed('dim',n=>!!lit&&!lit.has(n.name))
     .classed('center',n=>n.name===center);
   const sel=selectedOrg && mapNodes.find(n=>n.name===selectedOrg);
-  const shown=!selectedOrg ? []
+  const shown=selectedProj ? mapEdges.filter(e=>e.pids.has(selectedProj.project_id))   // the project's partners
+    : !selectedOrg ? []
     : sel ? mapEdges.filter(e=>e.a===sel||e.b===sel)
     : mapEdges.filter(e=>[...e.pids].some(id=>orgFocusSet.has(id)));   // selected, but not on the map
   mEdgeG.selectAll('path').data(shown).join('path')
@@ -1930,22 +2039,48 @@ function orgPanelData(name){
           partners:[...partners.values()].sort((a,b)=>b.count-a.count).slice(0,8)};
 }
 
-function renderOrgPanel(){
+// The profile panel shows the selected organisation or the selected project
+function renderPanel(){
   const el=document.getElementById('org-pop');
   const wrap=document.getElementById('canvas-wrap');
+  // A project the filters have since hidden closes its profile
+  if(selectedProj && !currentProjects.includes(selectedProj)) selectedProj=null;
   const d=selectedOrg ? orgPanelData(selectedOrg) : null;
-  const open=!!(d && d.projs.length);
+  const open=!!selectedProj || !!(d && d.projs.length);
   wrap.classList.toggle('pop-open',open);
   if(!open){ el.hidden=true; el.innerHTML=''; return; }
 
-  const name=selectedOrg;
+  el.innerHTML=selectedProj ? projPanelHtml(selectedProj) : orgPanelHtml(selectedOrg, d);
+  el.hidden=false;
+  el.querySelector('.mp-body').scrollTop=0;
+  placePanel();
+
+  // Keep the selection in view: pan if the panel would cover it
+  const free=wrap.clientWidth-el.offsetWidth-30;
+  const node=view==='map' && selectedOrg && mapNodes.find(x=>x.name===selectedOrg);
+  if(node && node.x+node.rr>free) mapObj.panBy([node.x+node.rr-free+40,0]);
+  if(view==='network' && pinnedNode && !el.classList.contains('floating')){
+    const t=d3.zoomTransform(svg.node()), sx=t.applyX(pinnedNode.x);
+    if(sx>free) svg.transition().duration(400).call(zoomBehavior.translateBy,-(sx-free+60)/t.k,0);
+  }
+  el.querySelector('.mp-close').addEventListener('click',clearFocus);
+  el.querySelectorAll('[data-org]').forEach(b=>b.addEventListener('click',()=>setOrgFocus(b.dataset.org)));
+  const shown=selectedProj ? [] : d.projs;
+  el.querySelectorAll('[data-proj]').forEach(b=>b.addEventListener('click',()=>setProjFocus(shown[+b.dataset.proj])));
+  const more=el.querySelector('.mp-more');
+  if(more) more.addEventListener('click',()=>{
+    const s=el.querySelector('.mp-summary');
+    more.textContent=s.classList.toggle('clamped') ? 'Show more' : 'Show less';
+  });
+}
+
+function orgPanelHtml(name, d){
   const place=orgCity(name) || d.country;
   const kw=new Map();
   d.projs.forEach(p=>(p._matched_terms||[]).forEach(k=>kw.set(k,(kw.get(k)||0)+1)));
   const kws=[...kw].sort((a,b)=>(activeKw.has(b[0])-activeKw.has(a[0])) || b[1]-a[1]);
   const n=d.projs.length;
-
-  el.innerHTML=`
+  return `
     <div class="mp-head">
       <button class="mp-close" title="Close (Esc)" aria-label="Close">✕</button>
       <div class="mp-name">${esc(name)}</div>
@@ -1957,12 +2092,12 @@ function renderOrgPanel(){
       ${kws.length?`<div class="mp-sec">Keywords</div>
         <div class="mp-chips">${kws.map(([k,c])=>`<span class="mp-chip${activeKw.has(k)?'':' off'}" title="${c} project${c!==1?'s':''}">${esc(k)} · ${c}</span>`).join('')}</div>`:''}
       <div class="mp-sec">Projects</div>
-      ${d.projs.map(p=>{
+      ${d.projs.map((p,i)=>{
         const url=projectUrl(p), yr=projectYear(p);
         const pkws=(p._matched_terms||[]).filter(k=>activeKw.has(k));
         const grant=p.ec_grant_num?`<span class="grant">${p._grant_estimated?'~':''}${fmtEuro(p.ec_grant_num)}</span>`:'';
         return `<div class="mp-proj">
-          ${url?`<a href="${esc(url)}" target="_blank" rel="noopener">${projTitleHtml(p)}</a>`:`<span class="mp-title">${projTitleHtml(p)}</span>`}
+          <button class="mp-plink" data-proj="${i}" title="Open the project profile">${projTitleHtml(p)}</button>${url?`<a class="mp-ext" href="${esc(url)}" target="_blank" rel="noopener" title="Open the project page">↗</a>`:''}
           <div class="mp-pmeta"><span class="prog-badge ${p._progKey}">${PROG_SHORT[p._progKey]}</span>${yr?`<span>${yr}</span>`:''}${grant}<span class="mp-role">${d.roles.get(p.project_id)}</span></div>
           ${pkws.length?`<div class="mp-pkw">${pkws.map(esc).join(' · ')}</div>`:''}
         </div>`;
@@ -1970,19 +2105,83 @@ function renderOrgPanel(){
       ${d.partners.length?`<div class="mp-sec">Most projects shared with</div>
         ${d.partners.map(o=>`<button class="mp-partner" data-org="${esc(o.name)}">${esc(o.name)} <span>· ${o.count} project${o.count!==1?'s':''}${(orgCity(o.name)||o.country)?', '+esc(orgCity(o.name)||o.country):''}</span></button>`).join('')}`:''}
     </div>`;
-  el.hidden=false;
-
-  // Keep the organisation in view: pan if the panel would cover it
-  const free=wrap.clientWidth-el.offsetWidth-30;
-  const node=view==='map' && mapNodes.find(x=>x.name===name);
-  if(node && node.x+node.rr>free) mapObj.panBy([node.x+node.rr-free+40,0]);
-  if(view==='network' && pinnedNode && pinnedNode.label===name){
-    const t=d3.zoomTransform(svg.node()), sx=t.applyX(pinnedNode.x);
-    if(sx>free) svg.transition().duration(400).call(zoomBehavior.translateBy,-(sx-free+60)/t.k,0);
-  }
-  el.querySelector('.mp-close').addEventListener('click',clearOrgFocus);
-  el.querySelectorAll('.mp-partner').forEach(b=>b.addEventListener('click',()=>setOrgFocus(b.dataset.org)));
 }
+
+// The organisations of a project, coordinator first, then the Dutch ones. For
+// NWO projects the members are people, so their names go with their organisation.
+function projectOrgs(p){
+  const orgs=new Map();
+  for(const m of (p.project_members||[])){
+    const raw=(m.organisation||m.name||'').split('||')[0].trim();
+    if(!raw) continue;
+    const name=normaliseOrgName(raw);
+    if(!orgs.has(name)) orgs.set(name,{name, coord:false, people:[],
+      isNL:p._src==='nwo' || NL_CODES.has((m.country||'').toUpperCase()), country:m.country||''});
+    const o=orgs.get(name);
+    if(isCoord(m.role,p._src)) o.coord=true;
+    const person=`${m.first_name||''} ${m.last_name||''}`.trim();
+    if(person) o.people.push(m.role ? `${person} (${m.role.toLowerCase()})` : person);
+  }
+  return [...orgs.values()].sort((a,b)=>(b.coord-a.coord) || (b.isNL-a.isNL) || a.name.localeCompare(b.name));
+}
+
+function projPanelHtml(p){
+  const url=projectUrl(p);
+  // Heading: the acronym, with the full title below, or else the full title
+  const full=(p.title_en||p.title||'').trim();
+  const acr=p._display_name && !full.startsWith(p._display_name) ? p._display_name : '';
+  const name=acr||full||p._display_name;
+  const start=extractYear(p.start_date), end=extractYear(p.end_date);
+  const period=p._src==='erasmus' ? (p.call_year?`call ${p.call_year}`:'')
+    : start&&end&&start!==end ? `${start}–${end}` : (start||end||'');
+  const status=(p.status||'').trim().toLowerCase();
+  const orgs=projectOrgs(p);
+  const summary=(p.objective||p.summary_en||p.summary_nl||'').trim();
+  const kws=[...(p._matched_terms||[])].sort((a,b)=>activeKw.has(b)-activeKw.has(a));
+  const topics=(p.topics||'').trim();
+  const piName=getPIName(p);
+  const stat=(label,value,cls='')=>`<div class="mp-stat"><span>${label}</span><b class="${cls}">${value||'—'}</b></div>`;
+  return `
+    <div class="mp-head">
+      <button class="mp-close" title="Close (Esc)" aria-label="Close">✕</button>
+      <div class="mp-kicker"><span class="prog-badge ${p._progKey}">${PROG_SHORT[p._progKey]}</span>${esc(p.funding_scheme||'')}${status?` · ${esc(status)}`:''}</div>
+      <div class="mp-name proj">${esc(name)}</div>
+      ${acr && full?`<div class="mp-full">${esc(full)}</div>`:''}
+      ${url?`<a class="mp-open" href="${esc(url)}" target="_blank" rel="noopener">Open the project page ↗</a>`:''}
+      <div class="mp-stats">
+        ${stat(p._grant_estimated?'Grant (estimate)':'Grant', p.ec_grant_num?`${p._grant_estimated?'~':''}${fmtEuro(p.ec_grant_num)}`:'', 'grant')}
+        ${stat('Period', esc(period))}
+        ${stat('Organisations', orgs.length)}
+      </div>
+    </div>
+    <div class="mp-body">
+      ${summary?`<div class="mp-sec">Summary</div>
+        <div class="mp-summary${summary.length>500?' clamped':''}">${esc(summary)}</div>
+        ${summary.length>500?'<button class="mp-more">Show more</button>':''}`:''}
+      ${kws.length?`<div class="mp-sec">Keywords</div>
+        <div class="mp-chips">${kws.map(k=>`<span class="mp-chip${activeKw.has(k)?'':' off'}">${esc(k)}</span>`).join('')}</div>`:''}
+      ${topics?`<div class="mp-sec">Topics</div><div class="mp-pkw">${esc(topics)}</div>`:''}
+      ${orgs.length?`<div class="mp-sec">Organisations${piName?` · lead: ${esc(piName)}`:''}</div>
+        ${orgs.map(o=>{
+          const where=orgCity(o.name) || (o.isNL?'NL':o.country);
+          const ppl=o.people.length>5 ? [...o.people.slice(0,5), `+${o.people.length-5} more`] : o.people;
+          return `<div class="mp-org"><div style="flex:1;min-width:0">
+              <button class="mp-partner${o.isNL?' nl':''}" data-org="${esc(o.name)}" title="Open the organisation's profile">${esc(o.name)}</button>
+              ${ppl.length?`<div class="mp-people">${ppl.map(esc).join(' · ')}</div>`:''}
+            </div>
+            <span class="mp-where">${o.coord?'<span class="mp-role">Coordinator</span> · ':''}${esc(where||'')}</span></div>`;
+        }).join('')}`:''}
+    </div>`;
+}
+
+// The panel sits in the network or map, but floats at the side of the window
+// when they are mostly scrolled out of view, e.g. after a click in a table
+function placePanel(){
+  const r=document.getElementById('canvas-wrap').getBoundingClientRect();
+  const seen=Math.min(r.bottom,window.innerHeight)-Math.max(r.top,0);
+  document.getElementById('org-pop').classList.toggle('floating', seen < r.height*0.5);
+}
+window.addEventListener('scroll',placePanel,{passive:true});
 
 function renderMapInfo(nodes,unplaced,abroad){
   const miss=[...unplaced].sort((a,b)=>b[1]-a[1]);
@@ -2052,7 +2251,7 @@ function loadMapLibre(){
     mapObj.on('move',overlayMove);
     mapObj.on('moveend',()=>{ mapObj.getZoom()!==layoutZoom ? layoutMap() : positionMap(); });
     mapObj.on('resize',layoutMap);
-    mapObj.on('click',()=>{ if(selectedOrg) clearOrgFocus(); });
+    mapObj.on('click',()=>{ if(selectedOrg||selectedProj) clearFocus(); });
     mapObj.on('load',()=>{ mapReady=true; resolve(); });
   }));
 }
@@ -2062,7 +2261,7 @@ function setView(v){
   document.body.classList.toggle('view-map',v==='map');
   document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   hideTT(); mapHover=null; pinnedNode=null; updatePinStats(null);
-  renderOrgPanel();
+  renderPanel();
   if(v==='map'){
     loadMapLibre()
       .then(()=>{ mapObj.resize(); render(); })
@@ -2161,7 +2360,7 @@ document.addEventListener('click',e=>{ if(!e.composedPath().includes(kwDd)) setK
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape') return;
   setKwOpen(false);
-  if(selectedOrg && document.activeElement!==document.getElementById('searchBox')) clearOrgFocus();
+  if((selectedOrg||selectedProj) && document.activeElement!==document.getElementById('searchBox')) clearFocus();
 });
 
 const newKwIn=document.getElementById('newKwIn');
