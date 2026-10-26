@@ -796,13 +796,17 @@ def _filter_col(label, dd_id, placeholder, values, options=None):
 
 app.layout = html.Div([
 
-    # ── Header: back to the TELL home page (relative, so it also works under /dev/)
-    html.Header(
+    # ── Header: back to the TELL home page (relative, so it also works under /dev/).
+    # The same markup and styles as the funding network's (site/network/index.html):
+    # change both together.
+    html.Header([
         html.A([
             html.Img(src='https://newtexeco.nl/wp-content/uploads/2023/12/logo_2x.png', alt='NewTexEco'),
             html.Span('NewTexEco · Textile Ecosystem Living Lab', className='site-label'),
-        ], href='../', title='Back to the TELL home page'),
-        className='tell-header'),
+        ], href='../', className='tell-brand', title='Back to the TELL home page'),
+        html.A([html.Span('←', **{'aria-hidden': 'true'}), ' Back to Home'],
+               href='../', className='tell-home'),
+    ], className='tell-header'),
 
     # ── The dashboard ─────────────────────────────────────────────────────────
     html.Div([

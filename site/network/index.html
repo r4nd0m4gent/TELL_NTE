@@ -11,24 +11,34 @@
 body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
 /* The network fills the first screen; the tables follow below it. Their tab
    row peeks out at the bottom so it is clear the page scrolls. */
-#viz{height:calc(100vh - 44px);min-height:600px;display:flex;flex-direction:column}
+#viz{height:calc(100vh - 44px);min-height:660px;display:flex;flex-direction:column}
 
-/* ── Header: the TELL brand bar, as on the home page and the dashboard ── */
-#topbar{display:flex;align-items:center;gap:16px;padding:10px 20px;background:#513773;flex-shrink:0;flex-wrap:wrap}
-#homeLink{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;
-  background:#fff;color:#513773;font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap;
+/* ── Header: the same as the dashboard's (assets/tell_wrapper.css), change both together ── */
+.tell-header{background:#513773;padding:18px 40px;display:flex;align-items:center;gap:16px;font-family:'Inter',sans-serif;flex-shrink:0}
+.tell-header .tell-brand{display:flex;align-items:center;gap:16px;text-decoration:none;min-width:0}
+.tell-header img{height:44px;object-fit:contain}
+.tell-header .site-label{color:rgba(255,255,255,.75);font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase}
+.tell-header .tell-home{margin-left:auto;display:inline-flex;align-items:center;gap:7px;
+  padding:8px 16px;border-radius:999px;background:#fff;color:#513773;
+  font-size:13px;font-weight:700;line-height:1.2;text-decoration:none;white-space:nowrap;
   box-shadow:0 1px 3px rgba(0,0,0,.25);transition:background .15s,transform .15s}
-#homeLink:hover,#homeLink:focus-visible{background:#efe9f7;transform:translateX(-2px)}
-#homeLink:focus-visible{outline:2px solid #fff;outline-offset:2px}
-#brandLogo{height:30px;object-fit:contain}
-#topbar h1{font-size:17px;font-weight:700;color:#fff;white-space:nowrap}
+.tell-header .tell-home:hover,.tell-header .tell-home:focus-visible{background:#efe9f7;transform:translateX(-2px)}
+.tell-header .tell-home:focus-visible{outline:2px solid #fff;outline-offset:2px}
+@media (max-width:768px){
+  .tell-header{padding:14px 20px}
+  .tell-header img{height:36px}
+  .tell-header .site-label{display:none}
+}
+
+/* ── Title row: the page's name and the network / map switch ───────── */
+#titlebar{display:flex;align-items:center;gap:12px 16px;padding:10px 20px;background:#161b22;border-bottom:1px solid #30363d;flex-shrink:0;flex-wrap:wrap}
+#titlebar h1{font-size:17px;font-weight:700;color:#e6edf3}
 .bar-right{margin-left:auto;display:flex;align-items:center;gap:12px}
-/* Network / map switch: white on the purple bar */
-#viewGroup{display:flex;border:1px solid rgba(255,255,255,.5);border-radius:8px;overflow:hidden}
-.view-btn{padding:7px 16px;font-size:13px;font-weight:600;font-family:inherit;background:transparent;color:rgba(255,255,255,.85);border:none;cursor:pointer;transition:background .15s}
-.view-btn+.view-btn{border-left:1px solid rgba(255,255,255,.5)}
-.view-btn:hover{background:rgba(255,255,255,.12)}
-.view-btn.active{background:#fff;color:#513773}
+#viewGroup{display:flex;border:1px solid #484f58;border-radius:8px;overflow:hidden}
+.view-btn{padding:6px 16px;font-size:13px;font-weight:600;font-family:inherit;background:transparent;color:#c9d1d9;border:none;cursor:pointer;transition:background .15s}
+.view-btn+.view-btn{border-left:1px solid #484f58}
+.view-btn:hover{background:#21262d}
+.view-btn.active{background:#513773;color:#fff}
 
 /* ── Filter panel: a labelled control per filter, like the dashboard ─── */
 #filterbar{display:flex;align-items:flex-end;gap:14px 22px;padding:10px 20px 12px;background:#161b22;border-bottom:1px solid #30363d;flex-shrink:0;flex-wrap:wrap}
@@ -40,9 +50,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0d1117;c
 .chk input{width:14px;height:14px}
 
 @media (max-width:640px){
-  #topbar{gap:10px;padding:10px 16px}
-  #brandLogo{display:none}
-  #topbar h1{font-size:15px;white-space:normal;flex:1 1 100%;order:3}
+  #titlebar{padding:10px 16px}
+  #titlebar h1{font-size:15px}
   #filterbar{padding:10px 16px}
   .fsearch{min-width:100%}
   #statbar{padding:6px 16px}
@@ -335,10 +344,17 @@ svg#graph-svg{cursor:default}
 
 <div id="viz">
 
-<!-- ═══ HEADER: back to TELL, title, view switch ═══════════════════════════ -->
-<header id="topbar">
-  <a id="homeLink" href="../" title="Back to the TELL home page"><span aria-hidden="true">←</span> Back to TELL</a>
-  <img id="brandLogo" src="https://newtexeco.nl/wp-content/uploads/2023/12/logo_2x.png" alt="NewTexEco">
+<!-- ═══ HEADER: the same as the dashboard's (textile_companies_NL.py) ═══════ -->
+<header class="tell-header">
+  <a class="tell-brand" href="../" title="Back to the TELL home page">
+    <img src="https://newtexeco.nl/wp-content/uploads/2023/12/logo_2x.png" alt="NewTexEco">
+    <span class="site-label">NewTexEco · Textile Ecosystem Living Lab</span>
+  </a>
+  <a class="tell-home" href="../"><span aria-hidden="true">←</span> Back to Home</a>
+</header>
+
+<!-- ═══ TITLE ROW: page name, view switch ════════════════════════════════ -->
+<div id="titlebar">
   <h1>Textile Research Funding Network</h1>
   <div class="bar-right">
     <div id="viewGroup" role="group" aria-label="View">
@@ -346,7 +362,7 @@ svg#graph-svg{cursor:default}
       <button class="view-btn" data-view="map" title="Dutch organisations on a map">Map</button>
     </div>
   </div>
-</header>
+</div>
 
 <!-- ═══ FILTER PANEL ═════════════════════════════════════════════════════ -->
 <div id="filterbar">
