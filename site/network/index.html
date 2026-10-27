@@ -198,6 +198,7 @@ body:not(.view-map) .map-only{display:none!important}
 .m-node.eu{fill:#ca8a04;stroke:#facc15}
 .m-node.dim{opacity:.15}
 .m-node.center{stroke:#fff;stroke-width:2.5;filter:drop-shadow(0 0 8px #fb923c)}
+.m-node.hit{stroke:#3fb950;stroke-width:3;filter:drop-shadow(0 0 7px #3fb950)}
 .m-label.eu{fill:#fde68a}
 .m-edge{fill:none;stroke:#8b949e;stroke-opacity:.22;transition:stroke-opacity .15s}
 .m-edge.dim{stroke-opacity:.03}
@@ -307,6 +308,11 @@ body:not(.view-map) .map-only{display:none!important}
 .node-org {cursor:pointer}
 .node-proj.dimmed,.node-org.dimmed,.link.dimmed{opacity:0.08}
 .node-proj.lit{stroke-width:3!important;filter:drop-shadow(0 0 6px #3fb950)}
+.node-proj.lit.top{stroke:#3fb950!important;stroke-width:4!important;filter:drop-shadow(0 0 9px #3fb950)}
+.node-org.lit{stroke:#3fb950!important;stroke-width:3!important;filter:drop-shadow(0 0 7px #3fb950)}
+text.top{font-weight:700;font-size:10px;paint-order:stroke;stroke:#0d1117;stroke-width:3px}
+.tbl .sub.hit{color:#3fb950}
+#proj-list.searching tr:not(.highlighted):not(.selected){opacity:.4}
 
 /* ── Hover / pin highlight ──────────────────────────────────────────── */
 .node-proj.h-dim,.node-org.h-dim{opacity:0.06!important;transition:opacity .15s}
@@ -425,7 +431,7 @@ svg#graph-svg{cursor:default}
     <label class="flabel" for="searchBox">Search <span id="searchHint">· projects, organisations, people</span></label>
     <div class="search-wrap">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5" stroke-linecap="round"/></svg>
-      <input id="searchBox" type="search" placeholder="Type to search…" autocomplete="off">
+      <input id="searchBox" type="search" placeholder="Type to search · Enter zooms to the matches" title="Every word must occur; &quot;quotes&quot; keep a phrase together" autocomplete="off">
       <button id="searchClear" title="Clear search" aria-label="Clear search">✕</button>
     </div>
   </div>
@@ -736,7 +742,6 @@ let activeKw     = new Set();     // every keyword, once the data is loaded
 let activeProgs  = new Set(['nwo','erasmus','he','h2020']);
 let excludedIds  = new Set();     // project_ids manually excluded
 let searchTerm   = '';
-let searchLocked = false;
 let highlightSet = new Set();
 let orgFocusSet  = new Set();
 let selectedOrg  = null;
@@ -1263,21 +1268,32 @@ function updateProjList(projects) {
   const list=document.getElementById('proj-list');
   list.innerHTML='';
 
-  // Projects of the selected organisation, or matching the search, come first
+  // Projects of the selected organisation come first, or else the search
+  // matches, best match first
   const focus = orgFocusSet.size>0 ? orgFocusSet : highlightSet;
+  const ranked = orgFocusSet.size===0 && searchHits.size>0;
   const key=PROJ_SORT[projSort.key];
   const sorted=[...projects].sort((a,b)=>{
     const am=focus.has(a.project_id), bm=focus.has(b.project_id);
     if(am&&!bm) return -1; if(!am&&bm) return 1;
+    if(ranked&&am) return searchHits.get(b.project_id).score-searchHits.get(a.project_id).score;
     return cmpVals(key(a),key(b))*projSort.dir;
   });
   markSorted('projTable', projSort);
 
   const note=document.getElementById('org-focus-note');
-  note.innerHTML=selectedOrg
-    ? `Projects of <b>${esc(selectedOrg)}</b> are listed first. <button class="linkbtn" id="clearFocus">Clear</button>`
-    : '';
-  if(selectedOrg) document.getElementById('clearFocus').addEventListener('click',clearFocus);
+  if(selectedOrg){
+    note.innerHTML=`Projects of <b>${esc(selectedOrg)}</b> are listed first. <button class="linkbtn" id="clearFocus">Clear</button>`;
+    document.getElementById('clearFocus').addEventListener('click',clearFocus);
+  } else if(searchTerm && queryTerms(searchTerm).length){
+    const hidden=searchHiddenCount(projects);
+    note.innerHTML=(searchHits.size
+      ? `<b>${searchHits.size}</b> project${searchHits.size!==1?'s match':' matches'} “${esc(searchTerm)}”, best match first`
+      : `No project matches “${esc(searchTerm)}”`)
+      +(hidden?` · ${hidden} more hidden by the filters`:'');
+  } else note.innerHTML='';
+  list.classList.toggle('searching', ranked);   // the other rows fade
+  if(ranked) document.querySelector('#proj-pane .tbl-wrap').scrollTop=0;
 
   const MAX=800;
   sorted.slice(0,MAX).forEach(p=>{
@@ -1296,10 +1312,13 @@ function updateProjList(projects) {
       ? `<span title="${p._grant_estimated?'Estimated from the NWO funding scheme':'Stated by the funder'}">${p._grant_estimated?'~':''}${fmtEuro(p.ec_grant_num)}</span>`
       : '';
     const titleHtml=projTitleHtml(p);
+    const hit=searchHits.get(p.project_id);
+    const hitHtml=hit
+      ? `<div class="sub hit">found in ${[...hit.fields].map(f=>SEARCH_FIELD_LABEL[f]).join(', ')}</div>` : '';
 
     tr.innerHTML=`
       <td><input type="checkbox" class="excl-cb" checked title="Untick to exclude this project"></td>
-      <td class="pcell"><span class="ptitle">${titleHtml}</span>${url?`<a class="ext" href="${esc(url)}" target="_blank" rel="noopener" title="Open the project page">↗</a>`:''}</td>
+      <td class="pcell"><span class="ptitle">${titleHtml}</span>${url?`<a class="ext" href="${esc(url)}" target="_blank" rel="noopener" title="Open the project page">↗</a>`:''}${hitHtml}</td>
       <td><span class="prog-badge ${pk}">${PROG_SHORT[pk]}</span></td>
       <td class="num">${yr||''}</td>
       <td class="num grant">${grant}</td>
@@ -1327,19 +1346,100 @@ function updateProjList(projects) {
 // ══════════════════════════════════════════════════════════════════════════
 // SEARCH
 // ══════════════════════════════════════════════════════════════════════════
+// Ranked: every word of the query has to occur, at the start of a word and
+// ignoring case and accents, somewhere in the project. Where it occurs sets the
+// rank: the acronym or title counts most, then the organisations and people,
+// the keywords, and last the summary. "Quotes" keep a phrase together.
+const SEARCH_FIELDS=[['name',12],['title',8],['orgs',6],['people',6],['topics',3],['summary',1]];
+const SEARCH_FIELD_LABEL={name:'name',title:'title',orgs:'organisation',people:'person',topics:'keywords',summary:'summary'};
+const SEARCH_TOP=10;          // the best matches get a label in the network
+let searchHits=new Map();     // project_id -> {score, fields}
+let searchTopSet=new Set();   // project_ids of the SEARCH_TOP best matches
+let searchOrgRe=[];           // the query's terms, to light organisations by name
+
+const fold=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+const reEsc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+
+function searchIndex(p){
+  if(p._sx) return p._sx;
+  const members=p.project_members||[];
+  const orgNames=members.map(m=>(m.organisation||m.name||'').split('||')[0].trim()).filter(Boolean);
+  const title=fold(p.title_en||p.title), name=fold(p._display_name);
+  return p._sx={
+    name:   title.startsWith(name) ? '' : name,   // an acronym, not the title cut short
+    title,
+    orgs:   fold([...orgNames, ...orgNames.map(normaliseOrgName)].join(' | ')),
+    people: fold(members.map(m=>`${m.first_name||''} ${m.last_name||''}`).join(' | ')),
+    topics: fold([p.topics, ...(p._matched_terms||[])].join(' | ')),
+    summary:fold([p.objective, p.summary_en, p.summary_nl].join(' ')),
+  };
+}
+
+function queryTerms(q){
+  const terms=[];
+  fold(q).replace(/"([^"]+)"|(\S+)/g,(_,phrase,word)=>{
+    let t=(phrase||word).replace(/^[^\w]+|[^\w]+$/g,'').trim();
+    if(word && t.length>4) t=t.replace(/(?<!s)s$/,'');   // 'textiles' also finds 'textile'
+    if(t.length>=2) terms.push(new RegExp(`${/^\w/.test(t)?'\\b':''}${reEsc(t).replace(/\s+/g,'\\s+')}`,'g'));
+    return '';
+  });
+  return terms;
+}
+
+// The project's score for the query's terms (0: some term is missing) and
+// the fields they were found in
+function searchScore(p, terms){
+  const ix=searchIndex(p);
+  let score=0; const fields=new Set();
+  for(const re of terms){
+    let best=0, bestField=null;
+    for(const [f,w] of SEARCH_FIELDS){
+      const n=(ix[f].match(re)||[]).length;
+      const s=n ? w*(f==='summary'?Math.min(n,4):1) : 0;
+      if(s>best){ best=s; bestField=f; }
+    }
+    if(!best) return null;
+    score+=best; fields.add(bestField);
+  }
+  // The whole query as the acronym, or as a phrase in the title
+  const q=fold(searchTerm).replace(/"/g,'').trim();
+  if(ix.name===q || ix.title===q) score+=20;
+  else if(terms.length>1 && ix.title.includes(q)) score+=8;
+  return {score, fields};
+}
+
 function applySearch(projects) {
-  if(!searchTerm){highlightSet.clear();return;}
-  const q=searchTerm.toLowerCase();
-  highlightSet=new Set(
-    projects.filter(p=>
-      (p._display_name||'').toLowerCase().includes(q)||
-      (p.title_en||'').toLowerCase().includes(q)||
-      (p._pi_institution||'').toLowerCase().includes(q)||
-      (p._pi_name||'').toLowerCase().includes(q)||
-      (p.objective||p.summary_en||'').toLowerCase().includes(q)
-    ).map(p=>p.project_id)
-  );
+  searchHits=new Map(); searchTopSet=new Set(); searchOrgRe=[];
+  const terms=searchTerm ? queryTerms(searchTerm) : [];
+  if(!terms.length){
+    highlightSet.clear();
+    document.getElementById('searchBox').classList.remove('has-match');
+    return;
+  }
+  for(const p of projects){
+    const hit=searchScore(p, terms);
+    if(hit) searchHits.set(p.project_id, hit);
+  }
+  const ranked=[...searchHits.entries()].sort((a,b)=>b[1].score-a[1].score);
+  searchTopSet=new Set(ranked.slice(0,SEARCH_TOP).map(([id])=>id));
+  highlightSet=new Set(searchHits.keys());
+  searchOrgRe=terms;
   document.getElementById('searchBox').classList.toggle('has-match',highlightSet.size>0);
+}
+
+// An organisation's name has every term of the query
+function orgMatchesSearch(name){
+  if(!searchOrgRe.length) return false;
+  const n=fold(name);
+  return searchOrgRe.every(re=>{ re.lastIndex=0; return re.test(n); });
+}
+
+// Matches the filters hide (they don't count in the table)
+function searchHiddenCount(projects){
+  const terms=queryTerms(searchTerm);
+  if(!terms.length) return 0;
+  const shown=new Set(projects.map(p=>p.project_id));
+  return allProjects.filter(p=>!shown.has(p.project_id) && searchScore(p,terms)).length;
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1377,28 +1477,37 @@ function applyGraphHighlight(){
   if(!_nodeSel||!_linkSel) return;
   const focus=orgFocusSet.size>0?orgFocusSet:highlightSet;
   const hasHL=focus.size>0;
+  const searching=orgFocusSet.size===0 && searchOrgRe.length>0;
+  // Links run from a project to an organisation (node ids until the simulation starts)
+  const end=x=>typeof x==='object'?x.id:x;
+  const focusNodes=new Set([...focus].map(id=>`proj:${id}`));
+  // Search: the organisations of the matches stay, the others fade
+  const nearMatch=new Set();
+  if(searching) _linkSel.each(d=>{ if(focusNodes.has(end(d.source))) nearMatch.add(end(d.target)); });
 
   _nodeSel.classed('dimmed', d=>{
     if(!hasHL) return false;
     if(d.type==='project') return !focus.has(d.data?.project_id);
-    return false;
+    return searching && !nearMatch.has(d.id) && !orgMatchesSearch(d.label);
   }).classed('lit', d=>{
-    if(d.type!=='project') return false;
+    if(d.type!=='project') return searching && orgMatchesSearch(d.label);
     return hasHL && highlightSet.has(d.data?.project_id);
+  }).classed('top', d=>{
+    return searching && d.type==='project' && searchTopSet.has(d.data?.project_id);
   }).classed('org-glow', d=>{
     if(d.type!=='org') return false;
     return hasHL && orgFocusSet.size>0 && d.label===selectedOrg;
   });
 
-  _linkSel.classed('dimmed', d=>{
-    if(!hasHL) return false;
-    const srcId=d.source.data?.project_id||d.source.id;
-    return !focus.has(srcId);
-  }).classed('link-hi', d=>{
-    if(!hasHL) return false;
-    const srcId=d.source.data?.project_id||d.source.id;
-    return focus.has(srcId);
-  });
+  _linkSel.classed('dimmed', d=> hasHL && !focusNodes.has(end(d.source)))
+          .classed('link-hi', d=> hasHL && focusNodes.has(end(d.source)));
+  if(!pinnedNode) updatePinLabels(null);
+}
+
+// The search's labels: its best matches and the organisations it names
+function searchLabelShown(d){
+  if(orgFocusSet.size>0 || !searchOrgRe.length) return false;
+  return d.type==='project' ? searchTopSet.has(d.data?.project_id) : orgMatchesSearch(d.label);
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1539,12 +1648,14 @@ function applyHoverPreview(focusDatum){
 function updatePinLabels(focusDatum){
   if(!_labelSel||!_projLabelSel) return;
   if(!focusDatum){
-    // No pin — revert to toggle state with wcount threshold
+    // No pin — revert to toggle state with wcount threshold, plus the search's labels
     _labelSel.style('display', d=>{
+      if(searchLabelShown(d)) return null;
       if(!showOrgLabels) return 'none';
       return (d.wcount||0)>=ORG_LABEL_MIN ? null : 'none';
     });
-    _projLabelSel.style('display', showProjLabels ? null : 'none');
+    _projLabelSel.style('display', d=> showProjLabels || searchLabelShown(d) ? null : 'none')
+      .classed('top', d=>searchLabelShown(d));
     return;
   }
   // 2-level neighbourhood for labels
@@ -2008,9 +2119,11 @@ function applyMapHighlight(){
       litEdge=e=>[...e.pids].some(id=>focus.has(id));
     }
   }
+  const searching=!mapHover && !selectedProj && orgFocusSet.size===0 && searchOrgRe.length>0;
   mNodeG.selectAll('circle')
     .classed('dim',n=>!!lit&&!lit.has(n.name))
-    .classed('center',n=>n.name===center);
+    .classed('center',n=>n.name===center)
+    .classed('hit',n=>searching && orgMatchesSearch(n.name));   // named by the search
   const sel=selectedOrg && mapNodes.find(n=>n.name===selectedOrg);
   const shown=selectedProj ? mapEdges.filter(e=>e.pids.has(selectedProj.project_id))   // the project's partners
     : !selectedOrg ? []
@@ -2413,32 +2526,42 @@ newKwIn.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementByI
 const sbEl=document.getElementById('searchBox');
 const scEl=document.getElementById('searchClear');
 let searchTimer;
-sbEl.addEventListener('input',e=>{
+function runSearch(){
   clearTimeout(searchTimer);
-  searchTimer=setTimeout(()=>{
-    searchTerm=e.target.value.trim();
-    searchLocked=false;
-    scEl.classList.toggle('visible',!!searchTerm);
-    const projs=filteredProjects();
-    applySearch(projs);
-    updateProjList(projs);
-    applyGraphHighlight();
-  },250);
+  searchTerm=sbEl.value.trim();
+  scEl.classList.toggle('visible',!!searchTerm);
+  // The results are in the project table
+  if(searchTerm && activePanel!=='proj') document.querySelector('.ptab[data-panel="proj"]').click();
+  applySearch(currentProjects);
+  updateProjList(currentProjects);
+  applyGraphHighlight();
+}
+// Enter: zoom to the matches
+function zoomToSearch(){
+  if(!highlightSet.size) return;
+  if(view==='map'){
+    const lit=mapNodes.filter(n=>[...n.pids].some(id=>highlightSet.has(id)));
+    if(!mapReady || !lit.length) return;
+    const lons=lit.map(n=>n.clon), lats=lit.map(n=>n.clat);
+    mapObj.fitBounds([[d3.min(lons),d3.min(lats)],[d3.max(lons),d3.max(lats)]],{padding:80, maxZoom:10});
+  } else if(_nodeSel){
+    const nodes=_nodeSel.data().filter(d=>d.type==='project' ? highlightSet.has(d.data?.project_id)
+                                                              : orgMatchesSearch(d.label));
+    if(nodes.length) fitView(nodes.length>1 ? nodes : [...nodes, {x:nodes[0].x-60,y:nodes[0].y-60}, {x:nodes[0].x+60,y:nodes[0].y+60}]);
+  }
+}
+sbEl.addEventListener('input',()=>{
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(runSearch,200);
 });
 sbEl.addEventListener('keydown',e=>{
-  if(e.key==='Enter'){
-    searchTerm=sbEl.value.trim(); searchLocked=true;
-    scEl.classList.toggle('visible',!!searchTerm);
-    render();
-  }
+  if(e.key==='Enter'){ runSearch(); zoomToSearch(); }
   if(e.key==='Escape') scEl.click();
 });
 scEl.addEventListener('click',()=>{
-  sbEl.value=''; searchTerm=''; searchLocked=false;
-  highlightSet.clear(); scEl.classList.remove('visible');
-  sbEl.classList.remove('has-match');
-  applyGraphHighlight();
-  updateProjList(filteredProjects());
+  sbEl.value='';
+  runSearch();
+  if(view==='map') fitMapToNodes(); else if(simulation) fitView(simulation.nodes());
 });
 
 // ── Year range sliders ──────────────────────────────────────────────────
