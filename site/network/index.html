@@ -399,7 +399,7 @@ svg#graph-svg{cursor:default}
             <button class="kwab" id="btnNone">none</button>
           </div>
         </div>
-        <div id="kw-note">Only textile projects are shown: a textile term in the title, used twice in the summary, or once with a related term (fibre, fabric, dye…). Untick keywords to narrow down.</div>
+        <div id="kw-note">Only textile projects are shown, chosen by a relevance score: textile terms in the title, in the project's own keywords (Horizon) and in the summary. Untick keywords to narrow down.</div>
         <div id="kw-list"></div>
         <div id="kw-add">
           <input id="newKwIn" type="text" placeholder="Add keyword…">
@@ -558,33 +558,30 @@ const NL_CODES = new Set(['NL','NLD','NETHERLANDS','THE NETHERLANDS']);
 const COORD_ROLES_EU  = new Set(['coordinator','lead','coordinating institution']);
 const COORD_ROLES_NWO = new Set(['main applicant','project leader']);
 
-// Textile keywords, and the rule for which projects count as textile projects:
-// both in data/textile_terms.json, which db/mysql/import_funding.py reads too
-// (textile_match there is textileMatch here - change both together).
-let TEXTILE  = null;   // {idiom, core:{keyword:RegExp}, related:{...}} once loaded
-let kwLabels = [];     // keywords in the checklist: the terms, then any the user adds
+// Textile keywords: data/textile_terms.json, which db/mysql reads too. Textile
+// projects: data/textile_projects.json, the textile_projects table that
+// db/mysql/build_textile_projects.py fills by a relevance score.
+let TEXTILE    = null;        // {idiom, terms:{keyword:RegExp}} once loaded
+let kwLabels   = [];          // keywords in the checklist: the terms, then any the user adds
+let textileIds = new Map();   // 'source:project_id' -> relevance score
 
 async function loadTextileTerms() {
-  const r=await fetch('data/textile_terms.json');
-  if(!r.ok) throw new Error(`HTTP ${r.status}`);
-  const t=await r.json();
-  const rx=o=>Object.fromEntries(Object.entries(o).map(([k,p])=>[k,new RegExp(p,'gi')]));
-  TEXTILE={idiom:new RegExp(t.idiom,'gi'), core:rx(t.core), related:rx(t.related)};
-  kwLabels=[...Object.keys(t.core),...Object.keys(t.related)];
+  const [t,list]=await Promise.all(['data/textile_terms.json','data/textile_projects.json'].map(async f=>{
+    const r=await fetch(f);
+    if(!r.ok) throw new Error(`${f}: HTTP ${r.status}`);
+    return r.json();
+  }));
+  const terms={...t.core,...t.related};
+  TEXTILE={idiom:new RegExp(t.idiom,'gi'),
+           terms:Object.fromEntries(Object.entries(terms).map(([k,p])=>[k,new RegExp(p,'i')]))};
+  kwLabels=Object.keys(terms);
+  textileIds=new Map(Object.entries(list.projects));
 }
 
-// The keywords a project matches and whether it is a textile project.
-// head: the title (EU: and the topics); bodies: the summary, one per language.
-function textileMatch(head, bodies) {
-  const strip=s=>(s||'').replace(TEXTILE.idiom,' ');
-  head=strip(head); bodies=bodies.map(strip);
-  const hits=(rx,s)=>(s.match(rx)||[]).length;   // match() on a /g regex ignores lastIndex
-  const all={...TEXTILE.core,...TEXTILE.related}, core=Object.values(TEXTILE.core);
-  const terms=kwLabels.filter(k=>[head,...bodies].some(s=>hits(all[k],s)>0));
-  const coreN=Math.max(0,...bodies.map(b=>core.reduce((n,rx)=>n+hits(rx,b),0)));
-  const relevant=core.some(rx=>hits(rx,head)>0) || coreN>=2
-    || (terms.some(k=>k in TEXTILE.core) && terms.some(k=>k in TEXTILE.related));
-  return {terms, relevant};
+// The keywords a project's texts match, as textile_match in db/mysql/import_funding.py
+function textileKeywords(texts) {
+  texts=texts.map(s=>(s||'').replace(TEXTILE.idiom,' '));
+  return kwLabels.filter(k=>texts.some(s=>TEXTILE.terms[k].test(s)));
 }
 
 const MAX_PROJ_GRAPH  = 600;
@@ -894,7 +891,7 @@ async function loadData() {
   const setS = s => document.getElementById('load-s').textContent=s;
   await loadOrgLocations();
   try { await loadTextileTerms(); }
-  catch(e){ console.warn('Failed to load textile terms:',e); setS('Could not load the textile keywords.'); return; }
+  catch(e){ console.warn('Failed to load textile terms:',e); setS('Could not load the textile projects.'); return; }
 
   // --- NWO ---
   setS('Loading nwo_textile_raw.json…');
@@ -928,8 +925,8 @@ async function loadData() {
       p._nlLed=true;
       p._display_name=computeDisplayName(p);
       p._hay=((p.title_en||'')+' '+(p.summary_nl||'')+' '+(p.summary_en||'')).toLowerCase();
-      const m=textileMatch(p.title_en,[p.summary_nl,p.summary_en]);
-      p._matched_terms=m.terms; p._textile=m.relevant;
+      p._matched_terms=textileKeywords([p.title_en,p.summary_nl,p.summary_en]);
+      p._textile=textileIds.has(`nwo:${p.project_id}`);
     });
     allProjects.push(...projects);
   } catch(e){ console.warn('Failed to load NWO:',e); }
@@ -956,8 +953,8 @@ async function loadData() {
         p._nlLed=isNLLed(p);
         p._display_name=computeDisplayName(p);
         p._hay=((p.title_en||'')+' '+(p.objective||'')+' '+(p.topics||'')).toLowerCase();
-        const m=textileMatch(`${p.title_en||''} | ${p.topics||''}`,[p.objective]);
-        p._matched_terms=m.terms; p._textile=m.relevant;
+        p._matched_terms=textileKeywords([p.title_en,p.objective,p.topics]);
+        p._textile=textileIds.has(`${src}:${p.project_id}`);
       });
       // Only keep EU projects with NL partner
       allProjects.push(...projects.filter(p=>p._isNL));
