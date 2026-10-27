@@ -693,6 +693,24 @@ const ORG_ALIASES = new Map([
   ['gemeente amsterdam', 'Gemeente Amsterdam'],
   ['rijksinstituut voor volksgezondheid en milieu', 'RIVM'],
   ['ministerie van infrastructuur en waterstaat', 'Min. I&W'],
+  // === European partners known by a short name their legal name lacks ===
+  ['centre scientifique et technique de l industrie textile belge', 'Centexbel'],
+  ["centre scientifique & technique del'industrie textile belge asbl", 'Centexbel'],
+  ['centexbel services', 'Centexbel'],
+  ["plate-forme technologique europeenne pour le future du textile et de l'habillement", 'Textile ETP'],
+  ['european apparel and textile confederation aisbl', 'EURATEX'],
+  ['confederacion de la industria textil asociacion', 'Texfor'],
+  ['acondicionamiento tarrasense associacion', 'LEITAT'],
+  ['deutsche institute fur textil- und faserforschung denkendorf', 'DITF Denkendorf'],
+  ['saechsisches textilforschungsinstitut e .v.', 'STFI'],
+  ['vlaamse instelling voor technologisch onderzoek n.v.', 'VITO'],
+  ['commissariat a l energie atomique et aux energies alternatives', 'CEA'],
+  ['instituto tecnologico del embalaje, transporte y logistica', 'ITENE'],
+  ["institut d'arquitectura avancada de catalunya", 'IAAC'],
+  ['danmarks tekniske universitet', 'DTU'],
+  ['aalto korkeakoulusaatio sr', 'Aalto University'],
+  ['hoegskolan i boras', 'University of Borås'],
+  ['tallinna tehnikakorgkool', 'TTK University of Applied Sciences'],
 ]);
 
 // Algorithmic fallback: strip Dutch legal prefixes/suffixes, normalise case
@@ -1286,11 +1304,23 @@ function updateProjList(projects) {
     note.innerHTML=`Projects of <b>${esc(selectedOrg)}</b> are listed first. <button class="linkbtn" id="clearFocus">Clear</button>`;
     document.getElementById('clearFocus').addEventListener('click',clearFocus);
   } else if(searchTerm && queryTerms(searchTerm).length){
-    const hidden=searchHiddenCount(projects);
+    const hidden=searchHidden(projects);
+    // Most often it is "Dutch-led only": European partners rarely coordinate with a Dutch partner
+    let notLed=0;
+    if(nlLedOnly && hidden.length){
+      nlLedOnly=false; const withPartners=new Set(filteredProjects().map(p=>p.project_id)); nlLedOnly=true;
+      notLed=hidden.filter(p=>withPartners.has(p.project_id)).length;
+    }
     note.innerHTML=(searchHits.size
       ? `<b>${searchHits.size}</b> project${searchHits.size!==1?'s match':' matches'} “${esc(searchTerm)}”, best match first`
       : `No project matches “${esc(searchTerm)}”`)
-      +(hidden?` · ${hidden} more hidden by the filters`:'');
+      +(!hidden.length ? ''
+        : notLed ? ` · ${hidden.length} more hidden by the filters, ${notLed===hidden.length?'all':notLed} by “Dutch-led only”. <button class="linkbtn" id="searchShowAll">Include them</button>`
+        : ` · ${hidden.length} more hidden by the filters`);
+    document.getElementById('searchShowAll')?.addEventListener('click',()=>{
+      const cb=document.getElementById('nlLedToggle');
+      cb.checked=false; cb.dispatchEvent(new Event('change'));
+    });
   } else note.innerHTML='';
   list.classList.toggle('searching', ranked);   // the other rows fade
   if(ranked) document.querySelector('#proj-pane .tbl-wrap').scrollTop=0;
@@ -1435,11 +1465,11 @@ function orgMatchesSearch(name){
 }
 
 // Matches the filters hide (they don't count in the table)
-function searchHiddenCount(projects){
+function searchHidden(projects){
   const terms=queryTerms(searchTerm);
-  if(!terms.length) return 0;
+  if(!terms.length) return [];
   const shown=new Set(projects.map(p=>p.project_id));
-  return allProjects.filter(p=>!shown.has(p.project_id) && searchScore(p,terms)).length;
+  return allProjects.filter(p=>!shown.has(p.project_id) && searchScore(p,terms));
 }
 
 // ══════════════════════════════════════════════════════════════════════════
