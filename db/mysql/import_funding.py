@@ -10,10 +10,10 @@ Sources (the JSON files the page loads, in site/network/data/)
     erasmus   erasmus_textile_projects.json   Erasmus+, projects with a Dutch partner
     cordis    cordis_textile_projects.json    Horizon Europe + Horizon 2020, idem
 
-All projects are kept, not only the textile ones: `textile_keywords` lists the
-page's default keywords a project matches (same list, read from the page, and
-the same substring match), so `WHERE textile_keywords <> ''` gives the set the
-page shows by default.
+All projects are kept, not only the textile ones. `textile_keywords` lists the
+keywords a project matches and `textile_relevant` says whether it counts as a
+textile project, by the terms and rules in data/textile_terms.json (which the
+page reads too), so `WHERE textile_relevant` gives the projects the page shows.
 
 Columns
 -------
@@ -90,7 +90,8 @@ CREATE TABLE {TABLE} (
     members_nl          SMALLINT      NOT NULL,
     members             JSON          NOT NULL,
     textile_keywords    VARCHAR(512)  NOT NULL,
-    project_url         VARCHAR(512),
+    textile_relevant    BOOLEAN       NOT NULL,
+    project_url        VARCHAR(512),
     project_website     VARCHAR(512),
     PRIMARY KEY (source, project_id),
     KEY idx_programme_year (programme, year)
@@ -112,13 +113,12 @@ def get_engine():
     )
 
 
-def page_keywords() -> list[str]:
-    """The page's DEFAULT_KEYWORDS, so the table matches what the page shows."""
-    page = (NETWORK_DIR / "index.html").read_text(encoding="utf-8")
-    block = re.search(r"const DEFAULT_KEYWORDS\s*=\s*\[(.*?)\];", page, flags=re.S)
-    if not block:
-        raise SystemExit("DEFAULT_KEYWORDS not found in site/network/index.html")
-    return re.findall(r"'([^']*)'", block.group(1))
+def textile_terms() -> dict:
+    """The keyword patterns and the idiom in data/textile_terms.json (shared with the page)."""
+    t = json.loads((DATA_DIR / "textile_terms.json").read_text(encoding="utf-8"))
+    return {"idiom": re.compile(t["idiom"], re.I),
+            "core": {k: re.compile(p, re.I) for k, p in t["core"].items()},
+            "related": {k: re.compile(p, re.I) for k, p in t["related"].items()}}
 
 
 def load(name: str) -> list[dict]:
@@ -141,9 +141,20 @@ def _year(v) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def _keywords(hay: str, keywords: list[str]) -> str:
-    hay = hay.lower()
-    return ", ".join(k for k in keywords if k.lower() in hay)
+def textile_match(head: str, bodies: list[str], terms: dict) -> dict:
+    """Keywords and relevance of a project, as textileMatch in the page computes them.
+
+    head: the title (EU: and the topics); bodies: the summary, one per language.
+    """
+    head = terms["idiom"].sub(" ", head)
+    bodies = [terms["idiom"].sub(" ", b) for b in bodies]
+    core, related = terms["core"], terms["related"]
+    found = [k for k, rx in {**core, **related}.items()
+             if rx.search(head) or any(rx.search(b) for b in bodies)]
+    core_n = max((sum(len(rx.findall(b)) for rx in core.values()) for b in bodies), default=0)
+    relevant = (any(rx.search(head) for rx in core.values()) or core_n >= 2
+                or (any(k in core for k in found) and any(k in related for k in found)))
+    return {"textile_keywords": ", ".join(found), "textile_relevant": relevant}
 
 
 def nwo_estimate(scheme: str | None) -> int:
@@ -152,7 +163,7 @@ def nwo_estimate(scheme: str | None) -> int:
                 NWO_ESTIMATE_DEFAULT)
 
 
-def nwo_row(p: dict, keywords: list[str]) -> dict:
+def nwo_row(p: dict, terms: dict) -> dict:
     members = p.get("project_members") or []
     pi = next((m for role in NWO_PI_ROLES for m in members
                if (m.get("role") or "").strip().lower() == role),
@@ -171,14 +182,14 @@ def nwo_row(p: dict, keywords: list[str]) -> dict:
         "coordinator_country": None, "pi_name": pi_name or None,
         "members_total": len(members), "members_nl": len(members),
         "members": json.dumps(members, ensure_ascii=False),
-        "textile_keywords": _keywords(" ".join(
-            p.get(k) or "" for k in ("title", "summary_nl", "summary_en")), keywords),
+        **textile_match(p.get("title") or "",
+                        [p.get("summary_nl") or "", p.get("summary_en") or ""], terms),
         "project_url": f"https://www.nwo.nl/projecten/{p['project_id']}",
         "project_website": None,
     }
 
 
-def eu_row(p: dict, source: str, keywords: list[str]) -> dict:
+def eu_row(p: dict, source: str, terms: dict) -> dict:
     members = p.get("project_members") or []
     grant = p.get("ec_grant")
     try:
@@ -200,8 +211,8 @@ def eu_row(p: dict, source: str, keywords: list[str]) -> dict:
         "members_total": len(members),
         "members_nl": sum((m.get("country") or "").upper() in NL_CODES for m in members),
         "members": json.dumps(members, ensure_ascii=False),
-        "textile_keywords": _keywords(" ".join(
-            p.get(k) or "" for k in ("title_en", "objective", "topics")), keywords),
+        **textile_match(f"{p.get('title_en') or ''} | {p.get('topics') or ''}",
+                        [p.get("objective") or ""], terms),
         "project_url": _str(p.get("project_page_url")),
         "project_website": _str(p.get("project_website")),
     }
@@ -214,11 +225,11 @@ def is_nl(row: dict) -> bool:
 
 
 def build_rows() -> list[dict]:
-    keywords = page_keywords()
-    rows = [nwo_row(p, keywords) for p in load("nwo_textile_raw.json")]
+    terms = textile_terms()
+    rows = [nwo_row(p, terms) for p in load("nwo_textile_raw.json")]
     for name, source in (("erasmus_textile_projects.json", "erasmus"),
                          ("cordis_textile_projects.json", "cordis")):
-        rows += [r for r in (eu_row(p, source, keywords) for p in load(name)) if is_nl(r)]
+        rows += [r for r in (eu_row(p, source, terms) for p in load(name)) if is_nl(r)]
     return rows
 
 
@@ -238,7 +249,7 @@ def summary(rows: list[dict]) -> None:
     print(f"{len(rows)} projects")
     for prog in sorted({r["programme"] for r in rows}):
         sel = [r for r in rows if r["programme"] == prog]
-        textile = sum(bool(r["textile_keywords"]) for r in sel)
+        textile = sum(r["textile_relevant"] for r in sel)
         years = [r["year"] for r in sel if r["year"]]
         span = f"{min(years)}-{max(years)}" if years else "-"
         grants = ", ".join(

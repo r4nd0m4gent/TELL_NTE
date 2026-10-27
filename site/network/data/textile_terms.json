@@ -1,0 +1,45 @@
+{
+ "_about": [
+  "Which funding projects count as textile projects, and the keywords they are tagged with.",
+  "Read by the network page (site/network/index.html) and db/mysql/import_funding.py: change it here only.",
+  "Each keyword is a case-insensitive regular expression (the same syntax in JavaScript and Python),",
+  "matched on whole words, with the Dutch terms folded into the English keyword.",
+  "Core terms name the textile, clothing, leather or footwear sector itself; related terms",
+  "(fibre, fabric, dye, wearable, ...) are common outside it and never make a project relevant on their own.",
+  "A project is relevant when, after the idiom is removed:",
+  "  1. a core term is in its title (or in its CORDIS keywords), or",
+  "  2. core terms occur at least twice in its summary, counted in one language (NWO repeats it in Dutch and English), or",
+  "  3. a core term occurs once and a related term also occurs."
+ ],
+ "idiom": "\\b(?:in|on)\\s+(?:an?|such\\s+an?|this|that|similar|the\\s+same|any)\\s[^.;:]{0,50}?\\bfashion\\b(?!\\s*(?:industry|sector|world|brands?|design|cycle|system|compan|retail|school|student))",
+ "core": {
+  "textile":  "textile|textiel",
+  "fashion":  "\\bfashion(?!ed|able|ing)|\\bmode(?:industrie|branche|sector|ontwerp|merk|onderwijs|opleiding|academie|keten|bedrijf|wereld)|\\b(?:duurzame|circulaire|slow) mode\\b",
+  "clothing": "\\bcloth(?:ing|es)\\b|(?<!be)kleding|\\bkledij\\b",
+  "garment":  "\\bgarments?\\b",
+  "apparel":  "\\bapparel\\b",
+  "footwear": "\\bfootwear\\b|\\bshoes?\\b|\\bschoen",
+  "leather":  "\\bleather\\b|\\bleder\\b",
+  "denim":    "\\bdenim\\b|\\bjeans\\b",
+  "yarn":     "\\byarns?\\b|\\bgarens\\b|\\bbreigaren",
+  "wool":     "(?<!mineral )(?<!glass )(?<!rock )(?<!stone )(?<!steel )\\bwool(?:len|s)?\\b|\\bwol\\b",
+  "cotton":   "\\bcotton\\b|katoen",
+  "knitting": "\\bknit(?:s|ted|ting|wear)?\\b|\\bbrei(?:en|garen|werk|machine)",
+  "nonwoven": "\\bnon-?wovens?\\b"
+ },
+ "related": {
+  "fibre":     "\\bfib(?:re|er)s?\\b|vezel",
+  "fabric":    "\\bfabrics?\\b",
+  "weaving":   "\\bweav(?:e|es|ing)\\b|\\bwoven\\b|\\bweven\\b|\\bweverij",
+  "polyester": "\\bpolyester\\b",
+  "dye":       "\\bdyes?\\b|\\bdyeing\\b|\\bververij",
+  "silk":      "\\bsilk\\b",
+  "hemp":      "\\bhemp\\b|hennep",
+  "flax":      "\\bflax\\b|\\blinen\\b|\\bvlas\\b|\\blinnen\\b",
+  "wearable":  "\\bwearables?\\b",
+  "thread":    "\\bthreads?\\b",
+  "cloth":     "\\bcloth\\b",
+  "sewing":    "\\bsewing\\b|\\bnaai(?:en|atelier|machine)",
+  "upcycling": "\\bupcycl"
+ }
+}

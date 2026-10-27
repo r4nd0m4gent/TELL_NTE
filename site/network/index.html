@@ -108,6 +108,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0d1117;c
 #kw-hdr{padding:7px 10px 5px;font-size:10px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .kwab{font-size:10px;padding:1px 6px;border-radius:3px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer}
 .kwab:hover{color:#e6edf3}
+#kw-note{padding:6px 10px;font-size:10px;line-height:1.45;color:#8b949e;border-bottom:1px solid #30363d;flex-shrink:0}
 #kw-list{flex:1;overflow-y:auto;padding:3px 0}
 #kw-list::-webkit-scrollbar{width:4px}
 #kw-list::-webkit-scrollbar-thumb{background:#30363d;border-radius:2px}
@@ -398,6 +399,7 @@ svg#graph-svg{cursor:default}
             <button class="kwab" id="btnNone">none</button>
           </div>
         </div>
+        <div id="kw-note">Only textile projects are shown: a textile term in the title, used twice in the summary, or once with a related term (fibre, fabric, dye…). Untick keywords to narrow down.</div>
         <div id="kw-list"></div>
         <div id="kw-add">
           <input id="newKwIn" type="text" placeholder="Add keyword…">
@@ -556,19 +558,34 @@ const NL_CODES = new Set(['NL','NLD','NETHERLANDS','THE NETHERLANDS']);
 const COORD_ROLES_EU  = new Set(['coordinator','lead','coordinating institution']);
 const COORD_ROLES_NWO = new Set(['main applicant','project leader']);
 
-const DEFAULT_KEYWORDS = [
-  'textile','textiel','fashion','garment',
-  'wool','wol','cotton','katoen',
-  'fiber','fibre','vezel','weven','kleding',
-  'zijde','polyester','denim','leather','fabric','dye',
-  'recycled textile','circular textile','circular fashion',
-  'circulair textiel','textiel recycling','smart textile',
-  'duurzame mode','textile lifecycle','textile value chain',
-  'hergebruik','wearable',
-  'textile supply chain','waardeketen','levenscyclus',
-  'hemp','hennep',
-  'footwear','shoes','clothing','cloth','yarn','thread','flax',
-];
+// Textile keywords, and the rule for which projects count as textile projects:
+// both in data/textile_terms.json, which db/mysql/import_funding.py reads too
+// (textile_match there is textileMatch here - change both together).
+let TEXTILE  = null;   // {idiom, core:{keyword:RegExp}, related:{...}} once loaded
+let kwLabels = [];     // keywords in the checklist: the terms, then any the user adds
+
+async function loadTextileTerms() {
+  const r=await fetch('data/textile_terms.json');
+  if(!r.ok) throw new Error(`HTTP ${r.status}`);
+  const t=await r.json();
+  const rx=o=>Object.fromEntries(Object.entries(o).map(([k,p])=>[k,new RegExp(p,'gi')]));
+  TEXTILE={idiom:new RegExp(t.idiom,'gi'), core:rx(t.core), related:rx(t.related)};
+  kwLabels=[...Object.keys(t.core),...Object.keys(t.related)];
+}
+
+// The keywords a project matches and whether it is a textile project.
+// head: the title (EU: and the topics); bodies: the summary, one per language.
+function textileMatch(head, bodies) {
+  const strip=s=>(s||'').replace(TEXTILE.idiom,' ');
+  head=strip(head); bodies=bodies.map(strip);
+  const hits=(rx,s)=>(s.match(rx)||[]).length;   // match() on a /g regex ignores lastIndex
+  const all={...TEXTILE.core,...TEXTILE.related}, core=Object.values(TEXTILE.core);
+  const terms=kwLabels.filter(k=>[head,...bodies].some(s=>hits(all[k],s)>0));
+  const coreN=Math.max(0,...bodies.map(b=>core.reduce((n,rx)=>n+hits(rx,b),0)));
+  const relevant=core.some(rx=>hits(rx,head)>0) || coreN>=2
+    || (terms.some(k=>k in TEXTILE.core) && terms.some(k=>k in TEXTILE.related));
+  return {terms, relevant};
+}
 
 const MAX_PROJ_GRAPH  = 600;
 const MAX_PARTNERS_PP = 6;
@@ -718,7 +735,7 @@ function normaliseOrgName(raw) {
 // ══════════════════════════════════════════════════════════════════════════
 let allProjects  = [];
 let metaFunding  = { nwo:0, erasmus:0, he:0, h2020:0 };
-let activeKw     = new Set(['garment','clothing','textile','footwear','shoes','leather','fashion']);
+let activeKw     = new Set();     // every keyword, once the data is loaded
 let activeProgs  = new Set(['nwo','erasmus','he','h2020']);
 let excludedIds  = new Set();     // project_ids manually excluded
 let searchTerm   = '';
@@ -876,6 +893,8 @@ function getPIInstitution(p) {
 async function loadData() {
   const setS = s => document.getElementById('load-s').textContent=s;
   await loadOrgLocations();
+  try { await loadTextileTerms(); }
+  catch(e){ console.warn('Failed to load textile terms:',e); setS('Could not load the textile keywords.'); return; }
 
   // --- NWO ---
   setS('Loading nwo_textile_raw.json…');
@@ -908,9 +927,9 @@ async function loadData() {
       p._isNL=true;  // All NWO projects are NL
       p._nlLed=true;
       p._display_name=computeDisplayName(p);
-      const hay=((p.title_en||'')+' '+(p.summary_nl||'')+' '+(p.summary_en||'')).toLowerCase();
-      p._hay=hay;
-      p._matched_terms=DEFAULT_KEYWORDS.filter(k=>hay.includes(k.toLowerCase()));
+      p._hay=((p.title_en||'')+' '+(p.summary_nl||'')+' '+(p.summary_en||'')).toLowerCase();
+      const m=textileMatch(p.title_en,[p.summary_nl,p.summary_en]);
+      p._matched_terms=m.terms; p._textile=m.relevant;
     });
     allProjects.push(...projects);
   } catch(e){ console.warn('Failed to load NWO:',e); }
@@ -936,9 +955,9 @@ async function loadData() {
         p._isNL=isNLProject(p);
         p._nlLed=isNLLed(p);
         p._display_name=computeDisplayName(p);
-        const hay=((p.title_en||'')+' '+(p.objective||'')+' '+(p.topics||'')).toLowerCase();
-        p._hay=hay;
-        p._matched_terms=DEFAULT_KEYWORDS.filter(k=>hay.includes(k.toLowerCase()));
+        p._hay=((p.title_en||'')+' '+(p.objective||'')+' '+(p.topics||'')).toLowerCase();
+        const m=textileMatch(`${p.title_en||''} | ${p.topics||''}`,[p.objective]);
+        p._matched_terms=m.terms; p._textile=m.relevant;
       });
       // Only keep EU projects with NL partner
       allProjects.push(...projects.filter(p=>p._isNL));
@@ -954,6 +973,10 @@ async function loadData() {
     else if(pk==='he')      metaFunding.he     +=f;
     else if(pk==='h2020')   metaFunding.h2020  +=f;
   }
+  // From here on only the textile projects; the totals above stay those of
+  // everything loaded, so the funding share is a share of that.
+  allProjects=allProjects.filter(p=>p._textile);
+  kwLabels.forEach(k=>activeKw.add(k));
 
   indexOrgPlaces();
   document.getElementById('loading').style.display='none';
@@ -979,7 +1002,7 @@ function filteredProjects() {
 // KEYWORD PANEL
 // ══════════════════════════════════════════════════════════════════════════
 function allKwSet() {
-  const s=new Set(DEFAULT_KEYWORDS);
+  const s=new Set(kwLabels);
   allProjects.forEach(p=>(p._matched_terms||[]).forEach(k=>s.add(k)));
   return s;
 }
@@ -2379,7 +2402,7 @@ const newKwIn=document.getElementById('newKwIn');
 document.getElementById('addKwBtn').addEventListener('click',()=>{
   const kw=newKwIn.value.trim().toLowerCase();
   if(!kw) return; newKwIn.value='';
-  activeKw.add(kw); DEFAULT_KEYWORDS.push(kw);
+  activeKw.add(kw); if(!kwLabels.includes(kw)) kwLabels.push(kw);
   allProjects.forEach(p=>{
     const t=(p._hay||'').toLowerCase();
     if(t.includes(kw)&&!(p._matched_terms||[]).includes(kw))
