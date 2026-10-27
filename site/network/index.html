@@ -85,45 +85,24 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0d1117;c
 .yr-fill{position:absolute;height:3px;border-radius:2px;background:linear-gradient(90deg,#58a6ff,#3fb950);pointer-events:none}
 .yr-vals{font-size:12px;color:#e6edf3;font-weight:600;min-width:76px;text-align:center}
 
-/* Search: a full-size field with a magnifier, like the dashboard's dropdowns */
-.search-wrap{position:relative;display:flex;align-items:center}
-.search-wrap svg{position:absolute;left:10px;width:15px;height:15px;color:#8b949e;pointer-events:none}
-#searchBox{width:100%;height:32px;padding:0 32px 0 32px;font-size:13px;font-family:inherit;border-radius:6px;border:1px solid #484f58;background:#0d1117;color:#e6edf3;transition:border-color .15s,box-shadow .15s}
-#searchBox:focus{outline:none;border-color:#58a6ff;box-shadow:0 0 0 3px rgba(56,139,253,.25)}
-#searchBox.has-match{border-color:#3fb950}
+/* Search: a full-size field with a magnifier, like the dashboard's dropdowns.
+   Enter turns the text into a keyword chip in front of it. */
+.search-wrap{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-height:32px;padding:3px 30px 3px 32px;border-radius:6px;border:1px solid #484f58;background:#0d1117;cursor:text;transition:border-color .15s,box-shadow .15s}
+.search-wrap:focus-within{border-color:#58a6ff;box-shadow:0 0 0 3px rgba(56,139,253,.25)}
+.search-wrap.has-match{border-color:#3fb950}
+.search-wrap svg{position:absolute;left:10px;top:8px;width:15px;height:15px;color:#8b949e;pointer-events:none}
+#kwChips{display:contents}
+.kw-chip{display:inline-flex;align-items:center;gap:3px;max-width:100%;font-size:11px;line-height:18px;padding:0 3px 0 8px;border-radius:10px;border:1px solid #1f6feb;background:#0d2040;color:#79c0ff}
+.kw-chip button{border:none;background:none;color:#58a6ff;cursor:pointer;font-size:11px;line-height:1;padding:1px 3px;border-radius:50%}
+.kw-chip button:hover{background:#1f6feb;color:#fff}
+#searchBox{flex:1;min-width:140px;height:24px;padding:0;font-size:13px;font-family:inherit;border:none;background:none;color:#e6edf3}
+#searchBox:focus{outline:none}
 #searchBox::placeholder{color:#6e7681}
 #searchBox::-webkit-search-cancel-button{display:none}
-#searchClear{position:absolute;right:5px;width:22px;height:22px;font-size:12px;border-radius:4px;border:none;background:none;color:#8b949e;cursor:pointer;display:none}
+#searchClear{position:absolute;right:5px;top:4px;width:22px;height:22px;font-size:12px;border-radius:4px;border:none;background:none;color:#8b949e;cursor:pointer;display:none}
 #searchClear:hover{background:#21262d;color:#e6edf3}
 #searchClear.visible{display:block}
 #searchHint{font-weight:400;color:#6e7681}
-
-/* ── Keyword filter (dropdown) ────────────────────────────────────── */
-.kw-dd{position:relative}
-#kwBtn{min-width:170px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0d1117;color:#e6edf3;font-weight:400;border-color:#484f58}
-#kwBtn b{color:#79c0ff}
-.tog-btn.open{border-color:#58a6ff;color:#e6edf3}
-#kw-section{display:none;position:absolute;top:calc(100% + 6px);left:0;width:270px;max-height:min(440px,70vh);background:#161b22;border:1px solid #30363d;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:50;flex-direction:column;overflow:hidden}
-#kw-section.open{display:flex}
-#kw-hdr{padding:7px 10px 5px;font-size:10px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.kwab{font-size:10px;padding:1px 6px;border-radius:3px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer}
-.kwab:hover{color:#e6edf3}
-#kw-note{padding:6px 10px;font-size:10px;line-height:1.45;color:#8b949e;border-bottom:1px solid #30363d;flex-shrink:0}
-#kw-list{flex:1;overflow-y:auto;padding:3px 0}
-#kw-list::-webkit-scrollbar{width:4px}
-#kw-list::-webkit-scrollbar-thumb{background:#30363d;border-radius:2px}
-.kw-item{display:flex;align-items:center;gap:5px;padding:3px 10px;cursor:pointer;border-radius:4px;margin:1px 4px;transition:background .1s}
-.kw-item:hover{background:#21262d}
-.kw-item input[type=checkbox]{accent-color:#1f6feb;width:12px;height:12px;flex-shrink:0}
-.kw-label{font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.kw-cnt{font-size:10px;color:#58a6ff;background:#0d2040;border-radius:8px;padding:1px 5px;min-width:22px;text-align:center;flex-shrink:0}
-.kw-rm{font-size:11px;color:#484f58;cursor:pointer;padding:0 2px;flex-shrink:0}
-.kw-rm:hover{color:#f85149}
-#kw-add{padding:5px 8px;border-top:1px solid #30363d;display:flex;gap:4px;flex-shrink:0}
-#newKwIn{flex:1;font-size:11px;padding:3px 7px;border-radius:4px;border:1px solid #30363d;background:#0d1117;color:#e6edf3}
-#newKwIn::placeholder{color:#484f58}
-#addKwBtn{font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer}
-#addKwBtn:hover{color:#e6edf3}
 
 /* ── Canvas ───────────────────────────────────────────────────────────── */
 #canvas-wrap{flex:1;position:relative;overflow:hidden}
@@ -392,47 +371,25 @@ svg#graph-svg{cursor:default}
     </div>
   </div>
 
-  <!-- Keywords: a dropdown with the checklist -->
-  <div class="fgroup">
-    <span class="flabel">Keywords</span>
-    <div class="kw-dd" id="kwDropdown">
-      <button class="tog-btn" id="kwBtn" aria-expanded="false" aria-controls="kw-section"><span><b id="kwBtnCount">—</b> selected</span> ▾</button>
-      <div id="kw-section">
-        <div id="kw-hdr">
-          Keywords
-          <div style="display:flex;gap:3px">
-            <button class="kwab" id="btnAll">all</button>
-            <button class="kwab" id="btnNone">none</button>
-          </div>
-        </div>
-        <div id="kw-note">Only textile projects are shown, chosen by a relevance score: textile terms in the title, in the project's own keywords (Horizon) and in the summary. Untick keywords to narrow down.</div>
-        <div id="kw-list"></div>
-        <div id="kw-add">
-          <input id="newKwIn" type="text" placeholder="Add keyword…">
-          <button id="addKwBtn">+</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <div class="fgroup">
     <span class="flabel">Projects</span>
     <div class="fscope">
       <label class="chk" title="Only projects coordinated by a Dutch organisation: every NWO project, and EU projects with a Dutch coordinator. Untick to include EU projects where a Dutch organisation is a partner.">
         <input type="checkbox" id="nlLedToggle" checked style="accent-color:#fb923c"> Dutch-led only
       </label>
-      <label class="chk map-only" title="Also put the European universities and research organisations these projects work with on the map">
+      <label class="chk" title="Also show the European universities and research organisations these projects work with, in the network and on the map">
         <input type="checkbox" id="euToggle" style="accent-color:#facc15"> European research partners
       </label>
     </div>
   </div>
 
   <div class="fgroup fsearch">
-    <label class="flabel" for="searchBox">Search <span id="searchHint">· projects, organisations, people</span></label>
-    <div class="search-wrap">
+    <label class="flabel" for="searchBox">Search and keywords <span id="searchHint">· Enter adds a keyword filter</span></label>
+    <div class="search-wrap" id="searchWrap" title="Typing highlights the matching projects: every word must occur, &quot;quotes&quot; keep a phrase together. Enter keeps it as a keyword: only projects matching one of the keywords are shown. Only textile projects are on this page, chosen by a relevance score (textile terms in the title, the project's own keywords and the summary).">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5" stroke-linecap="round"/></svg>
-      <input id="searchBox" type="search" placeholder="Type to search · Enter zooms to the matches" title="Every word must occur; &quot;quotes&quot; keep a phrase together" autocomplete="off">
-      <button id="searchClear" title="Clear search" aria-label="Clear search">✕</button>
+      <span id="kwChips"></span>
+      <input id="searchBox" type="search" placeholder="Projects, organisations, people…" autocomplete="off">
+      <button id="searchClear" title="Clear the search and the keywords" aria-label="Clear the search and the keywords">✕</button>
     </div>
   </div>
 </div>
@@ -480,7 +437,7 @@ svg#graph-svg{cursor:default}
       </div>
       <div>
         <div class="lr"><div class="ldot" style="background:#c2410c;border:1.5px solid #fb923c"></div><div class="ll" style="color:#fb923c">🇳🇱 NL organisation</div></div>
-        <div class="lr"><div class="ldot" style="background:#facc15;border:1px solid #fbbf24"></div><div class="ll">Non-NL organisation</div></div>
+        <div class="lr"><div class="ldot" style="background:#facc15;border:1px solid #fbbf24"></div><div class="ll">European university or research organisation</div></div>
         <div class="lr"><div class="lline" style="background:#e3b341"></div><div class="ll">PI / coordinator link</div></div>
         <div class="lr"><div class="lline" style="background:#3a4060"></div><div class="ll">Partner link</div></div>
       </div>
@@ -568,7 +525,7 @@ const COORD_ROLES_NWO = new Set(['main applicant','project leader']);
 // projects: data/textile_projects.json, the textile_projects table that
 // db/mysql/build_textile_projects.py fills by a relevance score.
 let TEXTILE    = null;        // {idiom, terms:{keyword:RegExp}} once loaded
-let kwLabels   = [];          // keywords in the checklist: the terms, then any the user adds
+let kwLabels   = [];          // the textile terms, in the order of the file
 let textileIds = new Map();   // 'source:project_id' -> relevance score
 
 async function loadTextileTerms() {
@@ -756,7 +713,6 @@ function normaliseOrgName(raw) {
 // ══════════════════════════════════════════════════════════════════════════
 let allProjects  = [];
 let metaFunding  = { nwo:0, erasmus:0, he:0, h2020:0 };
-let activeKw     = new Set();     // every keyword, once the data is loaded
 let activeProgs  = new Set(['nwo','erasmus','he','h2020']);
 let excludedIds  = new Set();     // project_ids manually excluded
 let searchTerm   = '';
@@ -947,7 +903,6 @@ async function loadData() {
       p._isNL=true;  // All NWO projects are NL
       p._nlLed=true;
       p._display_name=computeDisplayName(p);
-      p._hay=((p.title_en||'')+' '+(p.summary_nl||'')+' '+(p.summary_en||'')).toLowerCase();
       p._matched_terms=textileKeywords([p.title_en,p.summary_nl,p.summary_en]);
       p._textile=textileIds.has(`nwo:${p.project_id}`);
     });
@@ -975,7 +930,6 @@ async function loadData() {
         p._isNL=isNLProject(p);
         p._nlLed=isNLLed(p);
         p._display_name=computeDisplayName(p);
-        p._hay=((p.title_en||'')+' '+(p.objective||'')+' '+(p.topics||'')).toLowerCase();
         p._matched_terms=textileKeywords([p.title_en,p.objective,p.topics]);
         p._textile=textileIds.has(`${src}:${p.project_id}`);
       });
@@ -996,11 +950,9 @@ async function loadData() {
   // From here on only the textile projects; the totals above stay those of
   // everything loaded, so the funding share is a share of that.
   allProjects=allProjects.filter(p=>p._textile);
-  kwLabels.forEach(k=>activeKw.add(k));
 
   indexOrgPlaces();
   document.getElementById('loading').style.display='none';
-  renderKeywords();
   render();
 }
 
@@ -1012,58 +964,49 @@ function filteredProjects() {
     if(excludedIds.has(p.project_id)) return false;
     if(!activeProgs.has(p._progKey)) return false;
     if(nlLedOnly && !p._nlLed) return false;
-    if(activeKw.size>0 && !(p._matched_terms||[]).some(t=>activeKw.has(t))) return false;
+    if(searchKw.length && !kwHits(p).length) return false;
     if(!projectActiveInRange(p, yearMin, yearMax)) return false;
     return true;
   });
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// KEYWORD PANEL
+// KEYWORDS
 // ══════════════════════════════════════════════════════════════════════════
-function allKwSet() {
-  const s=new Set(kwLabels);
-  allProjects.forEach(p=>(p._matched_terms||[]).forEach(k=>s.add(k)));
-  return s;
+// Enter in the search box keeps its text as a keyword, as in the dashboard's
+// keyword filter: then only projects matching one of the keywords are shown.
+// A keyword matches the way the search does (see SEARCH).
+let searchKw=[];   // [{label, terms}], in the order added
+
+function kwHits(p){
+  return searchKw.filter(k=>searchScore(p,k.terms,k.label)).map(k=>k.label);
 }
-function buildKwCounts() {
-  const m=new Map();
-  allProjects.forEach(p=>{
-    if(excludedIds.has(p.project_id)) return;
-    if(!activeProgs.has(p._progKey)) return;
-    if(nlLedOnly && !p._nlLed) return;
-    (p._matched_terms||[]).forEach(k=>m.set(k,(m.get(k)||0)+1));
-  });
-  return m;
+
+// A project's keywords: the ones added that it matches, then its textile terms
+function projKeywords(p){
+  const hits=kwHits(p);
+  return [...hits, ...(p._matched_terms||[]).filter(t=>!hits.includes(t))];
 }
-function renderKeywords() {
-  const counts=buildKwCounts();
-  const kws=[...allKwSet()].sort((a,b)=>(counts.get(b)||0)-(counts.get(a)||0));
-  document.getElementById('kwBtnCount').textContent=`${activeKw.size} of ${kws.length}`;
-  const list=document.getElementById('kw-list');
-  list.innerHTML='';
-  for(const kw of kws){
-    const cnt=counts.get(kw)||0;
-    const div=document.createElement('div');
-    div.className='kw-item';
-    div.innerHTML=`
-      <input type="checkbox" ${activeKw.has(kw)?'checked':''} data-kw="${esc(kw)}">
-      <span class="kw-label" title="${esc(kw)}">${esc(kw)}</span>
-      <span class="kw-cnt">${cnt}</span>
-      <span class="kw-rm" data-kw="${esc(kw)}">×</span>`;
-    list.appendChild(div);
-  }
-  list.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.addEventListener('change',e=>{
-    const kw=e.target.dataset.kw;
-    e.target.checked?activeKw.add(kw):activeKw.delete(kw);
-    render();
+const kwOn=k=>searchKw.some(s=>s.label===k);
+const kwOff=k=>searchKw.length>0 && !kwOn(k);   // a textile term, while keywords filter
+
+function addKeyword(text){
+  const label=text.trim().toLowerCase(), terms=queryTerms(label);
+  if(!terms.length || searchKw.some(k=>k.label===label)) return false;
+  searchKw.push({label, terms});
+  return true;
+}
+
+function renderKwChips(){
+  const box=document.getElementById('kwChips');
+  box.innerHTML=searchKw.map((k,i)=>
+    `<span class="kw-chip">${esc(k.label)}<button data-i="${i}" title="Remove this keyword" aria-label="Remove ${esc(k.label)}">✕</button></span>`).join('');
+  box.querySelectorAll('button').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();
+    searchKw.splice(+b.dataset.i,1);
+    renderKwChips(); render();
   }));
-  list.querySelectorAll('.kw-rm').forEach(b=>b.addEventListener('click',e=>{
-    const kw=e.target.dataset.kw;
-    activeKw.delete(kw);
-    allProjects.forEach(p=>{if(p._matched_terms)p._matched_terms=p._matched_terms.filter(t=>t!==kw);});
-    renderKeywords(); render();
-  }));
+  document.getElementById('searchClear').classList.toggle('visible',!!(searchTerm||searchKw.length));
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1337,7 +1280,7 @@ function updateProjList(projects) {
     const yr=projectYear(p);
     const piName=getPIName(p);
     const piInst=getPIInstitution(p);
-    const kws=(p._matched_terms||[]).filter(k=>activeKw.has(k));
+    const kws=projKeywords(p);
     const grant=p.ec_grant_num
       ? `<span title="${p._grant_estimated?'Estimated from the NWO funding scheme':'Stated by the funder'}">${p._grant_estimated?'~':''}${fmtEuro(p.ec_grant_num)}</span>`
       : '';
@@ -1353,7 +1296,7 @@ function updateProjList(projects) {
       <td class="num">${yr||''}</td>
       <td class="num grant">${grant}</td>
       <td>${esc(piInst)}${piName?`<div class="sub">${esc(piName)}</div>`:''}</td>
-      <td class="kws">${kws.map(esc).join(' · ')}</td>`;
+      <td class="kws">${kws.map(k=>kwOn(k)?`<b>${esc(k)}</b>`:esc(k)).join(' · ')}</td>`;
 
     const cb=tr.querySelector('.excl-cb');
     cb.addEventListener('change',()=>{
@@ -1418,7 +1361,7 @@ function queryTerms(q){
 
 // The project's score for the query's terms (0: some term is missing) and
 // the fields they were found in
-function searchScore(p, terms){
+function searchScore(p, terms, query=searchTerm){
   const ix=searchIndex(p);
   let score=0; const fields=new Set();
   for(const re of terms){
@@ -1432,7 +1375,7 @@ function searchScore(p, terms){
     score+=best; fields.add(bestField);
   }
   // The whole query as the acronym, or as a phrase in the title
-  const q=fold(searchTerm).replace(/"/g,'').trim();
+  const q=fold(query).replace(/"/g,'').trim();
   if(ix.name===q || ix.title===q) score+=20;
   else if(terms.length>1 && ix.title.includes(q)) score+=8;
   return {score, fields};
@@ -1443,7 +1386,7 @@ function applySearch(projects) {
   const terms=searchTerm ? queryTerms(searchTerm) : [];
   if(!terms.length){
     highlightSet.clear();
-    document.getElementById('searchBox').classList.remove('has-match');
+    document.getElementById('searchWrap').classList.remove('has-match');
     return;
   }
   for(const p of projects){
@@ -1454,7 +1397,7 @@ function applySearch(projects) {
   searchTopSet=new Set(ranked.slice(0,SEARCH_TOP).map(([id])=>id));
   highlightSet=new Set(searchHits.keys());
   searchOrgRe=terms;
-  document.getElementById('searchBox').classList.toggle('has-match',highlightSet.size>0);
+  document.getElementById('searchWrap').classList.toggle('has-match',highlightSet.size>0);
 }
 
 // An organisation's name has every term of the query
@@ -1595,6 +1538,8 @@ function buildGraph(projects){
       const orgName=normaliseOrgName(raw);
       const oid=`org:${orgName}`;
       const orgIsNL= p._src==='nwo' || NL_CODES.has((country||'').toUpperCase());
+      // Abroad, only the European research partners, and only when ticked (as on the map)
+      if(!orgIsNL && !(euPartners && isEuPartner(orgName))) return null;
       if(!nm.has(oid)){
         const tf=orgFunding.get(orgName)||0;
         const on={id:oid,type:'org',label:orgName,isCoord:role==='coord',
@@ -1736,7 +1681,6 @@ function render(){
   applySearch(projects);
   updateStats(projects);
   updateProjList(projects);
-  renderKeywords();
   renderNLOrgs(projects);
   currentProjects=projects;
   if(view!=='map') renderPanel();
@@ -1865,7 +1809,7 @@ function showTT(e,d){
     const partners=members.filter(m=>!isCoord(m.role,p._src)).slice(0,4);
     const nlParts=members.filter(m=> p._src==='nwo' || NL_CODES.has((m.country||'').toUpperCase()));
     const grant=p.ec_grant_num?fmtEuro(p.ec_grant_num):'';
-    const kws=(p._matched_terms||[]).filter(k=>activeKw.has(k));
+    const kws=projKeywords(p);
     const pyr=projectYear(p);
     const dn=p._display_name||p.title_en||'';
     const fullTitle=(dn!==p.title_en&&p.title_en)?p.title_en.slice(0,110):'';
@@ -1917,7 +1861,11 @@ const EUROPE=new Set(['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','EL
   'LV','LT','LU','MT','PL','PT','RO','SK','SI','ES','SE','NO','IS','LI','CH','UK','GB',
   'RS','ME','MK','AL','BA','XK','UA','MD']);
 const RESEARCH_TYPES=new Set(['HES','REC']);
-let euOnMap=false;
+let euPartners=false;   // also show them, in the network and on the map
+function isEuPartner(name){
+  const pl=orgPlaces.get(name);
+  return !!pl && EUROPE.has(pl.country) && RESEARCH_TYPES.has(pl.type);
+}
 let view='network', currentProjects=[];
 let orgLoc=null, orgLocRe=null;
 let mapObj=null, mapReady=false, mapLoading=null;
@@ -1991,7 +1939,7 @@ function buildMapData(projects){
       const isNL=p._src==='nwo' || NL_CODES.has((m.country||'').toUpperCase());
       const pl=orgPlaces.get(name);
       if(!isNL){
-        if(!(euOnMap && pl && EUROPE.has(pl.country) && RESEARCH_TYPES.has(pl.type))){ abroad.add(name); continue; }
+        if(!(euPartners && isEuPartner(name))){ abroad.add(name); continue; }
       } else if(!pl){
         if(!here.has(name)) unplaced.set(name,(unplaced.get(name)||0)+1);
         here.add(name);
@@ -2103,7 +2051,7 @@ function renderMap(projects){
 // Fit the map to what is on it: the Netherlands, or Europe with the partners
 function fitMapToNodes(){
   if(!mapReady) return;
-  if(!euOnMap || !mapNodes.length){ mapObj.fitBounds(MAP_BOUNDS,{padding:20}); return; }
+  if(!euPartners || !mapNodes.length){ mapObj.fitBounds(MAP_BOUNDS,{padding:20}); return; }
   const lons=mapNodes.map(n=>n.clon), lats=mapNodes.map(n=>n.clat);
   mapObj.fitBounds([[d3.min(lons),d3.min(lats)],[d3.max(lons),d3.max(lats)]],{padding:60, maxZoom:7});
 }
@@ -2252,8 +2200,8 @@ function renderPanel(){
 function orgPanelHtml(name, d){
   const place=orgCity(name) || d.country;
   const kw=new Map();
-  d.projs.forEach(p=>(p._matched_terms||[]).forEach(k=>kw.set(k,(kw.get(k)||0)+1)));
-  const kws=[...kw].sort((a,b)=>(activeKw.has(b[0])-activeKw.has(a[0])) || b[1]-a[1]);
+  d.projs.forEach(p=>projKeywords(p).forEach(k=>kw.set(k,(kw.get(k)||0)+1)));
+  const kws=[...kw].sort((a,b)=>(kwOn(b[0])-kwOn(a[0])) || b[1]-a[1]);
   const n=d.projs.length;
   return `
     <div class="mp-head">
@@ -2265,11 +2213,11 @@ function orgPanelHtml(name, d){
     </div>
     <div class="mp-body">
       ${kws.length?`<div class="mp-sec">Keywords</div>
-        <div class="mp-chips">${kws.map(([k,c])=>`<span class="mp-chip${activeKw.has(k)?'':' off'}" title="${c} project${c!==1?'s':''}">${esc(k)} · ${c}</span>`).join('')}</div>`:''}
+        <div class="mp-chips">${kws.map(([k,c])=>`<span class="mp-chip${kwOff(k)?' off':''}" title="${c} project${c!==1?'s':''}">${esc(k)} · ${c}</span>`).join('')}</div>`:''}
       <div class="mp-sec">Projects</div>
       ${d.projs.map((p,i)=>{
         const url=projectUrl(p), yr=projectYear(p);
-        const pkws=(p._matched_terms||[]).filter(k=>activeKw.has(k));
+        const pkws=projKeywords(p);
         const grant=p.ec_grant_num?`<span class="grant">${p._grant_estimated?'~':''}${fmtEuro(p.ec_grant_num)}</span>`:'';
         return `<div class="mp-proj">
           <button class="mp-plink" data-proj="${i}" title="Open the project profile">${projTitleHtml(p)}</button>${url?`<a class="mp-ext" href="${esc(url)}" target="_blank" rel="noopener" title="Open the project page">↗</a>`:''}
@@ -2312,7 +2260,7 @@ function projPanelHtml(p){
   const status=(p.status||'').trim().toLowerCase();
   const orgs=projectOrgs(p);
   const summary=(p.objective||p.summary_en||p.summary_nl||'').trim();
-  const kws=[...(p._matched_terms||[])].sort((a,b)=>activeKw.has(b)-activeKw.has(a));
+  const kws=projKeywords(p);
   const topics=(p.topics||'').trim();
   const piName=getPIName(p);
   const stat=(label,value,cls='')=>`<div class="mp-stat"><span>${label}</span><b class="${cls}">${value||'—'}</b></div>`;
@@ -2334,7 +2282,7 @@ function projPanelHtml(p){
         <div class="mp-summary${summary.length>500?' clamped':''}">${esc(summary)}</div>
         ${summary.length>500?'<button class="mp-more">Show more</button>':''}`:''}
       ${kws.length?`<div class="mp-sec">Keywords</div>
-        <div class="mp-chips">${kws.map(k=>`<span class="mp-chip${activeKw.has(k)?'':' off'}">${esc(k)}</span>`).join('')}</div>`:''}
+        <div class="mp-chips">${kws.map(k=>`<span class="mp-chip${kwOff(k)?' off':''}">${esc(k)}</span>`).join('')}</div>`:''}
       ${topics?`<div class="mp-sec">Topics</div><div class="mp-pkw">${esc(topics)}</div>`:''}
       ${orgs.length?`<div class="mp-sec">Organisations${piName?` · lead: ${esc(piName)}`:''}</div>
         ${orgs.map(o=>{
@@ -2362,10 +2310,10 @@ function renderMapInfo(nodes,unplaced,abroad){
   const miss=[...unplaced].sort((a,b)=>b[1]-a[1]);
   const nl=nodes.filter(n=>n.isNL).length, eu=nodes.length-nl;
   document.getElementById('map-info').innerHTML=
-    `<b>${nl}</b> Dutch organisations${euOnMap?` · <b>${eu}</b> European research partners`:''} on the map
+    `<b>${nl}</b> Dutch organisations${euPartners?` · <b>${eu}</b> European research partners`:''} on the map
     ${miss.length?`<details><summary>${miss.length} Dutch without a known location</summary>
       <div class="mi-list">${miss.map(([n,c])=>`${esc(n)} <span>(${c})</span>`).join('<br>')}</div></details>`:''}
-    ${abroad.size?`<div>${abroad.size} ${euOnMap?'other ':''}partners abroad${euOnMap
+    ${abroad.size?`<div>${abroad.size} ${euPartners?'other ':''}partners abroad${euPartners
       ?' (companies, outside Europe or unknown location): see the network'
       :': tick “European research partners” to add universities and research organisations'}</div>`:''}`;
 }
@@ -2503,14 +2451,11 @@ document.querySelectorAll('[data-prog]').forEach(btn=>btn.addEventListener('clic
   render();
 }));
 
-document.getElementById('btnAll').addEventListener('click',()=>{allKwSet().forEach(k=>activeKw.add(k));renderKeywords();render();});
-document.getElementById('btnNone').addEventListener('click',()=>{activeKw.clear();renderKeywords();render();});
-
-// European research partners on the map
+// European research partners, in the network and on the map
 document.getElementById('euToggle').addEventListener('change',e=>{
-  euOnMap=e.target.checked;
+  euPartners=e.target.checked;
   render();
-  fitMapToNodes();
+  if(view==='map') fitMapToNodes();
 });
 
 // Dutch-led only
@@ -2519,80 +2464,53 @@ document.getElementById('nlLedToggle').addEventListener('change',e=>{
   render();
 });
 
-// Keyword dropdown: opens under its button, closes on a click elsewhere or Escape.
-// composedPath() is taken when the click happens, so a click on a list item
-// that re-rendering has since removed still counts as inside.
-const kwDd=document.getElementById('kwDropdown');
-const kwBtn=document.getElementById('kwBtn');
-const kwSec=document.getElementById('kw-section');
-function setKwOpen(open){
-  kwSec.classList.toggle('open',open);
-  kwBtn.classList.toggle('open',open);
-  kwBtn.setAttribute('aria-expanded',open);
-}
-kwBtn.addEventListener('click',()=>setKwOpen(!kwSec.classList.contains('open')));
-document.addEventListener('click',e=>{ if(!e.composedPath().includes(kwDd)) setKwOpen(false); });
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape') return;
-  setKwOpen(false);
   if((selectedOrg||selectedProj) && document.activeElement!==document.getElementById('searchBox')) clearFocus();
 });
 
-const newKwIn=document.getElementById('newKwIn');
-document.getElementById('addKwBtn').addEventListener('click',()=>{
-  const kw=newKwIn.value.trim().toLowerCase();
-  if(!kw) return; newKwIn.value='';
-  activeKw.add(kw); if(!kwLabels.includes(kw)) kwLabels.push(kw);
-  allProjects.forEach(p=>{
-    const t=(p._hay||'').toLowerCase();
-    if(t.includes(kw)&&!(p._matched_terms||[]).includes(kw))
-      p._matched_terms=[...(p._matched_terms||[]),kw];
-  });
-  renderKeywords(); render();
-});
-newKwIn.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('addKwBtn').click();});
-
-// Search
+// Search: typing highlights the matches. Enter keeps the text as a keyword
+// (a chip in front of it) that filters the projects, Backspace in the empty
+// box removes the last keyword, ✕ clears the text and the keywords.
 const sbEl=document.getElementById('searchBox');
 const scEl=document.getElementById('searchClear');
 let searchTimer;
 function runSearch(){
   clearTimeout(searchTimer);
   searchTerm=sbEl.value.trim();
-  scEl.classList.toggle('visible',!!searchTerm);
+  scEl.classList.toggle('visible',!!(searchTerm||searchKw.length));
   // The results are in the project table
   if(searchTerm && activePanel!=='proj') document.querySelector('.ptab[data-panel="proj"]').click();
   applySearch(currentProjects);
   updateProjList(currentProjects);
   applyGraphHighlight();
 }
-// Enter: zoom to the matches
-function zoomToSearch(){
-  if(!highlightSet.size) return;
-  if(view==='map'){
-    const lit=mapNodes.filter(n=>[...n.pids].some(id=>highlightSet.has(id)));
-    if(!mapReady || !lit.length) return;
-    const lons=lit.map(n=>n.clon), lats=lit.map(n=>n.clat);
-    mapObj.fitBounds([[d3.min(lons),d3.min(lats)],[d3.max(lons),d3.max(lats)]],{padding:80, maxZoom:10});
-  } else if(_nodeSel){
-    const nodes=_nodeSel.data().filter(d=>d.type==='project' ? highlightSet.has(d.data?.project_id)
-                                                              : orgMatchesSearch(d.label));
-    if(nodes.length) fitView(nodes.length>1 ? nodes : [...nodes, {x:nodes[0].x-60,y:nodes[0].y-60}, {x:nodes[0].x+60,y:nodes[0].y+60}]);
-  }
+function keywordsChanged(){
+  sbEl.value=''; searchTerm='';
+  renderKwChips(); render();
+  if(view==='map') fitMapToNodes();
 }
 sbEl.addEventListener('input',()=>{
   clearTimeout(searchTimer);
   searchTimer=setTimeout(runSearch,200);
 });
 sbEl.addEventListener('keydown',e=>{
-  if(e.key==='Enter'){ runSearch(); zoomToSearch(); }
+  if(e.key==='Enter'){
+    e.preventDefault();
+    const text=sbEl.value.trim().toLowerCase();
+    if(addKeyword(text) || searchKw.some(k=>k.label===text)) keywordsChanged();
+  }
+  if(e.key==='Backspace' && !sbEl.value && searchKw.length){ searchKw.pop(); keywordsChanged(); }
   if(e.key==='Escape') scEl.click();
 });
-scEl.addEventListener('click',()=>{
-  sbEl.value='';
-  runSearch();
-  if(view==='map') fitMapToNodes(); else if(simulation) fitView(simulation.nodes());
+scEl.addEventListener('click',e=>{
+  e.stopPropagation();
+  if(searchKw.length){ searchKw=[]; keywordsChanged(); }
+  else { sbEl.value=''; runSearch(); }
+  sbEl.focus();
 });
+// A click anywhere in the box (around the chips) goes to the text field
+document.getElementById('searchWrap').addEventListener('click',()=>sbEl.focus());
 
 // ── Year range sliders ──────────────────────────────────────────────────
 (function(){
