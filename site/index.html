@@ -15,10 +15,6 @@
       display: flex; align-items: center; gap: 16px;
     }
     header img { height: 44px; object-fit: contain; }
-    header .site-label {
-      color: rgba(255,255,255,0.75); font-size: 12px; font-weight: 600;
-      letter-spacing: 1.5px; text-transform: uppercase;
-    }
 
     main { flex: 1; }
     .intro { max-width: 860px; margin: 0 auto; padding: 52px 40px 36px; }
@@ -66,6 +62,7 @@
     /* ── Mobile ──────────────────────────────────────────── */
     @media (max-width: 768px) {
       header { padding: 14px 20px; }
+      header img { height: 36px; }
       .intro { padding: 32px 20px 24px; }
       .intro h1 { font-size: 1.5rem; margin-bottom: 14px; }
       .intro p { font-size: 0.95rem; line-height: 1.65; }
@@ -79,7 +76,6 @@
 
   <header>
     <img src="https://newtexeco.nl/wp-content/uploads/2023/12/logo_2x.png" alt="NewTexEco" />
-    <span class="site-label">NewTexEco</span>
   </header>
 
   <main>
