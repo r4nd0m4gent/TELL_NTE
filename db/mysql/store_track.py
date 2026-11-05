@@ -2,8 +2,8 @@
 store_track.py
 ──────────────
 Maintenance for the usage-tracking table `tracking_events`. The dashboard writes
-the events itself (textile_companies_NL.py, log_event); this script manages the
-table.
+the events itself (textile_companies_NL.py, log_event), the funding network
+through the dashboard's /track route; this script manages the table.
 
 Visit source
 ------------
@@ -23,6 +23,16 @@ Sessions without a `session_start` row stay NULL.
 
 Run it before deploying the dashboard version that writes `source`: until the
 column exists, that version's tracking inserts fail (silently).
+
+Page
+----
+`--add-page` adds a `page` column: which page the event happened on,
+`dashboard` (the Dash app) or `network` (the funding network, which posts its
+events to the dashboard's /track route). Every event recorded before the
+network was tracked came from the dashboard, so rows without a page are
+labelled `dashboard`. Run it before deploying the version that writes `page`;
+running it again after the deploy labels the rows the old version wrote in
+between, and changes nothing else.
 
 Duplicate session_start rows
 ----------------------------
@@ -48,6 +58,7 @@ Usage
     python db/mysql/store_track.py                        # counts per source
     python db/mysql/store_track.py --add-source           # show what would change
     python db/mysql/store_track.py --add-source --apply   # add the column, label rows
+    python db/mysql/store_track.py --add-page --apply     # add + fill the page column
     python db/mysql/store_track.py --dedupe               # count duplicate rows
     python db/mysql/store_track.py --dedupe --apply       # delete them
     python db/mysql/store_track.py --drop-detail referrer --apply
@@ -86,6 +97,30 @@ def has_source_column(conn) -> bool:
     return bool(conn.execute(text(
         "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE()"
         " AND table_name = 'tracking_events' AND column_name = 'source'")).scalar())
+
+
+def has_page_column(conn) -> bool:
+    return bool(conn.execute(text(
+        "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE()"
+        " AND table_name = 'tracking_events' AND column_name = 'page'")).scalar())
+
+
+def add_page(engine, apply: bool) -> None:
+    with engine.connect() as conn:
+        exists = has_page_column(conn)
+        unlabelled = conn.execute(text(
+            "SELECT COUNT(*) FROM tracking_events" +
+            (" WHERE page IS NULL" if exists else ""))).scalar()
+    print(f"`page` column exists: {exists}; events to label 'dashboard': {unlabelled:,}")
+    if not apply:
+        print("Dry run: nothing written. Add --apply to write.")
+        return
+    with engine.begin() as conn:
+        if not exists:
+            conn.execute(text(
+                "ALTER TABLE tracking_events ADD COLUMN page VARCHAR(16) NULL AFTER event_type"))
+        conn.execute(text("UPDATE tracking_events SET page = 'dashboard' WHERE page IS NULL"))
+    print("page column ready")
 
 
 def classify(details: dict) -> str:
@@ -241,6 +276,8 @@ def main() -> int:
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--add-source", action="store_true",
                    help="add the `source` column and label existing events")
+    p.add_argument("--add-page", action="store_true",
+                   help="add the `page` column and label existing events 'dashboard'")
     p.add_argument("--dedupe", action="store_true",
                    help="delete session_start rows repeated for one page load")
     p.add_argument("--drop-detail", metavar="FIELD",
@@ -254,6 +291,8 @@ def main() -> int:
     engine = get_engine()
     if args.add_source:
         add_source(engine, args.apply)
+    if args.add_page:
+        add_page(engine, args.apply)
     if args.dedupe:
         dedupe(engine, args.apply)
     if args.drop_detail:

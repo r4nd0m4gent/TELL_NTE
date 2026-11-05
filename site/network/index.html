@@ -515,6 +515,46 @@ svg#graph-svg{cursor:default}
 
 <script>
 // ══════════════════════════════════════════════════════════════════════════
+// USAGE TRACKING
+// ══════════════════════════════════════════════════════════════════════════
+// Events go to the dashboard server (TRACK_EVENTS in textile_companies_NL.py,
+// which lists the event types it accepts) and land in the tracking_events
+// table with page='network'. The session id is the one the dashboard keeps in
+// the tab's sessionStorage, so going from one page to the other stays one
+// visit. Relative URL: /network/ -> /dashboard/track, and the same under /dev/
+// (where the dev server drops the events). Tracking never gets in the way:
+// every failure is ignored.
+const TRACK_URL='../dashboard/track';
+const trackSid=(()=>{
+  try{
+    let sid=sessionStorage.getItem('tell_sid');
+    if(!sid){
+      sid=(window.crypto&&crypto.randomUUID)?crypto.randomUUID()
+         :'sid-'+Date.now()+'-'+Math.random().toString(16).slice(2);
+      sessionStorage.setItem('tell_sid',sid);
+    }
+    return sid;
+  }catch(e){ return null; }
+})();
+function track(type, details={}){
+  try{
+    const body=JSON.stringify({sid:trackSid, page:'network', type, details});
+    const blob=new Blob([body],{type:'application/json'});
+    if(!(navigator.sendBeacon && navigator.sendBeacon(TRACK_URL,blob)))
+      fetch(TRACK_URL,{method:'POST',body,keepalive:true,
+                       headers:{'Content-Type':'application/json'}}).catch(()=>{});
+  }catch(e){}
+}
+// For controls that change continuously (typing, sliders): one event once the
+// visitor pauses, not one per keystroke or slider step.
+const trackTimers={};
+function trackLater(type, details, ms=1500){
+  clearTimeout(trackTimers[type]);
+  trackTimers[type]=setTimeout(()=>track(type, details), ms);
+}
+track('session_start',{screen:`${screen.width}x${screen.height}`});
+
+// ══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ══════════════════════════════════════════════════════════════════════════
 const NL_CODES = new Set(['NL','NLD','NETHERLANDS','THE NETHERLANDS']);
@@ -1003,7 +1043,8 @@ function renderKwChips(){
     `<span class="kw-chip">${esc(k.label)}<button data-i="${i}" title="Remove this keyword" aria-label="Remove ${esc(k.label)}">✕</button></span>`).join('');
   box.querySelectorAll('button').forEach(b=>b.addEventListener('click',e=>{
     e.stopPropagation();
-    searchKw.splice(+b.dataset.i,1);
+    const [gone]=searchKw.splice(+b.dataset.i,1);
+    track('keyword_remove',{keyword:gone&&gone.label, keywords:searchKw.map(k=>k.label)});
     renderKwChips(); render();
   }));
   document.getElementById('searchClear').classList.toggle('visible',!!(searchTerm||searchKw.length));
@@ -1177,6 +1218,7 @@ function orgPids(name){
 // Select an organisation: its projects go to the top of the table, light up in
 // the network or on the map, and its panel opens
 function setOrgFocus(name, pids=orgPids(name)){
+  track('org_select',{org:name, view, projects:pids.size??pids.length});
   selectedOrg=name; selectedProj=null; orgFocusSet=new Set(pids);
   updateProjList(currentProjects); renderNLOrgs(currentProjects); applyGraphHighlight();
   syncNetworkPin();
@@ -1186,6 +1228,8 @@ function setOrgFocus(name, pids=orgPids(name)){
 // Select a project: its profile opens, and its partners light up in the network
 // or on the map. The table keeps its order, so a click there doesn't move rows.
 function setProjFocus(p){
+  track('project_select',{project_id:p.project_id, programme:progKey(p), view,
+                          title:String(p.title_en||p.title||'').slice(0,200)});
   selectedProj=p; selectedOrg=null; orgFocusSet.clear();
   updateProjList(currentProjects); renderNLOrgs(currentProjects); applyGraphHighlight();
   syncNetworkPin();
@@ -2392,7 +2436,10 @@ function setView(v){
   }
   render();
 }
-document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{
+  if(b.dataset.view!==view) track('view_change',{view:b.dataset.view});
+  setView(b.dataset.view);
+}));
 
 // ══════════════════════════════════════════════════════════════════════════
 // CSV DOWNLOAD
@@ -2409,6 +2456,7 @@ document.getElementById('downloadBtn').addEventListener('click',()=>{
   a.href=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv'}));
   a.download=`nl_textile_funding_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
+  track('download',{projects:projs.length});
 });
 
 // Reset excluded
@@ -2423,6 +2471,7 @@ document.getElementById('resetExclBtn').addEventListener('click',()=>{
 document.querySelectorAll('.ptab').forEach(tab=>tab.addEventListener('click',()=>{
   document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));
   tab.classList.add('active');
+  if(activePanel!==tab.dataset.panel) track('tab_change',{panel:tab.dataset.panel});
   activePanel=tab.dataset.panel;
   document.getElementById('proj-pane').style.display=activePanel==='proj'?'flex':'none';
   const op=document.getElementById('orgs-pane');
@@ -2448,12 +2497,14 @@ wireSort('orgTable',  ()=>orgSort,  renderNLOrgs);
 document.querySelectorAll('[data-prog]').forEach(btn=>btn.addEventListener('click',()=>{
   const p=btn.dataset.prog;
   activeProgs.has(p)?(activeProgs.delete(p),btn.classList.remove('active')):(activeProgs.add(p),btn.classList.add('active'));
+  track('programme_toggle',{programme:p, on:activeProgs.has(p), active:[...activeProgs]});
   render();
 }));
 
 // European research partners, in the network and on the map
 document.getElementById('euToggle').addEventListener('change',e=>{
   euPartners=e.target.checked;
+  track('option_toggle',{option:'eu_partners', on:euPartners});
   render();
   if(view==='map') fitMapToNodes();
 });
@@ -2461,6 +2512,7 @@ document.getElementById('euToggle').addEventListener('change',e=>{
 // Dutch-led only
 document.getElementById('nlLedToggle').addEventListener('change',e=>{
   nlLedOnly=e.target.checked;
+  track('option_toggle',{option:'dutch_led_only', on:nlLedOnly});
   render();
 });
 
@@ -2484,6 +2536,8 @@ function runSearch(){
   applySearch(currentProjects);
   updateProjList(currentProjects);
   applyGraphHighlight();
+  if(searchTerm) trackLater('search',{query:searchTerm.slice(0,200), matches:searchHits.size});
+  else clearTimeout(trackTimers.search);   // text cleared before the pause
 }
 function keywordsChanged(){
   sbEl.value=''; searchTerm='';
@@ -2498,14 +2552,27 @@ sbEl.addEventListener('keydown',e=>{
   if(e.key==='Enter'){
     e.preventDefault();
     const text=sbEl.value.trim().toLowerCase();
-    if(addKeyword(text) || searchKw.some(k=>k.label===text)) keywordsChanged();
+    const added=addKeyword(text);
+    if(added){
+      // The typed text became a keyword: that is the event, not the search
+      clearTimeout(trackTimers.search);
+      track('keyword_add',{keyword:text.slice(0,200), keywords:searchKw.map(k=>k.label)});
+    }
+    if(added || searchKw.some(k=>k.label===text)) keywordsChanged();
   }
-  if(e.key==='Backspace' && !sbEl.value && searchKw.length){ searchKw.pop(); keywordsChanged(); }
+  if(e.key==='Backspace' && !sbEl.value && searchKw.length){
+    const gone=searchKw.pop();
+    track('keyword_remove',{keyword:gone.label, keywords:searchKw.map(k=>k.label)});
+    keywordsChanged();
+  }
   if(e.key==='Escape') scEl.click();
 });
 scEl.addEventListener('click',e=>{
   e.stopPropagation();
-  if(searchKw.length){ searchKw=[]; keywordsChanged(); }
+  if(searchKw.length){
+    track('keyword_remove',{keyword:null, keywords:[]});   // ✕: all cleared
+    searchKw=[]; keywordsChanged();
+  }
   else { sbEl.value=''; runSearch(); }
   sbEl.focus();
 });
@@ -2535,6 +2602,7 @@ document.getElementById('searchWrap').addEventListener('click',()=>sbEl.focus())
     yearMin=+fromEl.value;
     yearMax=+toEl.value;
     updateFill();
+    trackLater('year_range',{from:yearMin, to:yearMax}, 1000);
     render();
   }
   fromEl.addEventListener('input', onSlider);
@@ -2545,6 +2613,7 @@ document.getElementById('searchWrap').addEventListener('click',()=>sbEl.focus())
 // Label toggles
 document.getElementById('orgLabelsToggle').addEventListener('change',e=>{
   showOrgLabels=e.target.checked;
+  track('option_toggle',{option:'org_labels', on:showOrgLabels});
   if(pinnedNode){
     updatePinLabels(pinnedNode);
   } else {
@@ -2556,6 +2625,7 @@ document.getElementById('orgLabelsToggle').addEventListener('change',e=>{
 });
 document.getElementById('projLabelsToggle').addEventListener('change',e=>{
   showProjLabels=e.target.checked;
+  track('option_toggle',{option:'project_labels', on:showProjLabels});
   if(pinnedNode){
     updatePinLabels(pinnedNode);
   } else {
@@ -2566,6 +2636,8 @@ document.getElementById('projLabelsToggle').addEventListener('change',e=>{
 // Org search filter
 document.getElementById('orgSearchIn').addEventListener('input',e=>{
   orgFilter=e.target.value.trim();
+  if(orgFilter) trackLater('org_search',{query:orgFilter.slice(0,200)});
+  else clearTimeout(trackTimers.org_search);
   renderNLOrgs(filteredProjects());
 });
 

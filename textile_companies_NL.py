@@ -6,6 +6,7 @@ import threading
 import zlib
 from collections import Counter
 from html import escape as escape_html
+from urllib.parse import quote
 import dash
 from dash import dcc, html, Input, Output, State, ALL, dash_table, ctx
 import plotly.express as px
@@ -354,11 +355,18 @@ _consortium_options = [{'label': _consortium_label(c), 'value': c}
 # Session starts, click events, and filter changes are written to the
 # `tracking_events` table. Writes run on a background thread so they never block
 # the UI, and any failure is swallowed so tracking can't break the dashboard.
+# The funding network (site/network/) is a static page: it posts its events to
+# the /track route below, and they land in the same table with page='network'.
+# Both pages keep the session id in the tab's sessionStorage ('tell_sid'), so a
+# visitor going from one page to the other stays one session.
+# An existing table gets the `page` column from
+# `python db/mysql/store_track.py --add-page --apply`.
 _TRACK_DDL = (
     "CREATE TABLE IF NOT EXISTS tracking_events ("
     " id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,"
     " session_id VARCHAR(64),"
     " event_type VARCHAR(32) NOT NULL,"
+    " page VARCHAR(16),"
     " details JSON,"
     " source VARCHAR(16),"
     " resolves_to VARCHAR(255),"
@@ -399,7 +407,7 @@ def _get_track_engine():
     return _track_engine
 
 
-def _write_event(session_id, event_type, details, source=None, ip=None):
+def _write_event(session_id, event_type, details, source=None, ip=None, page='dashboard'):
     """Insert one tracking row. Runs on a worker thread; errors are ignored."""
     global _track_schema_ready
     try:
@@ -415,9 +423,9 @@ def _write_event(session_id, event_type, details, source=None, ip=None):
                         _track_schema_ready = True
             conn.execute(
                 text("INSERT INTO tracking_events"
-                     " (session_id, event_type, details, source, resolves_to)"
-                     " VALUES (:sid, :etype, :details, :source, :host)"),
-                {'sid': session_id, 'etype': event_type,
+                     " (session_id, event_type, page, details, source, resolves_to)"
+                     " VALUES (:sid, :etype, :page, :details, :source, :host)"),
+                {'sid': session_id, 'etype': event_type, 'page': page,
                  'details': json.dumps(details or {}, default=str), 'source': source,
                  'host': _resolves_to(ip)},
             )
@@ -425,7 +433,7 @@ def _write_event(session_id, event_type, details, source=None, ip=None):
         pass
 
 
-def log_event(session_id, event_type, details=None):
+def log_event(session_id, event_type, details=None, page='dashboard'):
     """Fire-and-forget tracking write (non-blocking)."""
     if os.getenv('TELL_INSTANCE') == 'dev':
         return   # the dev preview shares the database; keep it out of the visit stats
@@ -433,7 +441,7 @@ def log_event(session_id, event_type, details=None):
     # reverse lookup happens on that thread, where it cannot delay the page.
     threading.Thread(target=_write_event,
                      args=(session_id, event_type, details or {},
-                           _visit_source(), _client_ip()),
+                           _visit_source(), _client_ip(), page),
                      daemon=True).start()
 
 
@@ -1031,6 +1039,8 @@ app.layout = html.Div([
     dcc.Store(id='trk-session-sink'),
     dcc.Store(id='trk-filter-sink'),
     dcc.Store(id='trk-click-sink'),
+    dcc.Store(id='trk-chart-sink'),
+    dcc.Store(id='trk-cloud-sink'),
     dcc.Store(id='axis-click-sink'),
 
 ], className='tell-app', style={'fontFamily': 'Inter, sans-serif', 'padding': '20px', 'maxWidth': '1400px', 'margin': 'auto'}),
@@ -1515,14 +1525,19 @@ def _export_state(regions, companies, keywords, cities, consortiums,
     Input('consortium-dropdown','value'),
     Input('selected-city',      'data'),
     Input('chart-filters',      'data'),
+    # The session id goes into the link so the download is logged with the
+    # visit it belongs to.
+    Input('session-id',         'data'),
 )
 def update_export_link(regions, companies, keywords, cities, consortiums,
-                       selected_city, chart_filters):
+                       selected_city, chart_filters, session_id):
     _, filtered = select_companies(regions, companies, keywords, cities,
                                    consortiums, selected_city, chart_filters)
     filtered = visible_companies(filtered)
     href = app.get_relative_path('/export/companies.xlsx') + '?f=' + _export_state(
         regions, companies, keywords, cities, consortiums, selected_city, chart_filters)
+    if session_id:
+        href += '&sid=' + quote(str(session_id))
     return href, f'⬇ Export filtered data ({len(filtered):,})'
 
 
@@ -1554,11 +1569,59 @@ def export_filtered_companies():
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
         export.to_excel(writer, index=False, sheet_name='Companies')
     buffer.seek(0)
+    log_event(request.args.get('sid'), 'export', {'rows': len(export), 'filters': state})
     stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     return send_file(buffer, as_attachment=True,
                      download_name=f'tell_companies_{stamp}.xlsx',
                      mimetype='application/vnd.openxmlformats-officedocument.'
                               'spreadsheetml.sheet')
+
+
+# ── Tracking endpoint for the static pages ────────────────────────────────────
+# The funding network (site/network/index.html) has no server of its own, so it
+# posts its events here: {sid, page, type, details}. Only the pages and event
+# types listed are accepted, and the details are capped, so the route cannot be
+# used to fill the table with arbitrary data. Always answers 204: a tracking
+# problem must never show up on the page.
+TRACK_EVENTS = {
+    'network': {
+        'session_start',     # page loaded
+        'view_change',       # network <-> map
+        'search',            # text typed in the search box (after a pause)
+        'keyword_add',       # search text kept as a keyword chip (Enter)
+        'keyword_remove',    # a chip removed, or all of them cleared
+        'programme_toggle',  # NWO / Erasmus+ / Horizon Europe / H2020 buttons
+        'year_range',        # the year sliders (after a pause)
+        'option_toggle',     # EU partners, Dutch-led only, label switches
+        'org_select',        # an organisation clicked (network, map or table)
+        'project_select',    # a project clicked (network, map or table)
+        'tab_change',        # projects <-> organisations table
+        'org_search',        # the organisation table's search (after a pause)
+        'download',          # CSV download
+    },
+}
+TRACK_DETAILS_MAX = 2000      # characters of JSON per event
+
+
+@server.route(app.config.requests_pathname_prefix + 'track', methods=['POST'])
+def track_static_page():
+    from flask import request
+    payload = request.get_json(force=True, silent=True)
+    if not isinstance(payload, dict):
+        return '', 204
+    page, event_type = payload.get('page'), payload.get('type')
+    if event_type not in TRACK_EVENTS.get(page, ()):
+        return '', 204
+    session_id = str(payload.get('sid') or '')[:64] or None
+    details = payload.get('details')
+    details = details if isinstance(details, dict) else {}
+    if len(json.dumps(details, default=str)) > TRACK_DETAILS_MAX:
+        details = {'truncated': True}
+    if event_type == 'session_start':
+        # Read on the server, like the dashboard's own session_start.
+        details = {**details, **_request_meta()}
+    log_event(session_id, event_type, details, page=page)
+    return '', 204
 
 
 # ── Clickable category labels ─────────────────────────────────────────────────
@@ -1746,6 +1809,34 @@ def track_clicks(click_data, active_cell, session_id):
             'column': active_cell.get('column_id'),
             'company': data.at[row_id, 'trade_name'] if row_id in data.index else None,
         })
+    return dash.no_update
+
+
+@app.callback(
+    Output('trk-chart-sink', 'data'),
+    Input('chart-filters', 'data'),
+    State('session-id', 'data'),
+    prevent_initial_call=True,
+)
+def track_chart_filters(chart_filters, session_id):
+    """Record a slice, bar or legend click on the distribution charts: the
+    filters they set have no dropdown, so filter_change never sees them."""
+    log_event(session_id, 'chart_filter', {'filters': chart_filters or {}})
+    return dash.no_update
+
+
+@app.callback(
+    Output('trk-cloud-sink', 'data'),
+    Input({'type': 'cloud-word', 'tag': ALL}, 'n_clicks'),
+    State('session-id', 'data'),
+    prevent_initial_call=True,
+)
+def track_cloud_clicks(_clicks, session_id):
+    """Record a word clicked in the keyword cloud. The keyword then also shows
+    up in a filter_change, but there it cannot be told from one picked in the
+    dropdown."""
+    if isinstance(ctx.triggered_id, dict) and any(t['value'] for t in ctx.triggered):
+        log_event(session_id, 'cloud_click', {'keyword': ctx.triggered_id['tag']})
     return dash.no_update
 
 
