@@ -3,10 +3,11 @@ import base64
 import datetime
 import json
 import threading
+import zlib
 from collections import Counter
 from html import escape as escape_html
 import dash
-from dash import dcc, html, Input, Output, State, dash_table, ctx
+from dash import dcc, html, Input, Output, State, ALL, dash_table, ctx
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -600,6 +601,55 @@ def _keyword_options(tag_lists, search=None, selected=None):
     return options
 
 
+# ── Keyword cloud ─────────────────────────────────────────────────────────────
+# The most frequent keywords among the companies shown, sized by how many
+# companies carry them. Plain HTML rather than a rendered image: the words stay
+# sharp at any width, wrap on a phone, and each one is a button that adds the
+# keyword to the filter.
+CLOUD_WORDS = 60
+CLOUD_MIN_PX, CLOUD_MAX_PX = 12, 34
+# Scraped words that turn up on many websites but say nothing about what a
+# company specializes in. Left out of the cloud only; the filter, the table and
+# the profiles still show them.
+CLOUD_STOPWORDS = {
+    'appointment', 'article', 'business', 'collect', 'company', 'deliver',
+    'discount', 'experience', 'general', 'good', 'hold', 'item', 'make', 'name',
+    'offer', 'personal', 'product', 'quality', 'quotation', 'range', 'request',
+    'sale', 'service', 'shipping', 'size', 'store locator', 'work',
+}
+
+
+def keyword_cloud(tag_lists, selected=None):
+    """Buttons for the CLOUD_WORDS most frequent keywords in `tag_lists`.
+
+    Keywords already in the filter are left out: every company shown carries
+    them, so they would only crowd out the ones the user can still pick. What
+    remains are the keywords that occur alongside them.
+    """
+    selected = {str(s).strip().lower() for s in (selected or ())}
+    skip = selected | CLOUD_STOPWORDS
+    counts = Counter(t for tags in tag_lists for t in tags if t not in skip)
+    top = counts.most_common(CLOUD_WORDS)
+    if not top:
+        return html.P('No keywords for the current selection.', className='tell-cloud-empty')
+    # Square root, like the map bubbles: a few words carried by thousands of
+    # companies would otherwise shrink everything else to the minimum size.
+    hi, lo = top[0][1] ** 0.5, top[-1][1] ** 0.5
+    words = []
+    # Ordered by a hash of the word, not by count: the big words spread across
+    # the cloud instead of piling up at the start, and a word keeps its place
+    # relative to the others when the filters change.
+    for tag, n in sorted(top, key=lambda kv: zlib.crc32(kv[0].encode())):
+        weight = (n ** 0.5 - lo) / (hi - lo) if hi > lo else 1.0
+        level = 1 if weight >= 0.5 else 2 if weight >= 0.15 else 3
+        words.append(html.Button(
+            tag, id={'type': 'cloud-word', 'tag': tag}, n_clicks=0,
+            className=f'tell-cloud-word tell-cloud-l{level}',
+            style={'fontSize': f'{CLOUD_MIN_PX + weight * (CLOUD_MAX_PX - CLOUD_MIN_PX):.0f}px'},
+            title=f'{tag}: {n:,} companies · click to filter'))
+    return words
+
+
 def _company_options(companies, search=None, selected=None):
     """Company dropdown options among the rows of `companies`.
 
@@ -933,6 +983,14 @@ app.layout = html.Div([
                flex='1 1 300px', minWidth='300px'),
     ], className='tell-pies', style={'display': 'flex', 'flexWrap': 'wrap', 'gap': '16px', 'marginTop': '20px'}),
 
+    # ── Keyword cloud ─────────────────────────────────────────────────────────
+    html.Div([
+        _block_head('Keyword Cloud',
+                    f'The {CLOUD_WORDS} most frequent keywords among the companies shown · '
+                    'click a word to add it to the keyword filter'),
+        html.Div(id='keyword-cloud', className='tell-card tell-cloud'),
+    ], className='tell-block', style={'marginTop': '20px'}),
+
     # ── Buttons ───────────────────────────────────────────────────────────────
     html.Div([
         html.A('✏️ Contribute (add/edit data)', href='/contribute/',
@@ -1047,7 +1105,9 @@ def update_company_options(search, regions, cities, keywords, consortiums, compa
     Input('city-dropdown',      'value'),
     Input('company-dropdown',   'value'),
     Input('consortium-dropdown','value'),
-    State('keywords-dropdown',  'value'),
+    # An Input, not State: a keyword added from the cloud may not be among the
+    # options yet, and the dropdown only shows values it has an option for.
+    Input('keywords-dropdown',  'value'),
 )
 def update_keyword_options(search, regions, cities, companies, consortiums, keywords):
     subset = filter_data(regions, companies, None, cities, consortiums)
@@ -1310,6 +1370,42 @@ def update_dashboard(selected_regions, selected_companies, selected_keywords,
                   if active else "")
     return (kpi_active, kpi_web, kpi_contacts, map_fig, region_fig,
             pie_cat, tier_bar, year_bar, pie_class, city_label)
+
+
+# ── Keyword cloud callbacks ───────────────────────────────────────────────────
+@app.callback(
+    Output('keyword-cloud',     'children'),
+    Input('region-dropdown',    'value'),
+    Input('company-dropdown',   'value'),
+    Input('keywords-dropdown',  'value'),
+    Input('city-dropdown',      'value'),
+    Input('consortium-dropdown','value'),
+    Input('selected-city',      'data'),
+    Input('chart-filters',      'data'),
+)
+def update_keyword_cloud(regions, companies, keywords, cities, consortiums,
+                         selected_city, chart_filters):
+    _, filtered = select_companies(regions, companies, keywords, cities,
+                                   consortiums, selected_city, chart_filters)
+    return keyword_cloud(filtered['tag_list'], keywords)
+
+
+@app.callback(
+    Output('keywords-dropdown', 'value'),
+    Input({'type': 'cloud-word', 'tag': ALL}, 'n_clicks'),
+    State('keywords-dropdown',  'value'),
+    prevent_initial_call=True,
+)
+def add_cloud_keyword(_clicks, keywords):
+    # A redrawn cloud brings new buttons with n_clicks=0, which can also fire
+    # this callback; only a real click has a count.
+    if not isinstance(ctx.triggered_id, dict) or not any(t['value'] for t in ctx.triggered):
+        return dash.no_update
+    tag = ctx.triggered_id['tag']
+    keywords = list(keywords or [])
+    if tag in keywords:
+        return dash.no_update
+    return keywords + [tag]
 
 
 # ── Companies table callback ──────────────────────────────────────────────────

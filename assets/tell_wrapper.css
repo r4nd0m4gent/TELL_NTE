@@ -138,6 +138,28 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
 /* Keywords the user is filtering on, so it is clear why the row matched */
 .tell-chip-on { background: #513773; border-color: #513773; color: #fff; font-weight: 600; }
 
+/* ── Keyword cloud ────────────────────────────────────────────────────── */
+/* Words sized by frequency (font size set inline); the three levels set the
+   colour, so the most common words also stand out for readers who cannot
+   tell the sizes apart at a glance. */
+.tell-cloud {
+    display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
+    gap: 4px 14px; padding: 22px 24px; min-height: 120px;
+}
+.tell-cloud-word {
+    background: none; border: none; padding: 2px 4px; border-radius: 6px;
+    font-family: inherit; line-height: 1.15; cursor: pointer;
+    transition: background-color 0.12s, color 0.12s;
+}
+.tell-cloud-l1 { color: #513773; font-weight: 700; }
+.tell-cloud-l2 { color: #54639E; font-weight: 600; }
+.tell-cloud-l3 { color: #6b6b76; font-weight: 500; }
+.tell-cloud-word:hover, .tell-cloud-word:focus-visible {
+    background: #f2eff7; color: #513773; outline: none;
+}
+.tell-cloud-word:focus-visible { box-shadow: 0 0 0 2px #513773; }
+.tell-cloud-empty { margin: auto; font-size: 13px; color: #6b6b76; }
+
 /* Markdown cells add their own paragraph margins; chips sit flush without them */
 .dash-cell .dash-cell-value p { margin: 0; }
 
