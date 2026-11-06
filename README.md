@@ -3,9 +3,8 @@
 @author r4nd0m4gent
 
 TELL gives a multi-perspective picture of the Dutch Textile, Clothing, Leather
-and Footwear sector: where businesses are and what they specialise in, and how
-research institutions and companies work together through funded projects. The
-data structure and the site are built so they can be extended to the rest of the EU.
+and Footwear sector in NL: where businesses are and what they specialise in, and how
+research institutions and companies work together through funded projects.
 
 Live site: <https://tell.newtexeco.nl>
 
@@ -134,9 +133,3 @@ sudo bash /home/tell/app/deploy/setup_ssl.sh
 certbot certificates                       # check expiry
 systemctl list-timers | grep certbot       # check the renewal timer
 ```
-
-## Secrets
-
-Credentials (database, server) are never written in this repository: not in
-code, docs or commit messages. Keep them in the git-ignored `.env` files and
-share them outside of git.
