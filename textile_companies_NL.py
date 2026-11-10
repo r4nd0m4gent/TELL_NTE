@@ -860,6 +860,8 @@ app.layout = html.Div([
         html.Div('Business activity and specializations', className='tell-page-title'),
         html.A([html.Span('←', **{'aria-hidden': 'true'}), ' Back to Home'],
                href='../', className='tell-home'),
+        html.A('Deep dive', href='../articles/', className='tell-deep',
+               title='Search the articles of open-access textile journals'),
     ], className='tell-header'),
 
     # ── The dashboard ─────────────────────────────────────────────────────────
@@ -1595,6 +1597,22 @@ TRACK_EVENTS = {
         'tab_change',        # projects <-> organisations table
         'org_search',        # the organisation table's search (after a pause)
         'download',          # CSV download
+    },
+    # Journal articles (site/articles/index.html)
+    'articles': {
+        'session_start',     # page loaded (with the query it opened on, if any)
+        'search',            # a search run: query, result count, filters
+        'example',           # an example search on the start page
+        'suggestion_pick',   # a suggested keyword picked while typing
+        'advanced_search',   # the advanced search form
+        'filter_change',     # date, sort, journal, open-access, library
+        'page_change',       # another page of results
+        'result_open',       # title, PDF/HTML or DOI link clicked
+        'abstract_open',     # an abstract unfolded
+        'related',           # "Related articles"
+        'cite',              # the citation dialog opened
+        'cite_download',     # BibTeX / RIS downloaded
+        'save',              # saved to / removed from the library
     },
 }
 TRACK_DETAILS_MAX = 2000      # characters of JSON per event

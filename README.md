@@ -16,6 +16,7 @@ Live site: <https://tell.newtexeco.nl>
 | `/` | Landing page. Introduces TELL and links to the two perspectives. |
 | `/dashboard/` | **Business specialization**: dashboard of Dutch textile businesses. |
 | `/network/` | **Research network**: research-funding network across the Netherlands and the EU. |
+| `/articles/` | **Deep dive**: search the articles of open-access textile journals. Reached by the "Deep dive" button in the page header. |
 | `/contribute/` | Contribution form for feedback and suggested edits or additions. |
 
 ### Business specialization dashboard (`/dashboard/`)
@@ -54,11 +55,30 @@ Digital Europe, …).
 - **Project and organisation profiles**, sortable tables, CSV download, and
   the option to exclude projects that were matched by mistake.
 
+### Journal articles (`/articles/`)
+
+A static page that searches about 5,900 open-access articles from Textiles,
+Fibers, Sustainability (textile articles only), Fashion and Textiles and the
+Journal of Engineered Fibers and Fabrics, collected from OpenAlex by
+`new_tell_scraper/fetch_textile_oa.py`. It is stored in the `journal_articles`
+table by `db/mysql/import_articles.py --apply`, which also writes the page's data.
+
+- **Search like Google Scholar**: results ranked by relevance (title first,
+  then authors, keywords and abstract), with the matching words highlighted.
+  Supports `"phrases"`, `OR`, `-word`, `author:`, `intitle:`, `allintitle:` and
+  `source:` (journal), an advanced-search form, and keyword suggestions.
+- **Filters**: date (presets or a custom range), sort by relevance or date,
+  journals (with counts), and open-access copy only.
+- **Per article**: PDF/HTML link, citations in APA, MLA, Chicago, Harvard and
+  Vancouver plus BibTeX/RIS download, related articles, the full abstract, and
+  a personal library saved in the browser.
+- Searches are in the URL, so they can be shared and the back button works.
+
 ### Usage tracking
 
-The dashboard and the funding network both log anonymous usage events (session
-starts, clicks, filter changes). A visitor who moves between the two pages stays
-one session. Events are labelled by source, so test and development traffic can
+The dashboard, the funding network and the articles page log anonymous usage
+events (session starts, searches, clicks, filter changes). A visitor who moves
+between the pages stays one session. Events are labelled by source, so test and development traffic can
 be told apart from real visitors.
 
 ## Repository layout
@@ -72,9 +92,11 @@ semantic_classifier.py      Sentence-embedding classifier
 build_embeddings.py         Precomputes company embeddings so classification runs take seconds
 build_network_locations.py  Places funding-network organisations on the map (CORDIS + GeoNames)
 assets/                     Dashboard CSS/JS
-site/                       Static pages served by Nginx: landing page, network/ and its data
+site/                       Static pages served by Nginx: landing page, network/ and
+                            articles/, each with its data
 db/                         Data-preparation and maintenance scripts (keywords, classes,
-                            tiers, categories, funding import, city names, tracking)
+                            tiers, categories, funding, ECOSYSTEX and article imports,
+                            city names, tracking)
 deploy/                     Server setup: Nginx, systemd units, Gunicorn, deploy scripts
 ```
 

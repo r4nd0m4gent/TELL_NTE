@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Journal articles – TELL</title>
+<meta name="description" content="Search open-access articles from textile journals: Textiles, Fibers, Sustainability, Fashion and Textiles, and the Journal of Engineered Fibers and Fabrics.">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --violet:#513773; --blue:#54639E; --ink:#2c2c2c; --muted:#6b6b76; --line:#e5e3ea;
+  --bg:#f7f7f5; --card:#fff; --link:#3d4f9f; --meta:#2f7a3d; --hl:#fff3b0;
+}
+html,body{margin:0}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--link)}
+button{font-family:inherit}
+
+/* ── Header: the same as the dashboard's (assets/tell_wrapper.css) and the
+   funding network's (site/network/index.html), change them together ── */
+.tell-header{background:#513773;padding:18px 40px;display:flex;align-items:center;gap:16px;font-family:'Inter',sans-serif;flex-shrink:0}
+.tell-header .tell-brand{display:flex;align-items:center;flex-shrink:0}
+.tell-header img{display:block;height:44px;object-fit:contain}
+.tell-header .tell-page-title{margin:0;padding-left:16px;border-left:1px solid rgba(255,255,255,.35);
+  display:flex;align-items:center;min-height:32px;
+  color:#fff;font-size:20px;font-weight:600;line-height:1.2}
+.tell-header .tell-home{margin-left:auto;display:inline-flex;align-items:center;gap:7px;
+  padding:8px 16px;border-radius:999px;background:#fff;color:#513773;
+  font-size:13px;font-weight:700;line-height:1.2;text-decoration:none;white-space:nowrap;
+  box-shadow:0 1px 3px rgba(0,0,0,.25);transition:background .15s,transform .15s}
+.tell-header .tell-home:hover,.tell-header .tell-home:focus-visible{background:#efe9f7;transform:translateX(-2px)}
+.tell-header .tell-home:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.tell-header .tell-deep{display:inline-flex;align-items:center;gap:7px;
+  padding:6.5px 15px;border-radius:999px;border:1.5px solid rgba(255,255,255,.85);color:#fff;
+  font-size:13px;font-weight:700;line-height:1.2;text-decoration:none;white-space:nowrap;transition:background .15s}
+.tell-header .tell-deep::before{content:'';width:13px;height:13px;background:currentColor;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='7' cy='7' r='5' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M11 11l4 4' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
+          mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='7' cy='7' r='5' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M11 11l4 4' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat}
+.tell-header .tell-deep:hover,.tell-header .tell-deep:focus-visible{background:rgba(255,255,255,.14)}
+.tell-header .tell-deep:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.tell-header .tell-deep[aria-current="page"]{background:rgba(255,255,255,.18);cursor:default}
+@media (max-width:768px){
+  .tell-header{padding:14px 20px;gap:12px;flex-wrap:wrap}
+  .tell-header img{height:36px}
+  .tell-header .tell-page-title{font-size:15px;padding-left:12px}
+}
+
+/* ── Search bar ─────────────────────────────────────────────────────── */
+main{flex:1;width:100%;max-width:1180px;margin:0 auto;padding:22px 24px 40px}
+.sbar-wrap{position:relative;max-width:720px}
+.sbar{display:flex;align-items:stretch;background:#fff;border:1px solid #d6d2de;border-radius:10px;
+  box-shadow:0 1px 2px rgba(30,20,50,.05);transition:border-color .15s,box-shadow .15s}
+.sbar:focus-within{border-color:var(--violet);box-shadow:0 0 0 3px rgba(81,55,115,.14)}
+.sbar input{flex:1;min-width:0;border:0;outline:0;background:transparent;padding:12px 14px;font:inherit;font-size:16px;color:var(--ink)}
+.sbar input::-webkit-search-cancel-button{cursor:pointer}
+.sbar .adv-btn{border:0;background:transparent;color:var(--muted);padding:0 12px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap}
+.sbar .adv-btn:hover,.sbar .adv-btn[aria-expanded="true"]{color:var(--violet)}
+.sbar .go{border:0;background:var(--violet);color:#fff;padding:0 18px;border-radius:0 9px 9px 0;cursor:pointer;display:flex;align-items:center}
+.sbar .go:hover{background:#432c61}
+.sbar .go svg{width:18px;height:18px}
+.suggest{position:absolute;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #d6d2de;border-radius:10px;
+  box-shadow:0 8px 24px rgba(30,20,50,.12);list-style:none;margin:0;padding:6px 0;z-index:30}
+.suggest li{padding:7px 14px;cursor:pointer;display:flex;justify-content:space-between;gap:12px;font-size:14px}
+.suggest li span{color:var(--muted);font-size:12px}
+.suggest li[aria-selected="true"],.suggest li:hover{background:#f1edf7}
+
+/* Advanced search */
+.adv{max-width:720px;margin-top:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.adv h2{margin:0 0 12px;font-size:15px;color:var(--violet)}
+.adv .row{display:grid;grid-template-columns:230px 1fr;gap:6px 14px;align-items:center;margin-bottom:9px;font-size:13px}
+.adv .row>label,.adv .row>span{color:#444}
+.adv input[type=text],.adv input[type=number],.adv select{font:inherit;font-size:14px;padding:6px 9px;border:1px solid #cfcbd8;border-radius:6px;width:100%;background:#fff}
+.adv .years{display:flex;gap:8px;align-items:center}
+.adv .years input{width:90px}
+.adv .hint{grid-column:2;color:var(--muted);font-size:12px;margin-top:-4px}
+.adv .acts{display:flex;gap:10px;justify-content:flex-end;margin-top:6px}
+.btn{font:inherit;font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid var(--violet);background:var(--violet);color:#fff;cursor:pointer}
+.btn.ghost{background:#fff;color:var(--violet)}
+.btn:hover{filter:brightness(1.08)}
+
+/* ── Home ───────────────────────────────────────────────────────────── */
+.hero{max-width:720px;margin:40px auto 0;text-align:center}
+.hero h2{font-size:28px;color:var(--violet);margin:0 0 8px}
+.hero p{color:#555;line-height:1.6;margin:0 0 22px}
+.hero .sbar-wrap{margin:0 auto;text-align:left}
+.try{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;font-size:13px;color:var(--muted);align-items:center}
+.try button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;font-size:13px;color:var(--link);cursor:pointer}
+.try button:hover{border-color:var(--violet)}
+.tips{margin:26px auto 0;max-width:720px;text-align:left;font-size:13px;color:#444;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px 18px}
+.tips summary{cursor:pointer;padding:10px 0;font-weight:600;color:var(--violet)}
+.tips table{border-collapse:collapse;margin:0 0 12px}
+.tips td{padding:4px 14px 4px 0;vertical-align:top}
+.tips code{background:#f1edf7;padding:1px 5px;border-radius:4px;font-size:12.5px}
+
+/* ── Results layout ─────────────────────────────────────────────────── */
+.layout{display:grid;grid-template-columns:190px 1fr;gap:28px;margin-top:20px}
+body.home .layout,body.home .top-search{display:none}
+body:not(.home) .hero,body:not(.home) .tips-home{display:none}
+aside{font-size:13px}
+aside .grp{padding:0 0 14px;margin:0 0 14px;border-bottom:1px solid var(--line)}
+aside .grp:last-child{border-bottom:0}
+aside h3{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+aside .opt{display:block;width:100%;text-align:left;border:0;background:none;padding:4px 0;color:var(--ink);cursor:pointer;font-size:13px}
+aside .opt:hover{color:var(--violet)}
+aside .opt.on{color:var(--violet);font-weight:700}
+aside .opt.on::before{content:'';display:inline-block;width:4px;height:12px;background:var(--violet);border-radius:2px;margin:0 6px -1px -10px}
+aside .range{display:flex;gap:6px;align-items:center;margin:6px 0 0}
+aside .range input{width:62px;font:inherit;font-size:13px;padding:4px 6px;border:1px solid #cfcbd8;border-radius:6px}
+aside .range button{font:inherit;font-size:12px;padding:4px 8px;border:1px solid var(--violet);background:#fff;color:var(--violet);border-radius:6px;cursor:pointer}
+aside label.chk{display:flex;gap:7px;align-items:flex-start;padding:3px 0;cursor:pointer;line-height:1.35}
+aside label.chk input{accent-color:var(--violet);margin:2px 0 0}
+aside label.chk span.n{color:var(--muted);margin-left:auto;padding-left:6px}
+aside label.chk.zero{color:#aaa}
+
+#stats{font-size:13px;color:var(--muted);margin:2px 0 14px;min-height:18px}
+#stats b{color:var(--ink)}
+.notice{background:#fff;border:1px solid var(--line);border-left:3px solid var(--violet);border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px;color:#444}
+.notice button{border:0;background:none;color:var(--link);cursor:pointer;padding:0;font-size:13px;text-decoration:underline}
+
+.r{position:relative;padding:0 150px 18px 0;margin-bottom:6px}
+.r-side{position:absolute;right:0;top:2px;width:138px;font-size:13px}
+.r-side a{text-decoration:none;color:var(--link);display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r-side a:hover{text-decoration:underline}
+.r-side .fmt{color:var(--muted);font-weight:600;margin-right:4px}
+.r-title{margin:0 0 3px;font-size:17px;font-weight:500;line-height:1.35}
+.r-title a{color:var(--link);text-decoration:none}
+.r-title a:hover{text-decoration:underline}
+.r-title a:visited{color:#6a3d8f}
+.r-meta{font-size:13px;color:var(--meta);margin-bottom:4px;line-height:1.45}
+.r-meta button{border:0;background:none;padding:0;color:var(--meta);cursor:pointer;font:inherit;text-decoration:underline;text-decoration-color:rgba(47,122,61,.35);text-underline-offset:2px}
+.r-meta button:hover{text-decoration-color:var(--meta)}
+.r-snip{font-size:13.5px;line-height:1.55;color:#3d3d3d}
+.r-title b,.r-snip b,.r-more b,.r-meta b{font-weight:700;color:inherit}
+.r-acts{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:6px;font-size:12.5px}
+.r-acts button,.r-acts a{border:0;background:none;padding:0;color:var(--muted);cursor:pointer;font:inherit;text-decoration:none}
+.r-acts button:hover,.r-acts a:hover{color:var(--violet);text-decoration:underline}
+.r-acts .saved{color:var(--violet);font-weight:600}
+.r-more{margin-top:8px;padding:10px 14px;background:#fff;border:1px solid var(--line);border-radius:8px;font-size:13.5px;line-height:1.6;color:#333}
+.r-more .kv{margin-top:8px;font-size:12.5px;color:#555}
+.r-more .kv span{color:var(--muted);font-weight:600}
+
+.pager{display:flex;flex-wrap:wrap;gap:4px;align-items:center;justify-content:center;margin:22px 0 6px;font-size:14px}
+.pager button{min-width:34px;height:34px;padding:0 10px;border:1px solid transparent;background:none;border-radius:8px;color:var(--link);cursor:pointer;font:inherit}
+.pager button:hover{border-color:var(--line);background:#fff}
+.pager button[aria-current="page"]{color:#fff;background:var(--violet);font-weight:700}
+.pager button:disabled{color:#bbb;cursor:default;background:none;border-color:transparent}
+.empty{font-size:14px;line-height:1.7;color:#444}
+.empty ul{margin:6px 0 0;padding-left:20px}
+.empty button{border:0;background:none;color:var(--link);cursor:pointer;padding:0;font:inherit;text-decoration:underline}
+.empty code{background:#f1edf7;padding:1px 5px;border-radius:4px;font-size:12.5px}
+.loading{color:var(--muted);font-size:14px;padding:30px 0}
+
+/* Cite dialog */
+dialog{border:0;border-radius:12px;padding:0;max-width:680px;width:calc(100% - 32px);box-shadow:0 20px 60px rgba(20,10,40,.3)}
+dialog::backdrop{background:rgba(20,10,40,.35)}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.dlg-head h2{margin:0;font-size:16px;color:var(--violet)}
+.dlg-head button{border:0;background:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1}
+.cites{padding:8px 18px 4px}
+.cite{display:grid;grid-template-columns:86px 1fr auto;gap:12px;padding:10px 0;border-bottom:1px solid #f0eef4;font-size:13px;line-height:1.5;align-items:start}
+.cite:last-child{border-bottom:0}
+.cite .f{color:var(--muted);font-weight:600;text-align:right}
+.cite .t{user-select:all}
+.cite button{border:1px solid var(--line);background:#fff;border-radius:6px;font-size:12px;padding:3px 9px;cursor:pointer;color:var(--violet)}
+.dlg-foot{display:flex;gap:14px;padding:12px 18px 16px;font-size:13px}
+.dlg-foot button{border:0;background:none;color:var(--link);cursor:pointer;padding:0;font:inherit;font-size:13px;text-decoration:underline}
+
+footer{text-align:center;padding:22px 24px;font-size:12px;color:#999;border-top:1px solid #e5e5e5}
+footer a{color:var(--blue);text-decoration:none}
+
+.filt-btn{display:none}
+@media (max-width:760px){
+  main{padding:16px 16px 32px}
+  .layout{grid-template-columns:1fr;gap:6px}
+  /* Filters fold away behind a button, so the results come first */
+  .filt-btn{display:block;justify-self:start;border:1px solid var(--line);background:#fff;border-radius:8px;
+    padding:6px 12px;font-size:13px;font-weight:600;color:var(--violet);cursor:pointer}
+  .filt-btn.active{border-color:var(--violet)}
+  aside{display:none;flex-wrap:wrap;gap:4px 18px;border-bottom:1px solid var(--line);padding-bottom:8px}
+  aside.open{display:flex}
+  aside .grp{border:0;margin:0;padding:0 0 6px;flex:1 1 140px}
+  aside .grp.journals{flex-basis:100%}
+  .r{padding-right:0}
+  .r-side{position:static;width:auto;margin-bottom:2px}
+  .adv .row{grid-template-columns:1fr}
+  .adv .hint{grid-column:1}
+  .hero{margin-top:18px}
+  .hero h2{font-size:22px}
+  .cite{grid-template-columns:1fr auto}
+  .cite .f{grid-column:1/-1;text-align:left}
+}
+</style>
+</head>
+<body class="home">
+
+<header class="tell-header">
+  <a class="tell-brand" href="../" title="Back to the TELL home page">
+    <img src="https://newtexeco.nl/wp-content/uploads/2023/12/logo_2x.png" alt="NewTexEco">
+  </a>
+  <h1 class="tell-page-title">Journal articles</h1>
+  <a class="tell-home" href="../"><span aria-hidden="true">←</span> Back to Home</a>
+  <a class="tell-deep" href="./" aria-current="page" title="Search the articles of open-access textile journals">Deep dive</a>
+</header>
+
+<main>
+  <!-- Home: the search box on its own -->
+  <section class="hero" aria-labelledby="heroTitle">
+    <h2 id="heroTitle">Search textile research</h2>
+    <p id="heroText">Open-access articles from five textile journals.</p>
+    <div id="heroSlot"></div>
+    <div class="try" id="tryList"><span>Try:</span></div>
+  </section>
+  <details class="tips tips-home" id="tipsHome">
+    <summary>Search tips</summary>
+    <table>
+      <tr><td><code>textile recycling</code></td><td>articles with all the words, best matches first; word endings are found too (<i>recycl</i>ing, <i>recycl</i>ed)</td></tr>
+      <tr><td><code>"fast fashion"</code></td><td>the exact phrase</td></tr>
+      <tr><td><code>wool OR cashmere</code></td><td>either word</td></tr>
+      <tr><td><code>denim -cotton</code></td><td>without a word</td></tr>
+      <tr><td><code>author:"Ali"</code></td><td>by an author</td></tr>
+      <tr><td><code>intitle:nonwoven</code></td><td>a word in the title; <code>allintitle:</code> puts every word there</td></tr>
+      <tr><td><code>source:fibers</code></td><td>in one journal</td></tr>
+    </table>
+  </details>
+
+  <!-- Results: search box on top -->
+  <div class="top-search" id="topSlot"></div>
+
+  <div class="sbar-wrap" id="sbarWrap">
+    <form class="sbar" id="searchForm" role="search" autocomplete="off">
+      <input id="q" type="search" name="q" placeholder="Search articles, authors, keywords…" aria-label="Search the articles"
+             aria-autocomplete="list" aria-controls="suggest" aria-expanded="false">
+      <button type="button" class="adv-btn" id="advBtn" aria-expanded="false" aria-controls="adv" title="Advanced search">Advanced ▾</button>
+      <button type="submit" class="go" aria-label="Search"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l4 4" stroke-linecap="round"/></svg></button>
+    </form>
+    <ul class="suggest" id="suggest" role="listbox" hidden></ul>
+    <form class="adv" id="adv" hidden>
+      <h2>Advanced search</h2>
+      <div class="row"><label for="advAll">with <b>all</b> of the words</label><input type="text" id="advAll"></div>
+      <div class="row"><label for="advPhrase">with the <b>exact phrase</b></label><input type="text" id="advPhrase"></div>
+      <div class="row"><label for="advAny">with <b>at least one</b> of the words</label><input type="text" id="advAny"></div>
+      <div class="row"><label for="advNone"><b>without</b> the words</label><input type="text" id="advNone"></div>
+      <div class="row"><span>where my words occur</span>
+        <span><label><input type="radio" name="advWhere" value="any" checked> anywhere in the article</label> &nbsp;
+              <label><input type="radio" name="advWhere" value="title"> in the title</label></span></div>
+      <div class="row"><label for="advAuthor">return articles <b>authored</b> by</label><input type="text" id="advAuthor" placeholder='e.g. "Juanga-Labayen" or Yuan'></div>
+      <div class="row"><label for="advJournal">return articles <b>published</b> in</label><select id="advJournal"><option value="">any journal</option></select></div>
+      <div class="row"><span>return articles <b>dated</b> between</span>
+        <span class="years"><input type="number" id="advFrom" placeholder="e.g. 2018" aria-label="From year"> — <input type="number" id="advTo" placeholder="e.g. 2026" aria-label="To year"></span></div>
+      <div class="acts"><button type="button" class="btn ghost" id="advCancel">Cancel</button><button type="submit" class="btn">Search</button></div>
+    </form>
+  </div>
+
+  <div class="layout">
+    <button type="button" class="filt-btn" id="filtBtn" aria-expanded="false" aria-controls="filters">Filters ▾</button>
+    <aside aria-label="Filters" id="filters">
+      <div class="grp" id="grpYears">
+        <h3>Date</h3>
+        <div id="yearOpts"></div>
+        <div class="range">
+          <input type="number" id="ylo" aria-label="From year" placeholder="from">–<input type="number" id="yhi" aria-label="To year" placeholder="to">
+          <button type="button" id="rangeGo">Go</button>
+        </div>
+      </div>
+      <div class="grp">
+        <h3>Sort</h3>
+        <button class="opt" data-sort="rel">Sort by relevance</button>
+        <button class="opt" data-sort="date">Sort by date</button>
+      </div>
+      <div class="grp journals">
+        <h3>Journals</h3>
+        <div id="journalOpts"></div>
+      </div>
+      <div class="grp">
+        <h3>Show</h3>
+        <label class="chk"><input type="checkbox" id="oaOnly"> With an open-access copy</label>
+        <button class="opt" id="libBtn">★ My library</button>
+      </div>
+    </aside>
+
+    <section aria-label="Results">
+      <div id="stats" aria-live="polite"></div>
+      <div id="notice"></div>
+      <div id="results"><div class="loading">Loading the articles…</div></div>
+      <nav class="pager" id="pager" aria-label="Result pages"></nav>
+    </section>
+  </div>
+</main>
+
+<dialog id="citeDlg" aria-labelledby="citeTitle">
+  <div class="dlg-head"><h2 id="citeTitle">Cite</h2><button type="button" data-close aria-label="Close">×</button></div>
+  <div class="cites" id="cites"></div>
+  <div class="dlg-foot"><button type="button" id="bibBtn">Download BibTeX</button><button type="button" id="risBtn">Download RIS</button></div>
+</dialog>
+
+<footer>
+  Articles and their metadata from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> (CC0).
+  Keywords and topics are assigned by OpenAlex, not by the authors. Links open the publisher's copy.
+</footer>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════
+// USAGE TRACKING
+// ══════════════════════════════════════════════════════════════════════════
+// As on the funding network: events go to the dashboard server (TRACK_EVENTS
+// in textile_companies_NL.py, page 'articles') and land in tracking_events.
+// The session id is the one the other pages keep in the tab's sessionStorage.
+// Tracking never gets in the way: every failure is ignored.
+const TRACK_URL='../dashboard/track';
+const trackSid=(()=>{
+  try{
+    let sid=sessionStorage.getItem('tell_sid');
+    if(!sid){
+      sid=(window.crypto&&crypto.randomUUID)?crypto.randomUUID()
+         :'sid-'+Date.now()+'-'+Math.random().toString(16).slice(2);
+      sessionStorage.setItem('tell_sid',sid);
+    }
+    return sid;
+  }catch(e){ return null; }
+})();
+function track(type, details={}){
+  try{
+    const body=JSON.stringify({sid:trackSid, page:'articles', type, details});
+    const blob=new Blob([body],{type:'application/json'});
+    if(!(navigator.sendBeacon && navigator.sendBeacon(TRACK_URL,blob)))
+      fetch(TRACK_URL,{method:'POST',body,keepalive:true,
+                       headers:{'Content-Type':'application/json'}}).catch(()=>{});
+  }catch(e){}
+}
+track('session_start',{screen:`${screen.width}x${screen.height}`, query:new URLSearchParams(location.search).get('q')||''});
+
+// ══════════════════════════════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════════════════════════════
+// data/journal_articles.json: the journal_articles table, written by
+// db/mysql/import_articles.py --apply.
+const PAGE_SIZE=10;
+const LIB_KEY='tell_articles_library';
+const STOP=new Set(('a an and are as at be by for from has have in into is it its of on or that the their this '+
+  'to was were which with within we our these those using use used based study analysis effect effects new '+
+  'via between among review case approach').split(' '));
+let A=[], byId=new Map(), JOURNALS=[], KW_DF=new Map(), TOP_DF=new Map(), TW_DF=new Map(), SUGGEST=[];
+let avgAbs=1, minYear=0, maxYear=0, loaded=false;
+
+const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const MARKS=/[̀-ͯ]/g;
+// Lower case, without accents, and as long as the original, so a match found
+// in the folded text marks the same characters of the original
+function fold(s){
+  s=String(s||'');
+  const f=s.normalize('NFD').replace(MARKS,'').toLowerCase();
+  if(f.length===s.length) return f;
+  let o='';
+  for(const ch of s){
+    let c=ch.normalize('NFD').replace(MARKS,'').toLowerCase();
+    if(c.length!==ch.length) c=c.length>ch.length ? c.slice(0,ch.length) : c.padEnd(ch.length,' ');
+    o+=c;
+  }
+  return o;
+}
+const words=s=>fold(s).split(/[^a-z0-9]+/).filter(Boolean);
+const split=s=>String(s||'').split(';').map(x=>x.trim()).filter(Boolean);
+
+async function load(){
+  try{
+    const r=await fetch('data/journal_articles.json');
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d=await r.json();
+    const ix=Object.fromEntries(d.fields.map((f,i)=>[f,i]));
+    const jc=new Map();
+    A=d.rows.map((row,i)=>{
+      const a={i, id:row[ix.id], doi:row[ix.doi]||'', journal:row[ix.journal]||'', year:row[ix.year]||null,
+               title:row[ix.title]||'', authors:split(row[ix.authors]), abstract:row[ix.abstract]||'',
+               keywords:split(row[ix.keywords]), topics:split(row[ix.topics]), oa:row[ix.oa_url]||''};
+      a.fTitle=fold(a.title); a.fAbs=fold(a.abstract); a.fAuth=fold(a.authors.join('; '));
+      a.fKw=fold([...a.keywords,...a.topics].join('; ')); a.fJournal=fold(a.journal);
+      a.kwF=a.keywords.map(fold); a.topF=a.topics.map(fold);
+      a.tw=new Set(words(a.title).filter(w=>w.length>=4 && !STOP.has(w)));
+      a.kwF.forEach(k=>KW_DF.set(k,(KW_DF.get(k)||0)+1));
+      a.topF.forEach(k=>TOP_DF.set(k,(TOP_DF.get(k)||0)+1));
+      a.tw.forEach(k=>TW_DF.set(k,(TW_DF.get(k)||0)+1));
+      jc.set(a.journal,(jc.get(a.journal)||0)+1);
+      byId.set(a.id,a);
+      return a;
+    });
+    avgAbs=A.reduce((s,a)=>s+a.fAbs.length,0)/Math.max(1,A.length);
+    const ys=A.map(a=>a.year).filter(Boolean);
+    minYear=Math.min(...ys); maxYear=Math.max(...ys);
+    JOURNALS=[...jc.entries()].sort((a,b)=>b[1]-a[1]).map(([name,n])=>({name,n}));
+    // Suggestions: the keywords, most used first (topics are long labels, not queries)
+    const sug=new Map();
+    for(const a of A) for(const k of a.keywords){
+      const f=fold(k); const e=sug.get(f)||{label:k.toLowerCase(), f, n:0}; e.n++; sug.set(f,e);
+    }
+    SUGGEST=[...sug.values()].filter(e=>e.n>=2).sort((a,b)=>b.n-a.n);
+    loaded=true;
+    setupStatic();
+    readUrl(); render();
+  }catch(e){
+    console.warn('Failed to load the articles:',e);
+    document.getElementById('results').innerHTML='<div class="empty">The articles could not be loaded. Please try again later.</div>';
+  }
+}
+
+function setupStatic(){
+  document.getElementById('heroText').textContent=
+    `${A.length.toLocaleString('en')} open-access articles, ${minYear}–${maxYear}, from ${JOURNALS.map(j=>j.name).join(', ').replace(/, ([^,]*)$/,' and $1')}.`;
+  const sel=document.getElementById('advJournal');
+  JOURNALS.forEach(j=>sel.insertAdjacentHTML('beforeend',`<option>${esc(j.name)}</option>`));
+  const tl=document.getElementById('tryList');
+  ['textile recycling','"fast fashion" consumer','natural dye','wearable sensor','intitle:nonwoven','"digital product passport"']
+    .forEach(t=>{ const b=document.createElement('button'); b.type='button'; b.textContent=t;
+      b.addEventListener('click',()=>{ track('example',{query:t}); search({q:t}); }); tl.appendChild(b); });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// QUERY
+// ══════════════════════════════════════════════════════════════════════════
+// The syntax of Google Scholar: words (all must occur), "phrases", OR between
+// alternatives, -word to exclude, author:, intitle:, source: (journal),
+// allintitle: (every word in the title) and related:ID.
+const FIELD_OPS={author:'author', intitle:'title', source:'source', in:'source', journal:'source'};
+
+// British and American spellings find each other
+function variants(w){
+  return w.replace(/fib(?:er|re)/g,'fib(?:er|re)')
+          .replace(/colou?r/g,'colou?r')
+          .replace(/cent(?:er|re)/g,'cent(?:er|re)')
+          .replace(/behaviou?r/g,'behaviou?r')
+          .replace(/^(\w{4,})i[sz](e|ed|es|ing|ation|ations)$/,'$1i[sz]$2');
+}
+// A word matches at the start of a word, so endings are found too ('recycl'
+// finds 'recycling'); a short one matches whole, with an optional plural
+// ('pet' doesn't find 'petroleum'). A phrase matches its words in order.
+function termRegex(text, phrase){
+  let ws=words(text);
+  if(!ws.length) return null;
+  if(!phrase && ws.length===1){
+    let w=ws[0];
+    if(w.length>4 && /[^s]s$/.test(w)) w=w.slice(0,-1);   // 'textiles' -> 'textile'
+    return new RegExp(w.length>=4 ? `\\b${variants(w)}` : `\\b${w}s?\\b`,'g');
+  }
+  const last=ws.length-1;
+  return new RegExp('\\b'+ws.map((w,k)=>variants(w)+(k===last?'(?:s|es)?\\b':'')).join('[^a-z0-9]+'),'g');
+}
+
+function parseQuery(raw){
+  const Q={groups:[], neg:[], related:null, text:raw};
+  let s=raw.trim(), allTitle=false;
+  const m=s.match(/^allintitle:\s*/i);
+  if(m){ allTitle=true; s=s.slice(m[0].length); }
+  const tokRe=/(-)?(?:([a-z]+):)?(?:"([^"]*)"?|(\S+))/gi;
+  let t, pendingOr=false;
+  while((t=tokRe.exec(s))){
+    const [, minus, opRaw, phraseText, wordText]=t;
+    const op=opRaw ? opRaw.toLowerCase() : null;
+    if(!opRaw && !phraseText && (wordText==='OR' || wordText==='|')){ pendingOr=true; continue; }
+    if(op==='related'){ Q.related=(phraseText??wordText??'').trim(); continue; }
+    let field=op && FIELD_OPS[op] ? FIELD_OPS[op] : 'any';
+    let text=phraseText!==undefined ? phraseText : wordText;
+    if(op && !FIELD_OPS[op]) text=`${opRaw}:${text}`;          // e.g. a URL: just words
+    if(field==='any' && allTitle) field='title';
+    const ws=words(text);
+    if(!ws.length) continue;
+    // 'bio-based' is the phrase "bio based", as in Scholar
+    const phrase=phraseText!==undefined || ws.length>1;
+    const re=termRegex(text, phrase);
+    if(!re) continue;
+    const item={field, re, phrase, text:phrase?ws.join(' '):ws[0]};
+    if(minus){ Q.neg.push(item); pendingOr=false; continue; }
+    if(pendingOr && Q.groups.length) Q.groups[Q.groups.length-1].push(item);
+    else Q.groups.push([item]);
+    pendingOr=false;
+  }
+  return Q;
+}
+
+function count(re, s, cap=12){
+  if(!s) return 0;
+  re.lastIndex=0;
+  let n=0;
+  while(re.exec(s)){ if(++n>=cap) break; }
+  return n;
+}
+
+// How often an item occurs in each field of an article
+function hits(a, it){
+  if(it.field==='author') return {au:count(it.re,a.fAuth)};
+  if(it.field==='title')  return {t:count(it.re,a.fTitle)};
+  if(it.field==='source') return {s:count(it.re,a.fJournal)};
+  // Not the journal's name: 'fiber' would find every article in Fibers. That
+  // is what source: is for.
+  return {t:count(it.re,a.fTitle), k:count(it.re,a.fKw), au:count(it.re,a.fAuth), ab:count(it.re,a.fAbs)};
+}
+const any=h=>(h.t||0)+(h.k||0)+(h.au||0)+(h.s||0)+(h.ab||0)>0;
+
+// ══════════════════════════════════════════════════════════════════════════
+// SEARCH
+// ══════════════════════════════════════════════════════════════════════════
+// Ranked like BM25 over the fields: a word in the title counts most, then the
+// authors, keywords and topics, then the abstract (longer abstracts weigh
+// less), and rarer words more. The whole query as a phrase in the title, and
+// every word in the title, lift an article further.
+const state={q:'', ylo:null, yhi:null, sort:'rel', start:0, journals:new Set(), oa:false, lib:false};
+let cache={key:null}, lastQ=null;
+
+const K1=1.2, B=0.75;
+const sat=x=>x ? x*(K1+1)/(x+K1) : 0;
+
+function library(){
+  try{ return new Set(JSON.parse(localStorage.getItem(LIB_KEY)||'[]')); }catch(e){ return new Set(); }
+}
+function saveLibrary(set){
+  try{ localStorage.setItem(LIB_KEY, JSON.stringify([...set])); }catch(e){}
+}
+
+function compute(){
+  const key=JSON.stringify([state.q, state.ylo, state.yhi, state.sort, [...state.journals].sort(), state.oa, state.lib,
+                            state.lib ? [...library()].sort() : 0]);
+  if(cache.key===key) return cache;
+  const t0=performance.now();
+  const Q=parseQuery(state.q);
+  lastQ=Q;
+  const lib=state.lib ? library() : null;
+  // Every filter except the journals: their counts show what each would give
+  let pool=A.filter(a=>(!state.ylo || (a.year && a.year>=state.ylo)) && (!state.yhi || (a.year && a.year<=state.yhi))
+                     && (!state.oa || a.oa) && (!lib || lib.has(a.id)));
+  let scored, target=null;
+  if(Q.related){
+    target=byId.get(Q.related) || null;
+    scored=target ? related(target, pool) : [];
+  } else {
+    scored=[];
+    const N=pool.length, df=Q.groups.map(()=>0), perDoc=[];
+    for(const a of pool){
+      if(Q.neg.some(it=>any(hits(a,it)))) continue;
+      const hs=[];
+      let ok=true;
+      for(let g=0; g<Q.groups.length; g++){
+        // An OR group: the alternative that scores best
+        let best=null, bestW=-1;
+        for(const it of Q.groups[g]){
+          const h=hits(a,it);
+          if(!any(h)) continue;
+          const w=3*(h.t||0)+2*(h.au||0)+1.6*(h.k||0)+(h.s||0)+(h.ab||0);
+          if(w>bestW){ bestW=w; best=h; }
+        }
+        if(!best){ ok=false; break; }
+        hs.push(best);
+      }
+      if(!ok) continue;
+      hs.forEach((h,g)=>df[g]++);
+      perDoc.push([a,hs]);
+    }
+    const idf=df.map(n=>Math.log(1+(N-n+0.5)/(n+0.5)));
+    const plain=Q.groups.length>1 && Q.groups.every(g=>g.length===1 && g[0].field==='any');
+    const whole=plain ? new RegExp('\\b'+Q.groups.map(g=>words(g[0].text).join('[^a-z0-9]+')).join('[^a-z0-9]+')) : null;
+    for(const [a,hs] of perDoc){
+      let score=0, inTitle=0;
+      hs.forEach((h,g)=>{
+        const absNorm=K1*(1-B+B*a.fAbs.length/avgAbs);
+        const ab=h.ab ? h.ab*(K1+1)/(h.ab+absNorm) : 0;
+        score+=idf[g]*(3*sat(h.t)+2.2*sat(h.au)+1.6*sat(h.k)+0.6*sat(h.s)+ab);
+        if(h.t) inTitle++;
+      });
+      const sumIdf=idf.reduce((s,x)=>s+x,0);
+      if(hs.length>1 && inTitle===hs.length) score+=sumIdf;
+      if(whole && whole.test(a.fTitle)) score+=2*sumIdf;
+      score+=(a.year||2000)*1e-5;                          // ties: newer first
+      scored.push({a, score});
+    }
+  }
+  if(!Q.groups.length && !Q.related) scored=pool.map(a=>({a, score:0}));   // filters only: browse
+  const byJournal=new Map();
+  scored.forEach(r=>byJournal.set(r.a.journal,(byJournal.get(r.a.journal)||0)+1));
+  let res=state.journals.size ? scored.filter(r=>state.journals.has(r.a.journal)) : scored;
+  const byDate=state.sort==='date' || (!Q.groups.length && !Q.related);
+  res.sort(byDate ? (x,y)=>(y.a.year||0)-(x.a.year||0) || y.score-x.score || x.a.title.localeCompare(y.a.title)
+                  : (x,y)=>y.score-x.score);
+  cache={key, res, byJournal, Q, target, ms:performance.now()-t0};
+  return cache;
+}
+
+// Related articles: shared keywords, topics and title words, the rarer the
+// more they count; the RELATED_MAX closest, as Scholar keeps it short
+const RELATED_MAX=100;
+function related(target, pool){
+  const N=A.length, idf=(m,k)=>Math.log(N/(m.get(k)||1));
+  const kw=new Set(target.kwF), tp=new Set(target.topF), tw=target.tw;
+  const out=[];
+  for(const a of pool){
+    if(a===target) continue;
+    let s=0;
+    for(const k of a.kwF) if(kw.has(k)) s+=idf(KW_DF,k);
+    for(const k of a.topF) if(tp.has(k)) s+=0.5*idf(TOP_DF,k);
+    for(const w of a.tw) if(tw.has(w)) s+=0.7*idf(TW_DF,w);
+    if(s>0) out.push({a, score:s+(a.year||2000)*1e-5});
+  }
+  return out.sort((x,y)=>y.score-x.score).slice(0,RELATED_MAX);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// HIGHLIGHTING
+// ══════════════════════════════════════════════════════════════════════════
+function ranges(fText, regs){
+  const r=[];
+  for(const re of regs){
+    re.lastIndex=0;
+    let m;
+    while((m=re.exec(fText))){ r.push([m.index, m.index+m[0].length]); if(r.length>400) break; }
+  }
+  r.sort((x,y)=>x[0]-y[0]);
+  const out=[];
+  for(const x of r){
+    const l=out[out.length-1];
+    if(l && x[0]<=l[1]) l[1]=Math.max(l[1],x[1]); else out.push([...x]);
+  }
+  return out;
+}
+function marked(orig, rs, from=0, to=orig.length){
+  let h='', pos=from;
+  for(const [s,e] of rs){
+    if(e<=from || s>=to) continue;
+    const a=Math.max(s,from), b=Math.min(e,to);
+    h+=esc(orig.slice(pos,a))+'<b>'+esc(orig.slice(a,b))+'</b>';
+    pos=b;
+  }
+  return h+esc(orig.slice(pos,to));
+}
+const regsFor=(Q, fields)=>Q ? Q.groups.flat().filter(it=>fields.includes(it.field)).map(it=>it.re) : [];
+
+// The part of the abstract with the most matches, about 300 characters
+function snippet(a, Q){
+  const text=a.abstract;
+  if(!text) return '<i>No abstract available.</i>';
+  const W=300;
+  const rs=ranges(a.fAbs, regsFor(Q,['any']));
+  let start=0;
+  if(rs.length){
+    let best=-1;
+    for(const [s] of rs){
+      const from=Math.max(0,s-70), n=rs.filter(([x,y])=>x>=from && y<=from+W).length;
+      if(n>best){ best=n; start=from; }
+    }
+  }
+  if(start>0){ const sp=text.indexOf(' ',start); start=sp>0 && sp-start<25 ? sp+1 : start; }
+  let end=Math.min(text.length, start+W);
+  if(end<text.length){ const sp=text.lastIndexOf(' ',end); if(sp>start+W-40) end=sp; }
+  return (start>0?'… ':'')+marked(text, rs, start, end)+(end<text.length?' …':'');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// RENDERING
+// ══════════════════════════════════════════════════════════════════════════
+const DOI_HOSTS={'10.3390':'mdpi.com','10.1186':'springeropen.com','10.1177':'sagepub.com','10.1007':'springer.com'};
+function host(a){
+  const h=(a.oa.match(/^https?:\/\/([^/]+)/i)||[])[1]||'';
+  if(h && !/(^|\.)(doi\.org|doaj\.org|handle\.net)$/i.test(h)) return h.replace(/^www\./,'').split('.').slice(-2).join('.');
+  return DOI_HOSTS[(a.doi.match(/^10\.\d+/)||[])[0]]||'';
+}
+const articleUrl=a=>a.doi ? `https://doi.org/${a.doi}` : a.oa;
+const isPdf=a=>/\.pdf(\?|$)|\/pdf(\?|\/|$)/i.test(a.oa);
+
+// 'Jeanger P. Juanga-Labayen' -> {given:['Jeanger','P.'], family:'Juanga-Labayen'}
+const PARTICLES=new Set(['van','der','den','de','da','del','della','di','du','dos','das','von','la','le','ten','ter','al','el','bin','ibn']);
+function nameParts(full){
+  const t=full.trim().split(/\s+/);
+  if(t.length===1) return {given:[], family:t[0]};
+  let i=t.length-1;
+  while(i>1 && PARTICLES.has(t[i-1].toLowerCase())) i--;
+  return {given:t.slice(0,i), family:t.slice(i).join(' ')};
+}
+const initials=(given,dot=true,sep=' ')=>given.map(g=>g.split('-').map(p=>p[0] ? p[0].toUpperCase()+(dot?'.':'') : '').join('-')).join(sep);
+const shortName=full=>{ const n=nameParts(full); return (n.given.length?initials(n.given,false,'')+' ':'')+n.family; };
+
+function metaLine(a, Q){
+  const shown=a.authors.slice(0,3);
+  const authRegs=regsFor(Q,['any','author']);
+  const authHtml=shown.map(n=>{
+    const sn=shortName(n);
+    const rs=ranges(fold(sn), authRegs);
+    return `<button type="button" data-author="${esc(n)}" title="Articles by ${esc(n)}">${marked(sn, rs)}</button>`;
+  }).join(', ')+(a.authors.length>3?'…':'');
+  const h=host(a);
+  return `${authHtml||'<i>no authors listed</i>'} - <button type="button" data-journal="${esc(a.journal)}" title="Only ${esc(a.journal)}">${esc(a.journal)}</button>${a.year?', '+a.year:''}${h?' - '+esc(h):''}`;
+}
+
+function resultHtml(a, Q, saved){
+  const url=articleUrl(a), h=host(a);
+  const tRegs=regsFor(Q,['any','title']);
+  return `<article class="r" data-id="${esc(a.id)}">
+    ${a.oa?`<div class="r-side"><a href="${esc(a.oa)}" target="_blank" rel="noopener" data-open="oa"><span class="fmt">[${isPdf(a)?'PDF':'HTML'}]</span>${esc(h||'open access')}</a></div>`:''}
+    <h3 class="r-title">${url?`<a href="${esc(url)}" target="_blank" rel="noopener" data-open="title">${marked(a.title, ranges(a.fTitle,tRegs))}</a>`:marked(a.title, ranges(a.fTitle,tRegs))}</h3>
+    <div class="r-meta">${metaLine(a,Q)}</div>
+    <div class="r-snip">${snippet(a,Q)}</div>
+    <div class="r-acts">
+      <button type="button" data-act="save" class="${saved?'saved':''}" aria-pressed="${saved}">${saved?'★ Saved':'☆ Save'}</button>
+      <button type="button" data-act="cite">❝ Cite</button>
+      <button type="button" data-act="related">Related articles</button>
+      ${a.abstract?`<button type="button" data-act="abstract" aria-expanded="false">Abstract ▾</button>`:''}
+      ${a.doi?`<a href="https://doi.org/${esc(a.doi)}" target="_blank" rel="noopener" data-open="doi">DOI</a>`:''}
+    </div>
+    <div class="r-more" hidden></div>
+  </article>`;
+}
+
+function moreHtml(a, Q){
+  return `${marked(a.abstract, ranges(a.fAbs, regsFor(Q,['any'])))}
+    ${a.keywords.length?`<div class="kv"><span>Keywords:</span> ${a.keywords.map(esc).join(' · ')}</div>`:''}
+    ${a.topics.length?`<div class="kv"><span>Topics:</span> ${a.topics.map(esc).join(' · ')}</div>`:''}
+    <div class="kv"><span>Authors:</span> ${a.authors.map(esc).join(', ')||'—'}</div>`;
+}
+
+function render(){
+  if(!loaded) return;
+  const home=!state.q && !filtersOn() && !state.lib;
+  document.body.classList.toggle('home', home);
+  placeSearch(home);
+  document.getElementById('q').value=state.q;
+  renderSide();
+  if(home){ document.title='Journal articles – TELL'; return; }
+  const {res, byJournal, Q, target, ms}=compute();
+  renderJournals(byJournal);
+  document.title=`${state.q || (state.lib?'My library':'Articles')} – Journal articles – TELL`;
+
+  const n=res.length;
+  if(state.start>=n) state.start=Math.max(0, Math.floor((n-1)/PAGE_SIZE)*PAGE_SIZE);
+  const from=state.start, page=res.slice(from, from+PAGE_SIZE);
+  document.getElementById('stats').innerHTML = n
+    ? `${from>0?`Page ${from/PAGE_SIZE+1} of `:''}<b>${n.toLocaleString('en')}</b> result${n!==1?'s':''} (${Math.max(0.01,ms/1000).toFixed(2)} sec)`
+    : '';
+  const notes=[];
+  if(Q.related) notes.push(target ? `Articles related to <b>${esc(target.title)}</b>` : 'The article to find related articles for is not in the collection.');
+  if(state.lib) notes.push(`Your library: the articles you saved in this browser. <button type="button" data-clear="lib">Show all articles</button>`);
+  document.getElementById('notice').innerHTML=notes.map(t=>`<div class="notice">${t}</div>`).join('');
+
+  const saved=library();
+  const box=document.getElementById('results');
+  if(!n){
+    box.innerHTML=`<div class="empty">${state.lib && !saved.size
+      ? 'Your library is empty. Save an article with ☆ Save under it.'
+      : `Your search ${state.q?`– <b>${esc(state.q)}</b> – `:''}did not match any articles.`}
+      <ul><li>Check the spelling, or use fewer or more general words.</li>
+      ${filtersOn()?'<li>Widen the filters: <button type="button" class="linkish" data-clear="filters">clear the date, journal and open-access filters</button>.</li>':''}
+      <li>Use <code>OR</code> for alternatives: <code>wool OR cashmere</code>.</li></ul></div>`;
+  } else {
+    box.innerHTML=page.map(r=>resultHtml(r.a, Q, saved.has(r.a.id))).join('');
+  }
+  renderPager(n);
+}
+
+function filtersOn(){ return !!(state.ylo || state.yhi || state.journals.size || state.oa); }
+
+// The search box sits in the middle of the home page and above the results
+function placeSearch(home){
+  const w=document.getElementById('sbarWrap');
+  const slot=document.getElementById(home?'heroSlot':'topSlot');
+  if(w.parentElement!==slot) slot.appendChild(w);
+}
+
+function renderSide(){
+  const y=new Date().getFullYear();
+  const opts=[['Any time',null,null],[`Since ${y}`,y,null],[`Since ${y-1}`,y-1,null],[`Since ${y-4}`,y-4,null]];
+  const presetOn=opts.some(([,lo,hi])=>lo===state.ylo && hi===state.yhi);
+  document.getElementById('yearOpts').innerHTML=opts.map(([l,lo,hi])=>
+    `<button type="button" class="opt${lo===state.ylo&&hi===state.yhi?' on':''}" data-ylo="${lo??''}" data-yhi="${hi??''}">${l}</button>`).join('')
+    +(presetOn?'':`<button type="button" class="opt on" disabled>${state.ylo||'…'} – ${state.yhi||'…'}</button>`);
+  document.getElementById('ylo').value=state.ylo||'';
+  document.getElementById('yhi').value=state.yhi||'';
+  document.querySelectorAll('[data-sort]').forEach(b=>b.classList.toggle('on', b.dataset.sort===state.sort));
+  document.getElementById('oaOnly').checked=state.oa;
+  const nlib=library().size;
+  const lb=document.getElementById('libBtn');
+  lb.textContent=`★ My library${nlib?` (${nlib})`:''}`;
+  lb.classList.toggle('on', state.lib);
+  // Phones: the filter button says how many are on
+  const on=(state.ylo||state.yhi?1:0)+state.journals.size+(state.oa?1:0)+(state.sort==='date'?1:0)+(state.lib?1:0);
+  const fb=document.getElementById('filtBtn');
+  fb.textContent=`Filters${on?` (${on})`:''} ${fb.getAttribute('aria-expanded')==='true'?'▴':'▾'}`;
+  fb.classList.toggle('active', on>0);
+}
+document.getElementById('filtBtn').addEventListener('click',e=>{
+  const open=document.getElementById('filters').classList.toggle('open');
+  e.currentTarget.setAttribute('aria-expanded', open);
+  renderSide();
+});
+
+function renderJournals(byJournal){
+  document.getElementById('journalOpts').innerHTML=JOURNALS.map(j=>{
+    const n=byJournal.get(j.name)||0;
+    return `<label class="chk${n?'':' zero'}"><input type="checkbox" data-j="${esc(j.name)}"${state.journals.has(j.name)?' checked':''}>
+      <span>${esc(j.name)}</span><span class="n">${n.toLocaleString('en')}</span></label>`;
+  }).join('');
+}
+
+function renderPager(n){
+  const pages=Math.ceil(n/PAGE_SIZE), cur=Math.floor(state.start/PAGE_SIZE);
+  const nav=document.getElementById('pager');
+  if(pages<=1){ nav.innerHTML=''; return; }
+  const lo=Math.max(0, Math.min(cur-4, pages-10)), hi=Math.min(pages, lo+10);
+  let h=`<button type="button" data-page="${cur-1}"${cur===0?' disabled':''}>‹ Previous</button>`;
+  for(let p=lo;p<hi;p++) h+=`<button type="button" data-page="${p}"${p===cur?' aria-current="page"':''}>${p+1}</button>`;
+  h+=`<button type="button" data-page="${cur+1}"${cur>=pages-1?' disabled':''}>Next ›</button>`;
+  nav.innerHTML=h;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// STATE <-> URL (shareable searches; the back button steps through them)
+// ══════════════════════════════════════════════════════════════════════════
+// Parameter names follow Google Scholar's: q, as_ylo, as_yhi, scisbd (sort by
+// date), start; j = journals, oa = open-access copy only, lib = my library
+function readUrl(){
+  const p=new URLSearchParams(location.search);
+  state.q=p.get('q')||'';
+  state.ylo=+p.get('as_ylo')||null;
+  state.yhi=+p.get('as_yhi')||null;
+  state.sort=p.get('scisbd')==='1'?'date':'rel';
+  state.start=Math.max(0, +p.get('start')||0);
+  state.journals=new Set(p.getAll('j'));
+  state.oa=p.get('oa')==='1';
+  state.lib=p.get('lib')==='1';
+}
+function writeUrl(replace=false){
+  const p=new URLSearchParams();
+  if(state.q) p.set('q',state.q);
+  if(state.ylo) p.set('as_ylo',state.ylo);
+  if(state.yhi) p.set('as_yhi',state.yhi);
+  if(state.sort==='date') p.set('scisbd','1');
+  if(state.start) p.set('start',state.start);
+  state.journals.forEach(j=>p.append('j',j));
+  if(state.oa) p.set('oa','1');
+  if(state.lib) p.set('lib','1');
+  const url=location.pathname+(p.toString()?'?'+p:'');
+  if(url!==location.pathname+location.search) history[replace?'replaceState':'pushState'](null,'',url);
+}
+window.addEventListener('popstate',()=>{ readUrl(); render(); window.scrollTo(0,0); });
+
+// A new search or filter: back to the first page
+function search(changes, event='search'){
+  Object.assign(state, {start:0}, changes);
+  writeUrl();
+  render();
+  window.scrollTo({top:0});
+  if(loaded && event){
+    const c=cache.res ? cache.res.length : 0;
+    track(event, {query:state.q.slice(0,200), results:c, ylo:state.ylo, yhi:state.yhi, sort:state.sort,
+                  journals:[...state.journals], oa:state.oa, lib:state.lib});
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// CONTROLS
+// ══════════════════════════════════════════════════════════════════════════
+const qEl=document.getElementById('q');
+document.getElementById('searchForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  hideSuggest();
+  const q=qEl.value.trim();
+  search({q, lib:q?state.lib:false});
+});
+
+// Sidebar
+document.getElementById('yearOpts').addEventListener('click',e=>{
+  const b=e.target.closest('[data-ylo]'); if(!b) return;
+  search({ylo:+b.dataset.ylo||null, yhi:+b.dataset.yhi||null}, 'filter_change');
+});
+function applyRange(){
+  let lo=+document.getElementById('ylo').value||null, hi=+document.getElementById('yhi').value||null;
+  if(lo && hi && lo>hi) [lo,hi]=[hi,lo];
+  search({ylo:lo, yhi:hi}, 'filter_change');
+}
+document.getElementById('rangeGo').addEventListener('click',applyRange);
+['ylo','yhi'].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); applyRange(); } }));
+document.querySelectorAll('[data-sort]').forEach(b=>b.addEventListener('click',()=>search({sort:b.dataset.sort},'filter_change')));
+document.getElementById('journalOpts').addEventListener('change',e=>{
+  const j=e.target.dataset.j; if(!j) return;
+  const s=new Set(state.journals); e.target.checked ? s.add(j) : s.delete(j);
+  search({journals:s},'filter_change');
+});
+document.getElementById('oaOnly').addEventListener('change',e=>search({oa:e.target.checked},'filter_change'));
+document.getElementById('libBtn').addEventListener('click',()=>search({lib:!state.lib},'filter_change'));
+
+document.getElementById('notice').addEventListener('click',e=>{
+  if(e.target.dataset.clear==='lib') search({lib:false},'filter_change');
+});
+
+// Results: authors, journals, actions, outbound links
+document.getElementById('results').addEventListener('click',e=>{
+  if(e.target.dataset.clear==='filters'){ search({ylo:null,yhi:null,journals:new Set(),oa:false},'filter_change'); return; }
+  const r=e.target.closest('.r'); if(!r) return;
+  const a=byId.get(r.dataset.id), rank=state.start+[...r.parentElement.children].indexOf(r)+1;
+  const au=e.target.closest('[data-author]');
+  if(au){ search({q:`author:"${au.dataset.author}"`, lib:false}); return; }
+  const jb=e.target.closest('[data-journal]');
+  if(jb){ search({journals:new Set([jb.dataset.journal])},'filter_change'); return; }
+  const link=e.target.closest('[data-open]');
+  if(link){ track('result_open',{id:a.id, link:link.dataset.open, rank, query:state.q.slice(0,200)}); return; }
+  const act=e.target.closest('[data-act]'); if(!act) return;
+  if(act.dataset.act==='abstract'){
+    const more=r.querySelector('.r-more'), open=more.hidden;
+    if(open) more.innerHTML=moreHtml(a, lastQ);
+    more.hidden=!open;
+    act.setAttribute('aria-expanded',open);
+    act.textContent=open?'Abstract ▴':'Abstract ▾';
+    if(open) track('abstract_open',{id:a.id, rank});
+  } else if(act.dataset.act==='related'){
+    track('related',{id:a.id});
+    search({q:`related:${a.id}`, lib:false}, null);
+  } else if(act.dataset.act==='cite'){
+    openCite(a);
+  } else if(act.dataset.act==='save'){
+    const lib=library(), on=!lib.has(a.id);
+    on ? lib.add(a.id) : lib.delete(a.id);
+    saveLibrary(lib);
+    track('save',{id:a.id, on});
+    act.classList.toggle('saved',on); act.setAttribute('aria-pressed',on);
+    act.textContent=on?'★ Saved':'☆ Save';
+    renderSide();
+  }
+});
+
+document.getElementById('pager').addEventListener('click',e=>{
+  const b=e.target.closest('[data-page]'); if(!b || b.disabled) return;
+  state.start=+b.dataset.page*PAGE_SIZE;
+  writeUrl(); render(); window.scrollTo({top:0});
+  track('page_change',{page:+b.dataset.page+1, query:state.q.slice(0,200)});
+});
+
+// '/' jumps to the search box, as on Scholar
+document.addEventListener('keydown',e=>{
+  if(e.key==='/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){ e.preventDefault(); qEl.focus(); qEl.select(); }
+});
+
+// ── Advanced search: composes an ordinary query ──────────────────────────
+const advEl=document.getElementById('adv'), advBtn=document.getElementById('advBtn');
+function toggleAdv(open=advEl.hidden){
+  advEl.hidden=!open; advBtn.setAttribute('aria-expanded',open);
+  if(open){
+    hideSuggest();
+    document.getElementById('advAll').value=state.q;
+    ['advPhrase','advAny','advNone','advAuthor'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('advJournal').value=state.journals.size===1?[...state.journals][0]:'';
+    document.getElementById('advFrom').value=state.ylo||'';
+    document.getElementById('advTo').value=state.yhi||'';
+    document.getElementById('advAll').focus();
+  }
+}
+advBtn.addEventListener('click',()=>toggleAdv());
+document.getElementById('advCancel').addEventListener('click',()=>toggleAdv(false));
+advEl.addEventListener('submit',e=>{
+  e.preventDefault();
+  const v=id=>document.getElementById(id).value.trim();
+  const title=advEl.querySelector('input[name=advWhere]:checked').value==='title';
+  const parts=[];
+  if(v('advAll')) parts.push(v('advAll'));
+  if(v('advPhrase')) parts.push(`"${v('advPhrase').replace(/"/g,'')}"`);
+  const anyW=v('advAny').split(/\s+/).filter(Boolean);
+  if(anyW.length) parts.push(anyW.join(' OR '));
+  v('advNone').split(/\s+/).filter(Boolean).forEach(w=>parts.push('-'+w.replace(/^-/,'')));
+  let q=parts.join(' ');
+  if(title && q) q='allintitle: '+q;
+  if(v('advAuthor')) q+=(q?' ':'')+(/^".*"$/.test(v('advAuthor'))?`author:${v('advAuthor')}`:v('advAuthor').split(/\s+/).map(w=>`author:${w}`).join(' '));
+  let lo=+v('advFrom')||null, hi=+v('advTo')||null;
+  if(lo && hi && lo>hi) [lo,hi]=[hi,lo];
+  toggleAdv(false);
+  search({q, ylo:lo, yhi:hi, journals:v('advJournal')?new Set([v('advJournal')]):new Set(), lib:false}, 'advanced_search');
+});
+
+// ── Suggestions while typing: keywords and topics, most used first ───────
+const sugEl=document.getElementById('suggest');
+let sugIdx=-1, sugTimer;
+function hideSuggest(){ sugEl.hidden=true; sugEl.innerHTML=''; sugIdx=-1; qEl.setAttribute('aria-expanded','false'); }
+function showSuggest(){
+  const t=fold(qEl.value).trim();
+  if(!loaded || t.length<2 || /[":]/.test(t)){ hideSuggest(); return; }
+  const starts=[], inner=[];
+  for(const e of SUGGEST){
+    if(e.f===t) continue;
+    if(e.f.startsWith(t)) starts.push(e);
+    else if(t.length>=3 && e.f.includes(' '+t)) inner.push(e);
+    if(starts.length>=8) break;
+  }
+  const list=[...starts,...inner].slice(0,8);
+  if(!list.length){ hideSuggest(); return; }
+  sugEl.innerHTML=list.map((e,i)=>`<li role="option" id="sug${i}" data-v="${esc(e.label)}" aria-selected="false">${esc(e.label)}<span>${e.n} article${e.n!==1?'s':''}</span></li>`).join('');
+  sugEl.hidden=false; sugIdx=-1; qEl.setAttribute('aria-expanded','true');
+}
+function pickSuggest(v){
+  qEl.value=v; hideSuggest();
+  track('suggestion_pick',{query:v.slice(0,200)});
+  search({q:v, lib:false}, 'search');
+}
+qEl.addEventListener('input',()=>{ clearTimeout(sugTimer); sugTimer=setTimeout(showSuggest,120); });
+qEl.addEventListener('keydown',e=>{
+  const items=[...sugEl.querySelectorAll('li')];
+  if(e.key==='Escape'){ hideSuggest(); return; }
+  if(!items.length || sugEl.hidden) return;
+  if(e.key==='ArrowDown' || e.key==='ArrowUp'){
+    e.preventDefault();
+    sugIdx=(sugIdx+(e.key==='ArrowDown'?1:-1)+items.length+1)%(items.length+1)-1;
+    items.forEach((li,i)=>li.setAttribute('aria-selected',i===sugIdx));
+    qEl.setAttribute('aria-activedescendant', sugIdx>=0?`sug${sugIdx}`:'');
+  } else if(e.key==='Enter' && sugIdx>=0){
+    e.preventDefault(); pickSuggest(items[sugIdx].dataset.v);
+  }
+});
+sugEl.addEventListener('mousedown',e=>{ const li=e.target.closest('li'); if(li){ e.preventDefault(); pickSuggest(li.dataset.v); } });
+qEl.addEventListener('blur',()=>setTimeout(hideSuggest,150));
+
+// ══════════════════════════════════════════════════════════════════════════
+// CITE
+// ══════════════════════════════════════════════════════════════════════════
+const citeDlg=document.getElementById('citeDlg');
+let citeArticle=null;
+const doiUrl=a=>a.doi?`https://doi.org/${a.doi}`:'';
+function listJoin(xs, last=', & ', two=' & ', sep=', '){
+  if(xs.length<=1) return xs.join('');
+  if(xs.length===2) return xs.join(two);
+  return xs.slice(0,-1).join(sep)+last+xs[xs.length-1];
+}
+// The five styles Scholar offers, as HTML (journal in italics). Volume, issue
+// and pages are not in the data, so they are left out.
+function citations(a){
+  const P=a.authors.map(nameParts), yr=a.year||'n.d.', t=esc(a.title.replace(/\.$/,'')), j=`<i>${esc(a.journal)}</i>`;
+  const d=esc(doiUrl(a)), doi=esc(a.doi);
+  const end=s=>s ? s.replace(/\.$/,'')+'. ' : '';               // author list, then '. '
+  const apaN=p=>`${p.family}${p.given.length?', '+initials(p.given):''}`;
+  const apa=P.length>20 ? [...P.slice(0,19).map(apaN),'… '+apaN(P[P.length-1])].join(', ') : listJoin(P.map(apaN), ', & ', ', & ');
+  const first=p=>`${p.family}${p.given.length?', '+p.given.join(' '):''}`;
+  const plain=p=>[...p.given,p.family].join(' ');
+  const mla=!P.length?'':P.length===1?first(P[0]):P.length===2?`${first(P[0])}, and ${plain(P[1])}`:`${first(P[0])}, et al.`;
+  const chi=!P.length?'':P.length===1?first(P[0])
+    : P.length>10 ? [first(P[0]),...P.slice(1,7).map(plain)].join(', ')+', et al.'
+    : P.length===2 ? `${first(P[0])} and ${plain(P[1])}`
+    : `${[first(P[0]),...P.slice(1,-1).map(plain)].join(', ')}, and ${plain(P[P.length-1])}`;
+  const harN=p=>`${p.family}${p.given.length?', '+initials(p.given,true,''):''}`;
+  const har=P.length>3 ? `${harN(P[0])} et al.` : listJoin(P.map(harN), ' and ', ' and ', ', ');
+  const vanN=p=>`${p.family}${p.given.length?' '+initials(p.given,false,''):''}`;
+  const van=P.length>6 ? P.slice(0,6).map(vanN).join(', ')+', et al' : P.map(vanN).join(', ');
+  return [
+    ['APA',      `${esc(apa)}${apa?' ':''}(${yr}). ${t}. ${j}.${d?' '+d:''}`],
+    ['MLA',      `${esc(end(mla))}“${t}.” ${j}, ${yr}${d?', '+d.replace(/^https:\/\//,''):''}.`],
+    ['Chicago',  `${esc(end(chi))}“${t}.” ${j} (${yr}).${d?' '+d+'.':''}`],
+    ['Harvard',  `${esc(har)}${har?' ':''}(${yr}) ‘${t}’, ${j}.${doi?' doi:'+doi+'.':''}`],
+    ['Vancouver',`${esc(end(van))}${t}. ${esc(a.journal)}. ${yr}.${doi?' doi:'+doi:''}`],
+  ];
+}
+function openCite(a){
+  citeArticle=a;
+  document.getElementById('cites').innerHTML=citations(a).map(([f,h],i)=>
+    `<div class="cite"><div class="f">${f}</div><div class="t" id="cite${i}">${h}</div><button type="button" data-copy="cite${i}">Copy</button></div>`).join('');
+  track('cite',{id:a.id});
+  citeDlg.showModal();
+}
+citeDlg.addEventListener('click',e=>{
+  if(e.target===citeDlg || e.target.closest('[data-close]')) citeDlg.close();
+  const b=e.target.closest('[data-copy]');
+  if(b){
+    const txt=document.getElementById(b.dataset.copy).textContent;
+    const done=()=>{ b.textContent='Copied'; setTimeout(()=>b.textContent='Copy',1400); };
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject())
+      .then(done).catch(()=>{ const r=document.createRange(); r.selectNodeContents(document.getElementById(b.dataset.copy));
+        const s=getSelection(); s.removeAllRanges(); s.addRange(r); });
+  }
+});
+function download(name, text, type){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([text],{type}));
+  a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function bibKey(a){
+  const fam=a.authors.length?words(nameParts(a.authors[0]).family).join(''):'anon';
+  return `${fam}${a.year||''}${(words(a.title).find(w=>w.length>3 && !STOP.has(w))||'')}`;
+}
+document.getElementById('bibBtn').addEventListener('click',()=>{
+  const a=citeArticle; if(!a) return;
+  const f=(k,v)=>v?`  ${k} = {${String(v).replace(/[{}]/g,'')}},\n`:'';
+  download(`${bibKey(a)}.bib`,
+    `@article{${bibKey(a)},\n${f('title',a.title)}${f('author',a.authors.map(n=>{const p=nameParts(n); return `${p.family}, ${p.given.join(' ')}`.replace(/, $/,'');}).join(' and '))}${f('journal',a.journal)}${f('year',a.year)}${f('doi',a.doi)}${f('url',a.oa||doiUrl(a))}}\n`,
+    'application/x-bibtex');
+  track('cite_download',{id:a.id, format:'bibtex'});
+});
+document.getElementById('risBtn').addEventListener('click',()=>{
+  const a=citeArticle; if(!a) return;
+  const l=[ 'TY  - JOUR', `TI  - ${a.title}`, ...a.authors.map(n=>{const p=nameParts(n); return `AU  - ${p.family}, ${p.given.join(' ')}`;}),
+            `JO  - ${a.journal}`, a.year?`PY  - ${a.year}`:'', a.doi?`DO  - ${a.doi}`:'', (a.oa||doiUrl(a))?`UR  - ${a.oa||doiUrl(a)}`:'',
+            a.abstract?`AB  - ${a.abstract}`:'', ...a.keywords.map(k=>`KW  - ${k}`), 'ER  - '].filter(Boolean);
+  download(`${bibKey(a)}.ris`, l.join('\r\n')+'\r\n', 'application/x-research-info-systems');
+  track('cite_download',{id:a.id, format:'ris'});
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════════════════════════════════
+readUrl();
+placeSearch(!state.q && !filtersOn() && !state.lib);
+document.body.classList.toggle('home', !state.q && !filtersOn() && !state.lib);
+qEl.value=state.q;
+load();
+</script>
+</body>
+</html>

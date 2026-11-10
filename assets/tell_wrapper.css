@@ -23,6 +23,21 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
 .tell-header .tell-home:hover,
 .tell-header .tell-home:focus-visible { background: #efe9f7; transform: translateX(-2px); }
 .tell-header .tell-home:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* "Deep dive": to the journal articles (site/articles/) */
+.tell-header .tell-deep {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 6.5px 15px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,0.85); color: #fff;
+    font-size: 13px; font-weight: 700; line-height: 1.2; text-decoration: none; white-space: nowrap;
+    transition: background 0.15s;
+}
+.tell-header .tell-deep::before {
+    content: ''; width: 13px; height: 13px; background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='7' cy='7' r='5' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M11 11l4 4' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='7' cy='7' r='5' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M11 11l4 4' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+.tell-header .tell-deep:hover,
+.tell-header .tell-deep:focus-visible { background: rgba(255,255,255,0.14); }
+.tell-header .tell-deep:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .tell-intro { max-width: 860px; margin: 0 auto; padding: 24px 20px 32px; }
 .tell-intro h1 { font-size: 2rem; font-weight: 700; color: #513773; line-height: 1.25; margin-bottom: 18px; }
 .tell-intro p { font-size: 1rem; line-height: 1.75; color: #444; margin: 0; }
@@ -218,7 +233,7 @@ body { margin: 0; background: #f7f7f5; font-family: 'Inter', sans-serif; color: 
 
 /* ── Responsive: dashboard on phones ──────────────────────────────────── */
 @media (max-width: 768px) {
-    .tell-header { padding: 14px 20px; }
+    .tell-header { padding: 14px 20px; flex-wrap: wrap; }
     .tell-header img { height: 36px; }
     .tell-header { gap: 12px; }
     .tell-header .tell-page-title { font-size: 15px; padding-left: 12px; }

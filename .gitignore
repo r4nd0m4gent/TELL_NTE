@@ -15,8 +15,9 @@ __pycache__/
 
 # Local data files
 data/
-# ...except the JSON the funding-network page loads, which must ship with it
+# ...except the JSON the static pages load, which must ship with them
 !site/network/data/
+!site/articles/data/
 *.xlsx
 *.xls
 
