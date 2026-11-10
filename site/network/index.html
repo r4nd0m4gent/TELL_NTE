@@ -392,7 +392,7 @@ svg#graph-svg{cursor:default}
     <span class="flabel">Projects</span>
     <div class="fscope">
       <label class="chk" title="Only projects coordinated by a Dutch organisation: every NWO project, and EU projects with a Dutch coordinator">
-        <input type="checkbox" id="nlLedToggle" style="accent-color:#fb923c"> Dutch-led only
+        <input type="checkbox" id="nlLedToggle" checked style="accent-color:#fb923c"> Dutch-led only
       </label>
       <label class="chk" title="Only the member projects of ECOSYSTEX, the European textile ecosystem network (ecosystex.eu)">
         <input type="checkbox" id="ecoToggle" style="accent-color:#e3b341"> ECOSYSTEX only
@@ -790,7 +790,7 @@ let pinnedNode   = null;
 let neighborMap  = new Map();
 let yearMin      = 2014;
 let yearMax      = 2026;
-let nlLedOnly    = false;         // only projects coordinated by a Dutch organisation
+let nlLedOnly    = true;          // only projects coordinated by a Dutch organisation (lighter to draw)
 let ecoOnly      = false;         // only ECOSYSTEX member projects
 let abroadOrgs   = true;          // organisations outside the Netherlands too (network, map, table)
 let projSort     = {key:'name', dir:1};
@@ -1639,6 +1639,85 @@ function buildGraph(projects){
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// LAYOUT: each connected group on its own, the groups packed side by side
+// ══════════════════════════════════════════════════════════════════════════
+// Laid out as one, unconnected projects and organisations ended up among each
+// other, their links crossing. So each group of connected nodes is laid out
+// by itself, its size measured, and the groups packed as circles that don't
+// overlap (largest in the middle). Sets every node's x/y and its home hx/hy.
+// A group of more than LIVE_GROUP nodes would take seconds to lay out in
+// advance, so it settles on screen instead, in a circle reserved for it of
+// about LIVE_RADIUS * sqrt(nodes) (measured: ~15 * sqrt(n) once settled).
+const GROUP_GAP=18;   // px between groups
+const LIVE_GROUP=250, LIVE_RADIUS=18;
+const linkForce=links=>d3.forceLink(links).id(d=>d.id)
+  .distance(d=>d.source.type==='project'?60:45).strength(0.3);
+const chargeForce=()=>d3.forceManyBody().strength(d=>d.type==='project'?-60:-40).distanceMax(350);
+
+// Repulsion among these nodes only: d3 hands a force every node of the
+// simulation, so pass it just the group's
+function groupCharge(groupNodes){
+  const f=chargeForce();
+  const force=alpha=>f(alpha);
+  force.initialize=(_, random)=>f.initialize(groupNodes, random);
+  return force;
+}
+
+// Returns the groups that settle live: [{nodes, cx, cy}]
+function layoutComponents(nodes, links, W, H){
+  // Connected groups (union-find over the links)
+  const parent=new Map(nodes.map(n=>[n.id,n.id]));
+  const find=id=>{ while(parent.get(id)!==id){ parent.set(id,parent.get(parent.get(id))); id=parent.get(id); } return id; };
+  const idOf=e=>typeof e==='object'?e.id:e;
+  for(const l of links){
+    const a=find(idOf(l.source)), b=find(idOf(l.target));
+    if(a!==b) parent.set(a,b);
+  }
+  const groups=new Map();
+  for(const n of nodes){ const r=find(n.id); if(!groups.has(r)) groups.set(r,{nodes:[],links:[]}); groups.get(r).nodes.push(n); }
+  for(const l of links) groups.get(find(idOf(l.source))).links.push(l);
+
+  const circles=[];
+  for(const grp of groups.values()){
+    const ns=grp.nodes;
+    // d3's compact spiral start, around 0,0
+    ns.forEach((n,i)=>{ const a=i*Math.PI*(3-Math.sqrt(5)), d=10*Math.sqrt(0.5+i);
+                        n.x=d*Math.cos(a); n.y=d*Math.sin(a); n.vx=0; n.vy=0; });
+    if(ns.length>LIVE_GROUP){
+      circles.push({nodes:ns, live:true, r:LIVE_RADIUS*Math.sqrt(ns.length)+GROUP_GAP/2});
+      continue;
+    }
+    if(ns.length>1){
+      const sim=d3.forceSimulation(ns)
+        .force('link',linkForce(grp.links))
+        .force('charge',chargeForce())
+        .force('collide',d3.forceCollide(d=>(d.r||5)+2))
+        .force('x',d3.forceX(0).strength(0.05))
+        .force('y',d3.forceY(0).strength(0.05))
+        .alphaDecay(0.035).stop();
+      for(let i=0;i<170;i++) sim.tick();
+    }
+    const cx=d3.mean(ns,n=>n.x), cy=d3.mean(ns,n=>n.y);
+    let r=0;
+    for(const n of ns){ n.x-=cx; n.y-=cy; r=Math.max(r, Math.hypot(n.x,n.y)+(n.r||5)); }
+    circles.push({nodes:ns, r:r+GROUP_GAP/2});
+  }
+  circles.sort((a,b)=>b.r-a.r);
+  d3.packSiblings(circles);
+  const live=[];
+  for(const c of circles){
+    const cx=W/2+c.x, cy=H/2+c.y;
+    for(const n of c.nodes){
+      n.x+=cx; n.y+=cy;
+      n.hx=n.x; n.hy=n.y; n.vx=0; n.vy=0;
+      n.gx=cx; n.gy=cy; n.live=!!c.live;
+    }
+    if(c.live) live.push({nodes:c.nodes, cx, cy});
+  }
+  return live;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // HOVER / PIN HIGHLIGHT
 // ══════════════════════════════════════════════════════════════════════════
 function buildAdjacency(links){
@@ -1771,6 +1850,8 @@ function render(){
   if(!nodes.length) return;
 
   buildAdjacency(links);
+  const liveGroups=layoutComponents(nodes, links, W, H);
+  fitView(nodes);
 
   const linkSel=g.append('g').selectAll('line').data(links).enter()
     .append('line')
@@ -1845,16 +1926,17 @@ function render(){
   applyGraphHighlight();
   syncNetworkPin();   // the graph was rebuilt: re-pin the selected organisation
 
+  // The small groups are laid out already (layoutComponents): each of their
+  // nodes is held at its spot, so groups don't drift into each other, and
+  // links pull dragged neighbours along. A large group settles here, in its
+  // own circle, pushed apart only by its own nodes.
   simulation=d3.forceSimulation(nodes)
-    .force('link',d3.forceLink(links).id(d=>d.id)
-      .distance(d=>d.source.type==='project'?60:45).strength(0.3))
-    .force('charge',d3.forceManyBody()
-      .strength(d=>d.type==='project'?-60:-40).distanceMax(350))
+    .force('link',linkForce(links))
     .force('collide',d3.forceCollide(d=>(d.r||5)+2))
-    .force('center',d3.forceCenter(W/2,H/2).strength(0.05))
-    .force('x',d3.forceX(W/2).strength(0.04))
-    .force('y',d3.forceY(H/2).strength(0.04))
-    .alphaDecay(0.022)
+    .force('x',d3.forceX(d=>d.live?d.gx:d.hx).strength(d=>d.live?0.05:0.12))
+    .force('y',d3.forceY(d=>d.live?d.gy:d.hy).strength(d=>d.live?0.05:0.12));
+  liveGroups.forEach((grp,i)=>simulation.force(`charge${i}`,groupCharge(grp.nodes)));
+  simulation.alpha(liveGroups.length?1:0.15).alphaDecay(liveGroups.length?0.022:0.05)
     .on('tick',()=>{
       linkSel.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
              .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
