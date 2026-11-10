@@ -1644,31 +1644,121 @@ function buildGraph(projects){
 // Laid out as one, unconnected projects and organisations ended up among each
 // other, their links crossing. So each group of connected nodes is laid out
 // by itself, its size measured, and the groups packed as circles that don't
-// overlap (largest in the middle). Sets every node's x/y and its home hx/hy.
-// A group of more than LIVE_GROUP nodes would take seconds to lay out in
-// advance, so it settles on screen instead, in a circle reserved for it of
-// about LIVE_RADIUS * sqrt(nodes) (measured: ~15 * sqrt(n) once settled).
-const GROUP_GAP=18;   // px between groups
-const LIVE_GROUP=250, LIVE_RADIUS=18;
-const linkForce=links=>d3.forceLink(links).id(d=>d.id)
-  .distance(d=>d.source.type==='project'?60:45).strength(0.3);
-const chargeForce=()=>d3.forceManyBody().strength(d=>d.type==='project'?-60:-40).distanceMax(350);
+// overlap (largest in the middle).
+//
+// Within a group, most nodes have one link: an NWO project with one
+// organisation, a partner in one project. Left to the forces they drift among
+// other stars and their spokes cross. So a node with one link is a leaf of the
+// node it links to (its hub), placed on a ring around it, in the gaps between
+// the hub's links to the rest of the group. Only the other nodes (the core)
+// are laid out by forces, each hub as a disc big enough for its ring of
+// leaves (its footprint), so stars keep apart and spokes stay inside their own.
+//
+// Everything is laid out before it is drawn (under half a second for the
+// largest group, ~380 core nodes) and then held at its spot (hx, hy).
+const GROUP_GAP=24;      // px between groups
+const LEAF_GAP=4;        // px between leaves on a ring
+const ARC_MARGIN=0.32;   // radians kept free either side of a link to the core
+const idOf=e=>typeof e==='object'?e.id:e;
 
-// Repulsion among these nodes only: d3 hands a force every node of the
-// simulation, so pass it just the group's
-function groupCharge(groupNodes){
-  const f=chargeForce();
-  const force=alpha=>f(alpha);
-  force.initialize=(_, random)=>f.initialize(groupNodes, random);
-  return force;
+// The core's forces, scaled by footprint so big stars keep their distance
+const coreLinkForce=links=>d3.forceLink(links).id(d=>d.id)
+  .distance(d=>Math.max(d.source.type==='project'?60:45, d.source.foot+d.target.foot+14)).strength(0.3);
+const coreCharge=()=>d3.forceManyBody().strength(d=>-(40+1.3*d.foot)).distanceMax(500);
+const coreCollide=()=>d3.forceCollide(d=>d.hub ? (d.r||5)+1 : d.foot+3).iterations(2);
+
+// A force on some nodes only: d3 hands a force every node of the simulation
+function only(force, subset){
+  const f=alpha=>force(alpha);
+  f.initialize=(_, random)=>force.initialize(subset, random);
+  return f;
 }
 
-// Returns the groups that settle live: [{nodes, cx, cy}]
+// Hubs, leaves and footprints of a group's nodes
+function starStructure(ns, links, byId){
+  const nb=new Map(ns.map(n=>[n,new Set()]));
+  for(const l of links){
+    const a=byId.get(idOf(l.source)), b=byId.get(idOf(l.target));
+    if(a===b) continue;
+    nb.get(a).add(b); nb.get(b).add(a);
+  }
+  ns.forEach(n=>{ n.hub=null; n.leaves=[]; });
+  for(const n of ns){
+    if(nb.get(n).size!==1) continue;
+    const [m]=nb.get(n);
+    // A pair: the project is the hub
+    if(nb.get(m).size===1 && (n.type==='project' && m.type!=='project' || n.type===m.type && n.id<m.id)) continue;
+    n.hub=m; m.leaves.push(n);
+  }
+  for(const n of ns){
+    n.coreNb=[...nb.get(n)].filter(m=>!m.hub);
+    n.leaves.sort((a,b)=>(a.type<b.type?-1:a.type>b.type?1:0) || (b.r||5)-(a.r||5));
+    const L=n.leaves;
+    if(!L.length){ n.foot=(n.r||5)+3; continue; }
+    // The ring has to fit in the arcs its links to the core leave free (see
+    // placeLeaves), so it is sized for them
+    const maxR=d3.max(L,l=>l.r||5), need=d3.sum(L,l=>2*(l.r||5)+LEAF_GAP);
+    const k=n.coreNb.length, roomed=2*Math.PI-k*2*ARC_MARGIN;
+    const free=Math.max(0.3, (roomed>=Math.PI/2 ? roomed : 2*Math.PI-k*0.12)/(2*Math.PI));
+    n.ringR=Math.max((n.r||5)+maxR+16, need/(free*2*Math.PI));
+    n.foot=n.ringR+maxR+3;
+  }
+  return {core:ns.filter(n=>!n.hub), hubs:ns.filter(n=>n.leaves.length),
+          coreLinks:links.filter(l=>!byId.get(idOf(l.source)).hub && !byId.get(idOf(l.target)).hub)};
+}
+
+// Each leaf's offset from its hub: spread evenly over the free arcs between
+// the hub's links to the core, each arc getting leaves by its length
+function placeLeaves(h){
+  const L=h.leaves;
+  const dirs=h.coreNb.map(m=>Math.atan2(m.y-h.y, m.x-h.x)).sort((a,b)=>a-b);
+  let arcs=[[-Math.PI/2, 2*Math.PI]];
+  if(dirs.length){
+    arcs=dirs.map((d,i)=>[d, (i+1<dirs.length ? dirs[i+1] : dirs[0]+2*Math.PI)-d]);
+    const room=d3.sum(arcs,([,len])=>Math.max(0,len-2*ARC_MARGIN));
+    const m=room>=Math.PI/2 ? ARC_MARGIN : 0.06;    // a crowded hub: smaller margins
+    arcs=arcs.map(([s,len])=>[s+m, Math.max(0,len-2*m)]);
+  }
+  const free=d3.sum(arcs,a=>a[1]) || 2*Math.PI;
+  if(!d3.sum(arcs,a=>a[1])) arcs=[[0,2*Math.PI]];
+  // Leaves per arc, by largest remainder
+  const exact=arcs.map(a=>L.length*a[1]/free), cnt=exact.map(Math.floor);
+  let left=L.length-d3.sum(cnt);
+  exact.map((e,i)=>[e-cnt[i],i]).sort((a,b)=>b[0]-a[0]).forEach(([,i])=>{ if(left>0){ cnt[i]++; left--; } });
+  const R=Math.max(h.ringR, d3.sum(L,l=>2*(l.r||5)+LEAF_GAP)/free);
+  let k=0;
+  arcs.forEach(([s,len],i)=>{
+    for(let j=0;j<cnt[i];j++){
+      const a=s+len*(j+0.5)/cnt[i], leaf=L[k++];
+      leaf.ox=R*Math.cos(a); leaf.oy=R*Math.sin(a);
+    }
+  });
+}
+
+// Keeps leaves on their hub's ring: they move with it, and the ring turns
+// away from the hub's links every few ticks. Added last, so it has the final say.
+function satelliteForce(hubs, leaves){
+  let tick=0;
+  const f=()=>{
+    if(tick++%8===0) hubs.forEach(placeLeaves);
+    for(const l of leaves){
+      if(l.fx!=null) continue;                     // being dragged
+      l.x=l.hub.x+l.ox; l.y=l.hub.y+l.oy; l.vx=l.hub.vx; l.vy=l.hub.vy;
+    }
+  };
+  f.initialize=()=>{};
+  return f;
+}
+
+// Lays out every group and packs them. Sets x/y and the home hx/hy, and
+// returns every hub and leaf, for the ring force while dragging.
 function layoutComponents(nodes, links, W, H){
+  const byId=new Map(nodes.map(n=>[n.id,n]));
+  // Links point at the nodes themselves from here on (the drawing reads them)
+  for(const l of links){ l.source=byId.get(idOf(l.source)); l.target=byId.get(idOf(l.target)); }
   // Connected groups (union-find over the links)
   const parent=new Map(nodes.map(n=>[n.id,n.id]));
   const find=id=>{ while(parent.get(id)!==id){ parent.set(id,parent.get(parent.get(id))); id=parent.get(id); } return id; };
-  const idOf=e=>typeof e==='object'?e.id:e;
   for(const l of links){
     const a=find(idOf(l.source)), b=find(idOf(l.target));
     if(a!==b) parent.set(a,b);
@@ -1677,44 +1767,43 @@ function layoutComponents(nodes, links, W, H){
   for(const n of nodes){ const r=find(n.id); if(!groups.has(r)) groups.set(r,{nodes:[],links:[]}); groups.get(r).nodes.push(n); }
   for(const l of links) groups.get(find(idOf(l.source))).links.push(l);
 
-  const circles=[];
+  const circles=[], allHubs=[], allLeaves=[];
   for(const grp of groups.values()){
     const ns=grp.nodes;
-    // d3's compact spiral start, around 0,0
-    ns.forEach((n,i)=>{ const a=i*Math.PI*(3-Math.sqrt(5)), d=10*Math.sqrt(0.5+i);
-                        n.x=d*Math.cos(a); n.y=d*Math.sin(a); n.vx=0; n.vy=0; });
-    if(ns.length>LIVE_GROUP){
-      circles.push({nodes:ns, live:true, r:LIVE_RADIUS*Math.sqrt(ns.length)+GROUP_GAP/2});
-      continue;
-    }
-    if(ns.length>1){
-      const sim=d3.forceSimulation(ns)
-        .force('link',linkForce(grp.links))
-        .force('charge',chargeForce())
-        .force('collide',d3.forceCollide(d=>(d.r||5)+2))
+    const {core, hubs, coreLinks}=starStructure(ns, grp.links, byId);
+    allHubs.push(...hubs); allLeaves.push(...ns.filter(n=>n.hub));
+    // A compact spiral start for the core, around 0,0, biggest stars first
+    // (a start spread by footprint took the forces far longer to settle)
+    core.sort((a,b)=>b.foot-a.foot).forEach((n,i)=>{
+      const a=i*Math.PI*(3-Math.sqrt(5)), rad=48*Math.sqrt(i+0.5);
+      n.x=rad*Math.cos(a); n.y=rad*Math.sin(a); n.vx=0; n.vy=0;
+    });
+    if(core.length>1){
+      const sim=d3.forceSimulation(core)
+        .force('link',coreLinkForce(coreLinks))
+        .force('charge',coreCharge())
+        .force('collide',coreCollide())
         .force('x',d3.forceX(0).strength(0.05))
         .force('y',d3.forceY(0).strength(0.05))
-        .alphaDecay(0.035).stop();
-      for(let i=0;i<170;i++) sim.tick();
+        .alphaDecay(0.03).stop();
+      for(let i=0;i<200;i++) sim.tick();
     }
-    const cx=d3.mean(ns,n=>n.x), cy=d3.mean(ns,n=>n.y);
+    hubs.forEach(placeLeaves);
+    ns.forEach(n=>{ if(n.hub){ n.x=n.hub.x+n.ox; n.y=n.hub.y+n.oy; } });
+    const cx=d3.mean(core,n=>n.x), cy=d3.mean(core,n=>n.y);
     let r=0;
     for(const n of ns){ n.x-=cx; n.y-=cy; r=Math.max(r, Math.hypot(n.x,n.y)+(n.r||5)); }
     circles.push({nodes:ns, r:r+GROUP_GAP/2});
   }
   circles.sort((a,b)=>b.r-a.r);
   d3.packSiblings(circles);
-  const live=[];
   for(const c of circles){
-    const cx=W/2+c.x, cy=H/2+c.y;
     for(const n of c.nodes){
-      n.x+=cx; n.y+=cy;
+      n.x+=W/2+c.x; n.y+=H/2+c.y;
       n.hx=n.x; n.hy=n.y; n.vx=0; n.vy=0;
-      n.gx=cx; n.gy=cy; n.live=!!c.live;
     }
-    if(c.live) live.push({nodes:c.nodes, cx, cy});
   }
-  return live;
+  return {hubs:allHubs, leaves:allLeaves};
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1850,7 +1939,7 @@ function render(){
   if(!nodes.length) return;
 
   buildAdjacency(links);
-  const liveGroups=layoutComponents(nodes, links, W, H);
+  const layout=layoutComponents(nodes, links, W, H);
   fitView(nodes);
 
   const linkSel=g.append('g').selectAll('line').data(links).enter()
@@ -1926,17 +2015,16 @@ function render(){
   applyGraphHighlight();
   syncNetworkPin();   // the graph was rebuilt: re-pin the selected organisation
 
-  // The small groups are laid out already (layoutComponents): each of their
-  // nodes is held at its spot, so groups don't drift into each other, and
-  // links pull dragged neighbours along. A large group settles here, in its
-  // own circle, pushed apart only by its own nodes.
+  // Everything is laid out already (layoutComponents) and held at its spot, so
+  // groups don't drift into each other. This only reacts to dragging: links
+  // pull the neighbours along, and leaves move with their hub.
   simulation=d3.forceSimulation(nodes)
-    .force('link',linkForce(links))
-    .force('collide',d3.forceCollide(d=>(d.r||5)+2))
-    .force('x',d3.forceX(d=>d.live?d.gx:d.hx).strength(d=>d.live?0.05:0.12))
-    .force('y',d3.forceY(d=>d.live?d.gy:d.hy).strength(d=>d.live?0.05:0.12));
-  liveGroups.forEach((grp,i)=>simulation.force(`charge${i}`,groupCharge(grp.nodes)));
-  simulation.alpha(liveGroups.length?1:0.15).alphaDecay(liveGroups.length?0.022:0.05)
+    .force('link',coreLinkForce(links.filter(l=>!l.source.hub && !l.target.hub)))
+    .force('collide',only(coreCollide(), nodes.filter(n=>!n.hub)))   // a hub's footprint holds its own leaves
+    .force('x',d3.forceX(d=>d.hx).strength(0.12))
+    .force('y',d3.forceY(d=>d.hy).strength(0.12))
+    .force('satellites',satelliteForce(layout.hubs,layout.leaves))
+    .alpha(0.15).alphaDecay(0.05)
     .on('tick',()=>{
       linkSel.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
              .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
