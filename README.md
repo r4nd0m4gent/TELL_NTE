@@ -39,14 +39,18 @@ Live site: <https://tell.newtexeco.nl>
 
 A static page built on project data from **NWO, Erasmus+, Horizon Europe and
 Horizon 2020**, limited to textile projects (whole-word keyword matching and a
-relevance score).
+relevance score), plus the **ECOSYSTEX member projects** (ecosystex.eu), also
+those without a Dutch partner or from other EU programmes (Interreg, LIFE,
+Digital Europe, …).
 
-- **Network view and map view**. Dutch organisations are placed at their main
-  seat and European research partners appear under their short names. Clicking
-  an organisation shows the lines to its shared projects.
-- **Filters**: programme, years active, Dutch-led only, and whether to include
-  European partners. The search box ranks the matching projects and highlights
-  them, and pressing Enter turns a search term into a keyword filter.
+- **Network view and map view**, with every organisation, in the Netherlands
+  and abroad. Dutch organisations are placed at their main seat, those abroad at
+  their CORDIS address, or in the middle of their country when only that is
+  known. Clicking an organisation shows the lines to its shared projects.
+- **Filters**: programme, years active, Dutch-led only, ECOSYSTEX only, and
+  whether to include the organisations abroad. The search box ranks the
+  matching projects and highlights them, and pressing Enter turns a search term
+  into a keyword filter.
 - **Project and organisation profiles**, sortable tables, CSV download, and
   the option to exclude projects that were matched by mistake.
 

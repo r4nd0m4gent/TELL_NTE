@@ -68,6 +68,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0d1117;c
 .tog-btn.prog-erasmus.active{background:#238636;border-color:#3fb950}
 .tog-btn.prog-he.active     {background:#1f6feb;border-color:#388bfd}
 .tog-btn.prog-h2020.active  {background:#0969da;border-color:#1f6feb}
+.tog-btn.prog-other.active  {background:#be185d;border-color:#f472b6}
 
 .stat{font-size:12px;color:#8b949e;white-space:nowrap}
 .stat b{font-weight:700}
@@ -175,6 +176,7 @@ body:not(.view-map) .map-only{display:none!important}
 #map-svg.zooming .m-label{display:none}   /* labels would scale along while zooming */
 .m-node{fill:#c2410c;stroke:#fb923c;stroke-width:1.5;fill-opacity:.85;pointer-events:all;cursor:pointer;transition:opacity .15s}
 .m-node.eu{fill:#ca8a04;stroke:#facc15}
+.m-node.approx{stroke-dasharray:2 2;fill-opacity:.5}   /* placed in the middle of its country */
 .m-node.dim{opacity:.15}
 .m-node.center{stroke:#fff;stroke-width:2.5;filter:drop-shadow(0 0 8px #fb923c)}
 .m-node.hit{stroke:#3fb950;stroke-width:3;filter:drop-shadow(0 0 7px #3fb950)}
@@ -263,6 +265,8 @@ body:not(.view-map) .map-only{display:none!important}
 .prog-badge.erasmus{background:#0d2a10;color:#3fb950}
 .prog-badge.he{background:#0d1f3c;color:#79c0ff}
 .prog-badge.h2020{background:#0d1830;color:#58a6ff}
+.prog-badge.other{background:#3a0d24;color:#f472b6}
+.prog-badge.eco{background:#2a2410;color:#e3b341;border:1px solid #6b5a1e}
 .excl-cb{width:13px;height:13px;accent-color:#3fb950;cursor:pointer;margin-top:2px}
 .role-indicator{font-size:10px;padding:1px 5px;border-radius:3px;font-weight:600;white-space:nowrap}
 .ri-pi{background:#2a1a00;color:#e3b341}
@@ -278,6 +282,7 @@ body:not(.view-map) .map-only{display:none!important}
 .node-erasmus {fill:#238636;stroke:#3fb950;stroke-width:1.5}
 .node-he      {fill:#1f6feb;stroke:#388bfd;stroke-width:1.5}
 .node-h2020   {fill:#0969da;stroke:#1f6feb;stroke-width:1.5}
+.node-other   {fill:#be185d;stroke:#f472b6;stroke-width:1.5}
 /* NL organisations → orange */
 .node-org-nl   {fill:#c2410c;stroke:#fb923c;stroke-width:1.5}
 /* Non-NL organisations → yellow/amber (warm, distinct from orange NL and cool project tones) */
@@ -303,6 +308,7 @@ text.top{font-weight:700;font-size:10px;paint-order:stroke;stroke:#0d1117;stroke
 .node-erasmus.h-pin {filter:drop-shadow(0 0 8px #3fb950)!important}
 .node-he.h-pin      {filter:drop-shadow(0 0 8px #388bfd)!important}
 .node-h2020.h-pin   {filter:drop-shadow(0 0 8px #1f6feb)!important}
+.node-other.h-pin   {filter:drop-shadow(0 0 8px #f472b6)!important}
 .node-org-nl.h-pin   {stroke-width:3.5!important;filter:drop-shadow(0 0 8px #fb923c)!important}
 .node-org-other.h-pin{stroke-width:3.5!important;filter:drop-shadow(0 0 8px #fbbf24)!important}
 svg#graph-svg{cursor:default}
@@ -344,7 +350,7 @@ svg#graph-svg{cursor:default}
     <span class="flabel">View</span>
     <div id="viewGroup" role="group" aria-label="View">
       <button class="view-btn active" data-view="network" title="Projects and partners as a network">Network</button>
-      <button class="view-btn" data-view="map" title="Dutch organisations on a map">Map</button>
+      <button class="view-btn" data-view="map" title="The organisations on a map">Map</button>
     </div>
   </div>
 
@@ -355,6 +361,7 @@ svg#graph-svg{cursor:default}
       <button class="tog-btn prog-erasmus active"  data-prog="erasmus" title="Erasmus+">Erasmus+</button>
       <button class="tog-btn prog-he active"       data-prog="he"      title="Horizon Europe">Horizon Europe</button>
       <button class="tog-btn prog-h2020 active"    data-prog="h2020"   title="Horizon 2020">H2020</button>
+      <button class="tog-btn prog-other active"    data-prog="other"   title="Other EU programmes of ECOSYSTEX member projects: Interreg, LIFE, Digital Europe, Single Market Programme, Creative Europe, I3">Other EU</button>
     </div>
   </div>
 
@@ -374,11 +381,14 @@ svg#graph-svg{cursor:default}
   <div class="fgroup">
     <span class="flabel">Projects</span>
     <div class="fscope">
-      <label class="chk" title="Only projects coordinated by a Dutch organisation: every NWO project, and EU projects with a Dutch coordinator. Untick to include EU projects where a Dutch organisation is a partner.">
-        <input type="checkbox" id="nlLedToggle" checked style="accent-color:#fb923c"> Dutch-led only
+      <label class="chk" title="Only projects coordinated by a Dutch organisation: every NWO project, and EU projects with a Dutch coordinator">
+        <input type="checkbox" id="nlLedToggle" style="accent-color:#fb923c"> Dutch-led only
       </label>
-      <label class="chk" title="Also show the European universities and research organisations these projects work with, in the network and on the map">
-        <input type="checkbox" id="euToggle" style="accent-color:#facc15"> European research partners
+      <label class="chk" title="Only the member projects of ECOSYSTEX, the European textile ecosystem network (ecosystex.eu)">
+        <input type="checkbox" id="ecoToggle" style="accent-color:#e3b341"> ECOSYSTEX only
+      </label>
+      <label class="chk" title="Also show the organisations outside the Netherlands, in the network, on the map and in the table. Untick for the Dutch organisations only.">
+        <input type="checkbox" id="abroadToggle" checked style="accent-color:#facc15"> Organisations abroad
       </label>
     </div>
   </div>
@@ -424,7 +434,8 @@ svg#graph-svg{cursor:default}
     <summary>Legend</summary>
     <div class="map-only">
       <div class="lr"><div class="ldot" style="background:#c2410c;border:1.5px solid #fb923c"></div><div class="ll">Dutch organisation, at its main seat</div></div>
-      <div class="lr"><div class="ldot" style="background:#ca8a04;border:1.5px solid #facc15"></div><div class="ll">European university or research organisation</div></div>
+      <div class="lr"><div class="ldot" style="background:#ca8a04;border:1.5px solid #facc15"></div><div class="ll">Organisation abroad, in its city</div></div>
+      <div class="lr"><div class="ldot" style="background:rgba(202,138,4,.5);border:1.5px dashed #facc15"></div><div class="ll">Organisation abroad, city unknown: in the middle of its country</div></div>
       <div class="lr"><div class="lline" style="background:#fb923c"></div><div class="ll">Shared projects of the organisation you click (thicker = more)</div></div>
       <div class="ll" style="font-size:9px;color:#484f58;margin-top:2px">Circle size = number of projects · organisations in one city are spread around it · click one to list its projects</div>
     </div>
@@ -434,10 +445,11 @@ svg#graph-svg{cursor:default}
         <div class="lr"><div class="ldot" style="background:#238636;border:1.5px solid #3fb950"></div><div class="ll">Erasmus+ project</div></div>
         <div class="lr"><div class="ldot" style="background:#1f6feb;border:1.5px solid #388bfd"></div><div class="ll">Horizon Europe project</div></div>
         <div class="lr"><div class="ldot" style="background:#0969da;border:1.5px solid #1f6feb"></div><div class="ll">Horizon 2020 project</div></div>
+        <div class="lr"><div class="ldot" style="background:#be185d;border:1.5px solid #f472b6"></div><div class="ll">Other EU programme (Interreg, LIFE, …)</div></div>
       </div>
       <div>
         <div class="lr"><div class="ldot" style="background:#c2410c;border:1.5px solid #fb923c"></div><div class="ll" style="color:#fb923c">🇳🇱 NL organisation</div></div>
-        <div class="lr"><div class="ldot" style="background:#facc15;border:1px solid #fbbf24"></div><div class="ll">European university or research organisation</div></div>
+        <div class="lr"><div class="ldot" style="background:#facc15;border:1px solid #fbbf24"></div><div class="ll">🌍 Organisation abroad</div></div>
         <div class="lr"><div class="lline" style="background:#e3b341"></div><div class="ll">PI / coordinator link</div></div>
         <div class="lr"><div class="lline" style="background:#3a4060"></div><div class="ll">Partner link</div></div>
       </div>
@@ -509,7 +521,7 @@ svg#graph-svg{cursor:default}
 <div id="tt"></div>
 <div id="loading">
   <div class="spinner"></div>
-  <h2>Loading NWO + EU project data…</h2>
+  <h2>Loading NWO, EU and ECOSYSTEX project data…</h2>
   <div id="load-s"></div>
 </div>
 
@@ -752,8 +764,8 @@ function normaliseOrgName(raw) {
 // STATE
 // ══════════════════════════════════════════════════════════════════════════
 let allProjects  = [];
-let metaFunding  = { nwo:0, erasmus:0, he:0, h2020:0 };
-let activeProgs  = new Set(['nwo','erasmus','he','h2020']);
+let metaFunding  = { nwo:0, erasmus:0, he:0, h2020:0, other:0 };
+let activeProgs  = new Set(['nwo','erasmus','he','h2020','other']);
 let excludedIds  = new Set();     // project_ids manually excluded
 let searchTerm   = '';
 let highlightSet = new Set();
@@ -769,7 +781,9 @@ let pinnedNode   = null;
 let neighborMap  = new Map();
 let yearMin      = 2014;
 let yearMax      = 2026;
-let nlLedOnly    = true;          // only projects coordinated by a Dutch organisation
+let nlLedOnly    = false;         // only projects coordinated by a Dutch organisation
+let ecoOnly      = false;         // only ECOSYSTEX member projects
+let abroadOrgs   = true;          // organisations outside the Netherlands too (network, map, table)
 let projSort     = {key:'name', dir:1};
 let orgSort      = {key:'total', dir:-1};
 
@@ -787,9 +801,13 @@ function fmtEuro(v) {
   return `€${v.toFixed(0)}`;
 }
 
+// ECOSYSTEX projects outside Horizon and Erasmus+ (Interreg, LIFE, Digital
+// Europe, ...) are 'other'
+const ECO_PROGS={'horizon europe':'he','horizon 2020':'h2020','erasmus+':'erasmus'};
 function progKey(p) {
   if(p._src==='nwo') return 'nwo';
   const pg=(p.programme||'').toLowerCase();
+  if(p._src==='ecosystex') return ECO_PROGS[pg]||'other';
   if(p._src==='erasmus'||pg.includes('erasmus')) return 'erasmus';
   if(pg.includes('2020')||pg.includes('h2020'))  return 'h2020';
   return 'he';
@@ -824,7 +842,7 @@ function computeDisplayName(p) {
     const t=(p.title||p.title_en||'').trim();
     return t.slice(0,55) || '(no title)';
   }
-  if(p._src==='cordis') {
+  if(p._src==='cordis' || p._src==='ecosystex') {
     const acr=(p.acronym||'').trim();
     if(acr) return acr;
   }
@@ -949,10 +967,16 @@ async function loadData() {
     allProjects.push(...projects);
   } catch(e){ console.warn('Failed to load NWO:',e); }
 
-  // --- EU sources ---
+  // --- EU sources, and the ECOSYSTEX member projects ---
+  // data/ecosystex_projects.json has all ECOSYSTEX projects (db/mysql/
+  // import_ecosystex.py). The ones TELL has from its own data (`tell`) come
+  // from there and are marked as ECOSYSTEX projects; the others are textile
+  // projects as source 'ecosystex'.
+  const ecoLinks=new Set();
   for(const {file,src} of [
     {file:'data/erasmus_textile_projects.json',src:'erasmus'},
     {file:'data/cordis_textile_projects.json', src:'cordis'},
+    {file:'data/ecosystex_projects.json',      src:'ecosystex'},
   ]) {
     setS(`Loading ${file}…`);
     try {
@@ -972,20 +996,19 @@ async function loadData() {
         p._display_name=computeDisplayName(p);
         p._matched_terms=textileKeywords([p.title_en,p.objective,p.topics]);
         p._textile=textileIds.has(`${src}:${p.project_id}`);
+        p._ecosystex=src==='ecosystex';
+        if(p.tell) ecoLinks.add(p.tell);
       });
-      // Only keep EU projects with NL partner
-      allProjects.push(...projects.filter(p=>p._isNL));
+      // Every project, with or without a Dutch partner
+      allProjects.push(...projects);
     } catch(e){ console.warn(`Failed to load ${file}:`,e); }
   }
+  for(const p of allProjects) if(ecoLinks.has(`${p._src}:${p.project_id}`)) p._ecosystex=true;
 
   // Compute total funding per programme across ALL loaded projects
   for(const p of allProjects){
-    const f=p.ec_grant_num||0;
-    const pk=p._progKey;
-    if(pk==='nwo')        metaFunding.nwo    +=f;
-    else if(pk==='erasmus') metaFunding.erasmus+=f;
-    else if(pk==='he')      metaFunding.he     +=f;
-    else if(pk==='h2020')   metaFunding.h2020  +=f;
+    if(p._src==='ecosystex' && p.tell) continue;   // counted as TELL's own copy
+    metaFunding[p._progKey]=(metaFunding[p._progKey]||0)+(p.ec_grant_num||0);
   }
   // From here on only the textile projects; the totals above stay those of
   // everything loaded, so the funding share is a share of that.
@@ -1004,6 +1027,7 @@ function filteredProjects() {
     if(excludedIds.has(p.project_id)) return false;
     if(!activeProgs.has(p._progKey)) return false;
     if(nlLedOnly && !p._nlLed) return false;
+    if(ecoOnly && !p._ecosystex) return false;
     if(searchKw.length && !kwHits(p).length) return false;
     if(!projectActiveInRange(p, yearMin, yearMax)) return false;
     return true;
@@ -1122,11 +1146,12 @@ function buildNLOrgs(projects) {
     for(const m of (p.project_members||[])){
       // For NWO: all orgs are NL. For EU: check country
       const isNLOrg = p._src==='nwo' || NL_CODES.has((m.country||'').toUpperCase());
-      if(!isNLOrg) continue;
+      if(!isNLOrg && !abroadOrgs) continue;
       const raw=(m.organisation||m.name||'').split('||')[0].trim();
       if(!raw) continue;
       const name=normaliseOrgName(raw);
-      if(!orgs.has(name)) orgs.set(name,{piCount:0,ptCount:0,progs:new Set(),pids:new Set(),totalFund:0});
+      if(!orgs.has(name)) orgs.set(name,{piCount:0,ptCount:0,progs:new Set(),pids:new Set(),totalFund:0,
+                                         isNL:isNLOrg, country:isNLOrg?'NL':(m.country||'')});
       const o=orgs.get(name);
       isCoord(m.role,p._src) ? o.piCount++ : o.ptCount++;
       o.progs.add(p._progKey);
@@ -1143,7 +1168,7 @@ function buildNLOrgs(projects) {
 // ══════════════════════════════════════════════════════════════════════════
 const ORG_SORT={
   name: ([n])=>n.toLowerCase(),
-  city: ([n])=>(orgCity(n)||'\uffff').toLowerCase(),   // unknown last
+  city: ([n,i])=>(orgWhere(n,i.country)||'\uffff').toLowerCase(),   // unknown last
   role: ([,i])=>(i.piCount>0?2:0)+(i.ptCount>0?1:0),
   total:([,i])=>i.piCount+i.ptCount,
   pi:   ([,i])=>i.piCount,
@@ -1174,7 +1199,7 @@ function renderNLOrgs(projects) {
     if(selectedOrg===name) tr.className='selected';
     tr.innerHTML=`
       <td style="color:${isPI?'#e3b341':'#c9d1d9'}">${esc(name)}</td>
-      <td>${esc(orgCity(name)||'')}</td>
+      <td>${esc(orgWhere(name, info.country))}</td>
       <td><span class="role-indicator ${ri}">${rl}</span></td>
       <td class="num">${info.piCount+info.ptCount}</td>
       <td class="num">${info.piCount||''}</td>
@@ -1190,7 +1215,8 @@ function renderNLOrgs(projects) {
 // ══════════════════════════════════════════════════════════════════════════
 // PROJECT LIST PANEL
 // ══════════════════════════════════════════════════════════════════════════
-const PROG_SHORT={nwo:'NWO',erasmus:'E+',he:'HE',h2020:'H2020'};
+const PROG_SHORT={nwo:'NWO',erasmus:'E+',he:'HE',h2020:'H2020',other:'Other EU'};
+const ECO_BADGE='<span class="prog-badge eco" title="ECOSYSTEX member project">ECOSYSTEX</span>';
 const PROJ_SORT={
   name: p=>(p.title_en||p.title||p._display_name||'').toLowerCase(),
   prog: p=>p._progKey,
@@ -1336,7 +1362,7 @@ function updateProjList(projects) {
     tr.innerHTML=`
       <td><input type="checkbox" class="excl-cb" checked title="Untick to exclude this project"></td>
       <td class="pcell"><span class="ptitle">${titleHtml}</span>${url?`<a class="ext" href="${esc(url)}" target="_blank" rel="noopener" title="Open the project page">↗</a>`:''}${hitHtml}</td>
-      <td><span class="prog-badge ${pk}">${PROG_SHORT[pk]}</span></td>
+      <td><span class="prog-badge ${pk}" title="${esc(p.programme||'')}">${PROG_SHORT[pk]}</span>${p._ecosystex?' '+ECO_BADGE:''}</td>
       <td class="num">${yr||''}</td>
       <td class="num grant">${grant}</td>
       <td>${esc(piInst)}${piName?`<div class="sub">${esc(piName)}</div>`:''}</td>
@@ -1582,8 +1608,8 @@ function buildGraph(projects){
       const orgName=normaliseOrgName(raw);
       const oid=`org:${orgName}`;
       const orgIsNL= p._src==='nwo' || NL_CODES.has((country||'').toUpperCase());
-      // Abroad, only the European research partners, and only when ticked (as on the map)
-      if(!orgIsNL && !(euPartners && isEuPartner(orgName))) return null;
+      // Organisations abroad, unless unticked (as on the map)
+      if(!orgIsNL && !abroadOrgs) return null;
       if(!nm.has(oid)){
         const tf=orgFunding.get(orgName)||0;
         const on={id:oid,type:'org',label:orgName,isCoord:role==='coord',
@@ -1757,7 +1783,7 @@ function render(){
     .attr('r', d=> d.r || 5)
     .attr('class',d=>{
       if(d.type==='project'){
-        const nc=d.pk==='nwo'?'node-nwo':d.pk==='erasmus'?'node-erasmus':d.pk==='h2020'?'node-h2020':'node-he';
+        const nc=`node-${d.pk}`;
         return `node-proj ${nc}`;
       }
       return `node-org ${d.isNL?'node-org-nl':'node-org-other'}`;
@@ -1808,6 +1834,7 @@ function render(){
       if(pk==='nwo') return '#a78bfa';
       if(pk==='erasmus') return '#3fb950';
       if(pk==='h2020') return '#58a6ff';
+      if(pk==='other') return '#f472b6';
       return '#79c0ff';
     })
     .attr('text-anchor','middle')
@@ -1859,7 +1886,7 @@ function showTT(e,d){
     const fullTitle=(dn!==p.title_en&&p.title_en)?p.title_en.slice(0,110):'';
     const piName=getPIName(p);
     const piInst=getPIInstitution(p);
-    const srcLabel=p._src==='nwo'?'NWO/SIA':(p.programme||p._src);
+    const srcLabel=(p._src==='nwo'?'NWO/SIA':(p.programme||p._src))+(p._ecosystex?' · ECOSYSTEX':'');
     h=`<div class="tth">${esc(dn)}</div>
        ${fullTitle?`<div class="tts" style="font-style:italic;margin-bottom:2px">${esc(fullTitle)}</div>`:''}
        <div class="tts">${esc(srcLabel)} ${pyr?`· <b style="color:#e6edf3">${pyr}</b>`:''} ${grant?`· <span class="ttg">${grant}</span>`:''}</div>
@@ -1870,7 +1897,7 @@ function showTT(e,d){
        <div class="tts" style="margin-top:5px;color:#58a6ff">Click for the project profile</div>`;
   } else {
     h=`<div class="tth" style="color:${d.isNL?'#fb923c':'#fbbf24'}">${esc(d.label)}</div>
-       <div class="tts">${d.isNL?'🇳🇱 NL org':'🌍 Non-NL org'} · ${d.isCoord?'PI/Coordinator':'Partner'} · ${d.count} project${d.count!==1?'s':''}</div>
+       <div class="tts">${d.isNL?'🇳🇱 NL org':`🌍 ${esc(orgWhere(d.label,'')||'Non-NL org')}`} · ${d.isCoord?'PI/Coordinator':'Partner'} · ${d.count} project${d.count!==1?'s':''}</div>
        <div class="tts" style="color:#d2a8ff">${fmtEuro(d.totalFund||0)} funding share</div>
        <div class="tts" style="margin-top:5px;color:#58a6ff">Click for its profile: projects and keywords</div>`;
   }
@@ -1899,18 +1926,11 @@ const MAP_DROP_LAYERS=new Set(['transportation','transportation_name','aeroway',
 // Tiles get no more detailed than this zoom: without streets nothing is gained,
 // and zooming in further just enlarges them, without new downloads
 const MAP_TILE_MAXZOOM=7;
-// "European research partners": universities (HES) and research organisations
-// (REC) in these countries
-const EUROPE=new Set(['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','EL','GR','HU','IE','IT',
-  'LV','LT','LU','MT','PL','PT','RO','SK','SI','ES','SE','NO','IS','LI','CH','UK','GB',
-  'RS','ME','MK','AL','BA','XK','UA','MD']);
-const RESEARCH_TYPES=new Set(['HES','REC']);
-let euPartners=false;   // also show them, in the network and on the map
-function isEuPartner(name){
-  const pl=orgPlaces.get(name);
-  return !!pl && EUROPE.has(pl.country) && RESEARCH_TYPES.has(pl.type);
-}
-let view='network', currentProjects=[];
+// Opening the map with organisations abroad: fit to those in this box (Europe
+// and around), so a few partners in the Americas or Asia don't zoom it out to
+// the whole world. They are on the map all the same.
+const EUROPE_BOX={lon:[-25,45], lat:[34,72]};
+let view='network', currentProjects=[], mapFitted=false;
 let orgLoc=null, orgLocRe=null;
 let mapObj=null, mapReady=false, mapLoading=null;
 let mapNodes=[], mapEdges=[], mapHover=null, mapLit=null;
@@ -1922,7 +1942,9 @@ async function loadOrgLocations(){
     const [r1,r2]=await Promise.all([fetch('data/nl_org_locations.json'), fetch('data/org_locations.json')]);
     if(!r1.ok||!r2.ok) throw new Error(`HTTP ${r1.status}/${r2.status}`);
     orgLoc=await r1.json();
-    orgLoc.cordis=(await r2.json()).organisations;
+    const eu=await r2.json();
+    orgLoc.cordis=eu.organisations;
+    orgLoc.countries=eu.countries||{};
     const alt=orgLoc.name_cities.map(c=>c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
     orgLocRe=new RegExp(`(?:^|[^\\p{L}])(${alt})(?![\\p{L}])`,'iu');
   }catch(e){ console.warn('Failed to load organisation locations:',e); }
@@ -1937,11 +1959,14 @@ function nlSeat(name){
 }
 
 // Where every organisation in the data is, by the name the page shows:
-// {city, lat, lon, country, type, isNL}. Dutch ones by their main seat first,
-// then everyone by CORDIS (data/org_locations.json, by name and country).
+// {city, lat, lon, country, type, isNL, approx}. Dutch ones by their main seat
+// first, then everyone by CORDIS (data/org_locations.json, by name and
+// country). Organisations abroad that CORDIS doesn't know go in the middle of
+// their country (approx: true); Dutch ones without a seat stay off the map.
 const orgPlaces=new Map();
 function indexOrgPlaces(){
   if(!orgLoc) return;
+  const approx=new Map();
   for(const p of allProjects){
     for(const m of (p.project_members||[])){
       const raw=(m.organisation||m.name||'').split('||')[0].trim();
@@ -1958,20 +1983,36 @@ function indexOrgPlaces(){
       }
       const c=orgLoc.cordis[raw.toUpperCase().split(/\s+/).join(' ')+'|'+(isNL?'NL':country)];
       if(c) orgPlaces.set(name,{city:c[0], lat:c[1], lon:c[2], country:isNL?'NL':country, type:c[3], isNL});
+      else if(!isNL && orgLoc.countries[country] && !approx.has(name)) approx.set(name,country);
     }
+  }
+  // Last, so that a CORDIS address found under another spelling wins
+  for(const [name,country] of approx){
+    if(orgPlaces.has(name)) continue;
+    const [lat,lon]=orgLoc.countries[country];
+    orgPlaces.set(name,{city:'', lat, lon, country, type:'', isNL:false, approx:true});
   }
 }
 
-// City of an organisation (tables, panel)
+// City of an organisation (tables, panel); '' when only its country is known
 function orgCity(name){
   const pl=orgPlaces.get(name);
   return pl ? pl.city : null;
 }
 
-// One node per placed organisation: the Dutch ones, plus European universities
-// and research organisations when that is switched on. Edges join organisations
-// that share projects, only where a Dutch one is involved. The rest is counted
-// for the info box.
+// Where an organisation is, for tables and panels: its city, with the country
+// for one abroad, or just the country
+function orgWhere(name, country){
+  const pl=orgPlaces.get(name);
+  if(pl && pl.city) return pl.isNL ? pl.city : `${pl.city}, ${pl.country}`;
+  if(pl) return pl.country;
+  return NL_CODES.has(String(country||'').toUpperCase()) ? '' : (country||'');
+}
+
+// One node per placed organisation: the Dutch ones, and those abroad unless
+// that is switched off. Edges join organisations that share projects. The
+// rest is counted for the info box: Dutch ones without a known seat, and
+// (switched off, or without a known country) those abroad.
 function buildMapData(projects){
   const nodes=new Map(), edges=new Map(), unplaced=new Map(), abroad=new Set();
   for(const p of projects){
@@ -1983,7 +2024,7 @@ function buildMapData(projects){
       const isNL=p._src==='nwo' || NL_CODES.has((m.country||'').toUpperCase());
       const pl=orgPlaces.get(name);
       if(!isNL){
-        if(!(euPartners && isEuPartner(name))){ abroad.add(name); continue; }
+        if(!abroadOrgs || !pl){ abroad.add(name); continue; }
       } else if(!pl){
         if(!here.has(name)) unplaced.set(name,(unplaced.get(name)||0)+1);
         here.add(name);
@@ -1991,7 +2032,7 @@ function buildMapData(projects){
       }
       if(!nodes.has(name)){
         nodes.set(name,{name, city:pl.city, country:pl.country, isNL:pl.isNL||isNL, lat:pl.lat, lon:pl.lon,
-          group:`${pl.country}|${pl.city.toLowerCase()}`,
+          approx:!!pl.approx, group:`${pl.country}|${pl.city.toLowerCase()}`,
           pids:new Set(),pi:0,pt:0,fund:0,estimated:false,ox:0,oy:0,x:0,y:0});
       }
       const n=nodes.get(name);
@@ -2005,7 +2046,6 @@ function buildMapData(projects){
     const names=[...here].filter(n=>nodes.has(n)).sort();
     for(let i=0;i<names.length;i++) for(let j=i+1;j<names.length;j++){
       const a=nodes.get(names[i]), b=nodes.get(names[j]);
-      if(!a.isNL && !b.isNL) continue;   // Dutch perspective: no lines between two foreign partners
       const k=names[i]+'\u0000'+names[j];
       if(!edges.has(k)) edges.set(k,{a,b,pids:new Set()});
       edges.get(k).pids.add(p.project_id);
@@ -2027,11 +2067,24 @@ function buildMapData(projects){
 function layoutMap(){
   if(!mapReady) return;
   layoutZoom=mapObj.getZoom();
-  // Smaller circles when zoomed out (Europe), full size from about zoom 7.5
-  const f=Math.max(0.4, Math.min(1, (mapObj.getZoom()-3)/4.5));
+  // Smaller circles, closer together, when zoomed out (Europe), so the
+  // organisations of a country stay near it; full size from about zoom 7.5
+  const f=Math.max(0.22, Math.min(1, (mapObj.getZoom()-3)/4.5));
+  const gap=f<0.6 ? 0.4 : 1.5;
   for(const n of mapNodes) n.rr=n.r*f;
   mNodeG.selectAll('circle').attr('r',n=>n.rr);
-  const placed=[];
+  // Circles placed so far, in a grid of cells as wide as the biggest circle,
+  // so a spot is only checked against the circles near it (thousands of
+  // organisations with those abroad)
+  const cell=2*Math.max(1,d3.max(mapNodes,n=>n.rr)||1)+2, grid=new Map();
+  const cellOf=v=>Math.floor(v/cell);
+  const free=(x,y,r)=>{
+    const cx=cellOf(x), cy=cellOf(y);
+    for(let i=cx-1;i<=cx+1;i++) for(let j=cy-1;j<=cy+1;j++){
+      for(const q of grid.get(i+','+j)||[]) if(Math.hypot(q.x-x,q.y-y)<q.r+r+gap) return false;
+    }
+    return true;
+  };
   const groups=[...d3.group(mapNodes,n=>n.group).values()]
     .sort((a,b)=>d3.sum(b,n=>n.pids.size)-d3.sum(a,n=>n.pids.size));
   for(const grp of groups){
@@ -2039,9 +2092,13 @@ function layoutMap(){
     for(const n of grp){
       const c=mapObj.project([n.clon,n.clat]);
       for(let t=0;t<4000;t++){
-        const x=c.x+t*0.35*Math.cos(t*0.4), y=c.y+t*0.35*Math.sin(t*0.4);
-        if(placed.every(q=>Math.hypot(q.x-x,q.y-y)>=q.r+n.rr+1.5)){
-          n.ox=x-c.x; n.oy=y-c.y; placed.push({x,y,r:n.rr}); break;
+        const x=c.x+t*0.35*f*Math.cos(t*0.4), y=c.y+t*0.35*f*Math.sin(t*0.4);
+        if(free(x,y,n.rr)){
+          n.ox=x-c.x; n.oy=y-c.y;
+          const k=cellOf(x)+','+cellOf(y);
+          if(!grid.has(k)) grid.set(k,[]);
+          grid.get(k).push({x,y,r:n.rr});
+          break;
         }
       }
     }
@@ -2078,7 +2135,7 @@ function renderMap(projects){
   edges.sort((a,b)=>a.pids.size-b.pids.size);   // strongest drawn last, on top
   nodes.sort((a,b)=>b.r-a.r);                    // small circles on top of big ones
   mNodeG.selectAll('circle').data(nodes,n=>n.name).join('circle')
-    .attr('class',n=>n.isNL?'m-node':'m-node eu').attr('r',n=>n.r)
+    .attr('class',n=>n.isNL?'m-node':`m-node eu${n.approx?' approx':''}`).attr('r',n=>n.r)
     .on('mouseover',(e,n)=>{ mapHover=n; showMapTT(e,n); applyMapHighlight(); })
     .on('mousemove',moveTT)
     .on('mouseout',()=>{ mapHover=null; hideTT(); applyMapHighlight(); })
@@ -2087,16 +2144,19 @@ function renderMap(projects){
     .attr('class',n=>n.isNL?'m-label':'m-label eu')
     .text(n=>n.name.length>34?n.name.slice(0,32)+'…':n.name);
   renderMapInfo(nodes,unplaced,abroad);
+  if(!mapFitted){ mapFitted=true; fitMapToNodes(); }   // first time: Europe with those abroad
   layoutMap();
   applyMapHighlight();
   renderPanel();   // filters changed: refresh the open panel
 }
 
-// Fit the map to what is on it: the Netherlands, or Europe with the partners
+// Fit the map to what is on it: the Netherlands, or Europe with those abroad
 function fitMapToNodes(){
   if(!mapReady) return;
-  if(!euPartners || !mapNodes.length){ mapObj.fitBounds(MAP_BOUNDS,{padding:20}); return; }
-  const lons=mapNodes.map(n=>n.clon), lats=mapNodes.map(n=>n.clat);
+  const near=mapNodes.filter(n=>n.clon>=EUROPE_BOX.lon[0] && n.clon<=EUROPE_BOX.lon[1]
+                              && n.clat>=EUROPE_BOX.lat[0] && n.clat<=EUROPE_BOX.lat[1]);
+  if(!abroadOrgs || !near.some(n=>!n.isNL)){ mapObj.fitBounds(MAP_BOUNDS,{padding:20}); return; }
+  const lons=near.map(n=>n.clon), lats=near.map(n=>n.clat);
   mapObj.fitBounds([[d3.min(lons),d3.min(lats)],[d3.max(lons),d3.max(lats)]],{padding:60, maxZoom:7});
 }
 
@@ -2163,7 +2223,8 @@ function showMapTT(e,n){
     .sort((a,b)=>b.pids.size-a.pids.size).slice(0,5)
     .map(x=>`${esc((x.a===n?x.b:x.a).name)} (${x.pids.size})`);
   ttEl.innerHTML=`<div class="tth" style="color:${n.isNL?'#fb923c':'#facc15'}">${esc(n.name)}</div>
-    <div class="tts">${esc(n.city)}${n.isNL?'':', '+esc(n.country)} · ${n.pids.size} project${n.pids.size!==1?'s':''}${n.pi?` · coordinator of ${n.pi}`:''}</div>
+    <div class="tts">${n.approx?`${esc(n.country)}: city unknown, placed in the middle of the country`
+      :`${esc(n.city)}${n.isNL?'':', '+esc(n.country)}`} · ${n.pids.size} project${n.pids.size!==1?'s':''}${n.pi?` · coordinator of ${n.pi}`:''}</div>
     <div class="tts" style="color:#d2a8ff">${n.estimated?'~':''}${fmtEuro(n.fund)} funding share</div>
     ${partners.length?`<div class="tts" style="margin-top:4px">Most projects shared with: ${partners.join(', ')}</div>`:''}
     <div class="tts" style="margin-top:5px;color:#58a6ff">Click for its projects and keywords</div>`;
@@ -2242,7 +2303,7 @@ function renderPanel(){
 }
 
 function orgPanelHtml(name, d){
-  const place=orgCity(name) || d.country;
+  const place=orgWhere(name, d.country) || (NL_CODES.has(String(d.country).toUpperCase()) ? 'NL' : '');
   const kw=new Map();
   d.projs.forEach(p=>projKeywords(p).forEach(k=>kw.set(k,(kw.get(k)||0)+1)));
   const kws=[...kw].sort((a,b)=>(kwOn(b[0])-kwOn(a[0])) || b[1]-a[1]);
@@ -2270,7 +2331,7 @@ function orgPanelHtml(name, d){
         </div>`;
       }).join('')}
       ${d.partners.length?`<div class="mp-sec">Most projects shared with</div>
-        ${d.partners.map(o=>`<button class="mp-partner" data-org="${esc(o.name)}">${esc(o.name)} <span>· ${o.count} project${o.count!==1?'s':''}${(orgCity(o.name)||o.country)?', '+esc(orgCity(o.name)||o.country):''}</span></button>`).join('')}`:''}
+        ${d.partners.map(o=>`<button class="mp-partner" data-org="${esc(o.name)}">${esc(o.name)} <span>· ${o.count} project${o.count!==1?'s':''}${orgWhere(o.name,o.country)?', '+esc(orgWhere(o.name,o.country)):''}</span></button>`).join('')}`:''}
     </div>`;
 }
 
@@ -2311,7 +2372,8 @@ function projPanelHtml(p){
   return `
     <div class="mp-head">
       <button class="mp-close" title="Close (Esc)" aria-label="Close">✕</button>
-      <div class="mp-kicker"><span class="prog-badge ${p._progKey}">${PROG_SHORT[p._progKey]}</span>${esc(p.funding_scheme||'')}${status?` · ${esc(status)}`:''}</div>
+      <div class="mp-kicker"><span class="prog-badge ${p._progKey}">${PROG_SHORT[p._progKey]}</span>${p._ecosystex?ECO_BADGE:''}${esc(p.funding_scheme||'')}${status?` · ${esc(status)}`:''}</div>
+      ${p._src==='ecosystex'?`<div class="mp-meta">ECOSYSTEX member project${p.category?` · ${esc(p.category)}`:''} · partners from ${p.members_source==='cordis'?'CORDIS':'the ECOSYSTEX list'}</div>`:''}
       <div class="mp-name proj">${esc(name)}</div>
       ${acr && full?`<div class="mp-full">${esc(full)}</div>`:''}
       ${url?`<a class="mp-open" href="${esc(url)}" target="_blank" rel="noopener">Open the project page ↗</a>`:''}
@@ -2330,7 +2392,7 @@ function projPanelHtml(p){
       ${topics?`<div class="mp-sec">Topics</div><div class="mp-pkw">${esc(topics)}</div>`:''}
       ${orgs.length?`<div class="mp-sec">Organisations${piName?` · lead: ${esc(piName)}`:''}</div>
         ${orgs.map(o=>{
-          const where=orgCity(o.name) || (o.isNL?'NL':o.country);
+          const where=orgWhere(o.name, o.country) || (o.isNL?'NL':'');
           const ppl=o.people.length>5 ? [...o.people.slice(0,5), `+${o.people.length-5} more`] : o.people;
           return `<div class="mp-org"><div style="flex:1;min-width:0">
               <button class="mp-partner${o.isNL?' nl':''}" data-org="${esc(o.name)}" title="Open the organisation's profile">${esc(o.name)}</button>
@@ -2352,14 +2414,15 @@ window.addEventListener('scroll',placePanel,{passive:true});
 
 function renderMapInfo(nodes,unplaced,abroad){
   const miss=[...unplaced].sort((a,b)=>b[1]-a[1]);
-  const nl=nodes.filter(n=>n.isNL).length, eu=nodes.length-nl;
+  const nl=nodes.filter(n=>n.isNL).length, eu=nodes.length-nl, approx=nodes.filter(n=>n.approx).length;
   document.getElementById('map-info').innerHTML=
-    `<b>${nl}</b> Dutch organisations${euPartners?` · <b>${eu}</b> European research partners`:''} on the map
+    `<b>${nl}</b> Dutch organisations${abroadOrgs?` · <b>${eu}</b> abroad`:''} on the map
+    ${abroadOrgs&&approx?`<div>${approx} of those abroad in the middle of their country (city unknown)</div>`:''}
     ${miss.length?`<details><summary>${miss.length} Dutch without a known location</summary>
       <div class="mi-list">${miss.map(([n,c])=>`${esc(n)} <span>(${c})</span>`).join('<br>')}</div></details>`:''}
-    ${abroad.size?`<div>${abroad.size} ${euPartners?'other ':''}partners abroad${euPartners
-      ?' (companies, outside Europe or unknown location): see the network'
-      :': tick “European research partners” to add universities and research organisations'}</div>`:''}`;
+    ${abroad.size?`<div>${abroad.size} organisations abroad ${abroadOrgs
+      ?'without a known country: see the network'
+      :'not shown: tick “Organisations abroad” to add them'}</div>`:''}`;
 }
 
 // The base map's style, without roads, railways, ferry routes, airports and buildings
@@ -2447,11 +2510,10 @@ document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',(
 document.getElementById('downloadBtn').addEventListener('click',()=>{
   const projs=filteredProjects();
   const cols=['project_id','title_en','_src','programme','funding_scheme','start_date','end_date',
-              '_pi_name','_pi_institution','ec_grant','status','project_page_url','_matched_terms'];
+              '_pi_name','_pi_institution','ec_grant','status','project_page_url','_matched_terms','ecosystex'];
   const rows=[cols.join(',')];
-  projs.forEach(p=>rows.push(
-    cols.map(c=>`"${(c==='_matched_terms'?(p[c]||[]).join('|'):String(p[c]||'')).replace(/"/g,'""')}"`).join(',')
-  ));
+  const val=(p,c)=>c==='_matched_terms' ? (p[c]||[]).join('|') : c==='ecosystex' ? (p._ecosystex?'yes':'') : String(p[c]??'');
+  projs.forEach(p=>rows.push(cols.map(c=>`"${val(p,c).replace(/"/g,'""')}"`).join(',')));
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv'}));
   a.download=`nl_textile_funding_${new Date().toISOString().slice(0,10)}.csv`;
@@ -2501,12 +2563,19 @@ document.querySelectorAll('[data-prog]').forEach(btn=>btn.addEventListener('clic
   render();
 }));
 
-// European research partners, in the network and on the map
-document.getElementById('euToggle').addEventListener('change',e=>{
-  euPartners=e.target.checked;
-  track('option_toggle',{option:'eu_partners', on:euPartners});
+// Organisations abroad, in the network, on the map and in the table
+document.getElementById('abroadToggle').addEventListener('change',e=>{
+  abroadOrgs=e.target.checked;
+  track('option_toggle',{option:'orgs_abroad', on:abroadOrgs});
   render();
   if(view==='map') fitMapToNodes();
+});
+
+// ECOSYSTEX member projects only
+document.getElementById('ecoToggle').addEventListener('change',e=>{
+  ecoOnly=e.target.checked;
+  track('option_toggle',{option:'ecosystex_only', on:ecoOnly});
+  render();
 });
 
 // Dutch-led only

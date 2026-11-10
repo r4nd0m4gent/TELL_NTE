@@ -24,6 +24,12 @@ placed in Rome). So each one is checked against its city in GeoNames
 kept (it is the address); if not, the city's own coordinates are used; if the
 city is not found, the CORDIS point stays.
 
+Organisations CORDIS doesn't know (partners in Interreg, LIFE and other
+projects from data/ecosystex_projects.json) can only be placed by their
+country: `countries` gives a point in the middle of each country (the median of
+its GeoNames places), keyed by the codes the data uses (CORDIS's EL and UK as
+well as GR and GB). The page shows such organisations as placed approximately.
+
 The CORDIS exports (~150 MB) and GeoNames cities (~11 MB) are downloaded to
 data/ once and reused.
 
@@ -73,7 +79,8 @@ def key(name: str | None, country: str | None) -> str:
 def wanted_keys() -> set[str]:
     """Name|country of every organisation in the page's data."""
     keys = set()
-    for fname in ("cordis_textile_projects.json", "erasmus_textile_projects.json"):
+    for fname in ("cordis_textile_projects.json", "erasmus_textile_projects.json",
+                  "ecosystex_projects.json"):
         data = json.loads((DATA / fname).read_text(encoding="utf-8"))
         for p in data["projects"]:
             for m in p.get("project_members") or []:
@@ -136,6 +143,23 @@ def city_index(path: Path, countries: set[str]) -> dict:
                 if (k := norm(name)):
                     index[(f[8], k)].append(entry)
     return index
+
+
+def country_points(path: Path) -> dict[str, list[float]]:
+    """Country code -> [lat, lon]: the median of the country's GeoNames places,
+    under CORDIS's codes too (EL, UK)."""
+    lats, lons = defaultdict(list), defaultdict(list)
+    with zipfile.ZipFile(path) as z, z.open("cities1000.txt") as fh:
+        for line in io.TextIOWrapper(fh, encoding="utf-8"):
+            f = line.rstrip("\n").split("\t")
+            lats[f[8]].append(float(f[4]))
+            lons[f[8]].append(float(f[5]))
+    median = lambda v: sorted(v)[len(v) // 2]   # noqa: E731
+    points = {cc: [round(median(lats[cc]), 3), round(median(lons[cc]), 3)] for cc in lats if cc}
+    for cordis, iso in ISO.items():
+        if iso in points:
+            points[cordis] = points[iso]
+    return points
 
 
 def city_names(city: str) -> list[tuple[str, bool]]:
@@ -208,7 +232,8 @@ def main() -> int:
     found = {k: list(c.most_common(1)[0][0]) for k, c in sorted(seen.items())}
 
     countries = {ISO.get(k.rsplit("|", 1)[1], k.rsplit("|", 1)[1]) for k in found}
-    index = city_index(download(GEONAMES_URL, ROOT / "data" / "geonames" / "cities1000.zip"), countries)
+    geonames = download(GEONAMES_URL, ROOT / "data" / "geonames" / "cities1000.zip")
+    index = city_index(geonames, countries)
     shared = fallback_points(found)
     verdicts, moved = Counter(), []
     for k, loc in found.items():
@@ -229,8 +254,11 @@ def main() -> int:
                    "(Horizon Europe, Horizon 2020). Key: NAME|COUNTRY, name in capitals. "
                    "Value: [city, lat, lon, activity type (HES/REC/PRC/PUB/OTH)]. "
                    "Coordinates checked against GeoNames cities (CC BY 4.0). "
+                   "countries: COUNTRY -> [lat, lon], the middle of the country (median of its "
+                   "GeoNames places), for organisations CORDIS doesn't know. "
                    "Written by build_network_locations.py."),
         "organisations": {k: [city, lat, lon, typ] for k, (city, lat, lon, typ) in found.items()},
+        "countries": dict(sorted(country_points(geonames).items())),
     }
     OUT.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     types = Counter(v[3] for v in out["organisations"].values())

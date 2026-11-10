@@ -31,6 +31,16 @@ places:
 A project is a textile project at SCORE_THRESHOLD (5.5) or more, with at least
 one core term somewhere: a related term alone (fibre, fabric) never suffices.
 
+ECOSYSTEX member projects
+-------------------------
+The projects in `ecosystex_projects` (import_ecosystex.py) are textile
+projects by choice of the ECOSYSTEX network, whatever their score. Those
+already in the table from funding_projects stay as they are; the others are
+added as source 'ecosystex', project_id their acronym, scored the same way on
+their title, the keywords ECOSYSTEX gives (as a project's own keywords) and
+their description (as the summary). The page reads them from
+data/ecosystex_projects.json. Without that table, none are added.
+
 Tokens
 ------
 The summary tokenised as new_tell_scraper does for website keywords
@@ -63,12 +73,14 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from import_funding import DATA_DIR, get_engine, textile_terms
 
 TABLE = "textile_projects"
 SOURCE_TABLE = "funding_projects"
+ECOSYSTEX_TABLE = "ecosystex_projects"
+ECOSYSTEX = "ecosystex"                               # their source in textile_projects
 PAGE_LIST = DATA_DIR / "textile_projects.json"
 SCRAPER_DIR = Path(__file__).resolve().parents[3] / "new_tell_scraper"
 
@@ -114,8 +126,8 @@ def load_tokenizer(scraper_dir: Path):
 
 
 def author_keywords(row: dict) -> list[str]:
-    """CORDIS topics: the project's own keywords, without call codes."""
-    if row["source"] != "cordis":
+    """CORDIS topics (and ECOSYSTEX keywords): the project's own keywords, without call codes."""
+    if row["source"] not in ("cordis", ECOSYSTEX):
         return []
     return [k for k in (k.strip() for k in re.split(r"[,;|]", row["topics"] or ""))
             if k and not CALL_CODE.match(k)]
@@ -169,13 +181,42 @@ def build_rows(engine, tokenize) -> tuple[list[dict], list[dict]]:
         tokens = tokenize(r["summary"])
         rows.append({**{c: r[c] for c in COLUMNS if c in r},
                      "tokens": " ".join(tokens), "token_count": len(tokens)})
+    rows += ecosystex_rows(engine, tokenize, terms, {(r["source"], r["project_id"]) for r in rows})
     return rows, scored
+
+
+def ecosystex_rows(engine, tokenize, terms: dict, have: set[tuple]) -> list[dict]:
+    """The ECOSYSTEX projects not in `have` (already textile projects), as rows."""
+    with engine.connect() as conn:
+        if not inspect(conn).has_table(ECOSYSTEX_TABLE):
+            print(f"no {ECOSYSTEX_TABLE} table (import_ecosystex.py): no ECOSYSTEX projects added")
+            return []
+        eco = [dict(r._mapping) for r in conn.execute(text(
+            f"SELECT acronym, title, programme, start_year, description, keywords, "
+            f"tell_source, tell_project_id FROM {ECOSYSTEX_TABLE}"))]
+    rows = []
+    for e in eco:
+        if (e["tell_source"], e["tell_project_id"]) in have:
+            continue
+        r = {"source": ECOSYSTEX, "project_id": e["acronym"], "programme": e["programme"],
+             "title": e["title"] or e["acronym"], "year": e["start_year"],
+             "summary": e["description"], "topics": e["keywords"]}
+        r.update(relevance(r, terms))
+        tokens = tokenize(r["summary"])
+        rows.append({**{c: r[c] for c in COLUMNS if c in r},
+                     "tokens": " ".join(tokens), "token_count": len(tokens)})
+    print(f"{len(rows)} of {len(eco)} ECOSYSTEX projects added as source '{ECOSYSTEX}' "
+          f"(the other {len(eco) - len(rows)} are textile projects already)")
+    return rows
 
 
 def summary(rows: list[dict], scored: list[dict]) -> None:
     total = Counter(r["programme"] for r in scored)
+    eco = [r for r in rows if r["source"] == ECOSYSTEX]
+    rows = [r for r in rows if r["source"] != ECOSYSTEX]
     kept = Counter(r["programme"] for r in rows)
-    print(f"{len(rows)} of {len(scored)} projects are textile projects (score >= {SCORE_THRESHOLD})")
+    print(f"{len(rows)} of {len(scored)} projects are textile projects (score >= {SCORE_THRESHOLD}),"
+          f" plus {len(eco)} ECOSYSTEX projects: {dict(Counter(r['programme'] for r in eco))}")
     for prog in sorted(total):
         print(f"  {prog:15} {kept[prog]:4} of {total[prog]:5}")
     near = sorted((r for r in scored if r["has_core"]
