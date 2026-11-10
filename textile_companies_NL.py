@@ -25,12 +25,9 @@ INK        = '#2c2c2c'   # primary text
 MUTED      = '#6b6b76'   # labels, axis ticks
 GRID       = '#eeecf2'   # gridlines, row dividers
 
-# Brand ramps for the donut charts (dark → light). Plotly picks black or white
+# Brand ramp for the donut charts (dark → light). Plotly picks black or white
 # slice text automatically, so light shades stay readable.
 VIOLET_RAMP = ['#513773', '#7a5a9e', '#a58cc4', '#cbbbe0', '#e7dff0', '#f3eff8']
-BLUE_RAMP   = ['#2f3c70', '#54639E', '#8390c0', '#b3bcdc', '#dde1f0', '#eef0f7']
-MIXED_RAMP  = ['#54639E', '#513773', '#8390c0', '#a58cc4', '#b3bcdc', '#cbbbe0',
-               '#dde1f0', '#e7dff0']
 
 # The legend is laid out in two fixed columns (see entrywidth below), so its
 # height no longer depends on how wide the card happens to be: six entries are

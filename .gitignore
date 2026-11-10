@@ -5,7 +5,11 @@
 *.pem
 ca-certificate*
 
-# Python bytecode / caches
+# Python virtual environments (each machine makes its own: see README)
+.venv/
+venv/
+
+# Python bytecode / caches (in every folder)
 __pycache__/
 *.py[cod]
 

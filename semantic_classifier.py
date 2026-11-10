@@ -10,7 +10,6 @@ Requirements:
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Optional
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -26,10 +25,6 @@ class ClassDefinition:
     name: str
     keywords: list[str] = field(default_factory=list)
     prototypes: list[str] = field(default_factory=list)  # e.g. "This article discusses stock markets"
-
-    def all_text_signals(self) -> list[str]:
-        """All text signals that represent this class."""
-        return [self.name] + self.keywords + self.prototypes
 
 
 @dataclass

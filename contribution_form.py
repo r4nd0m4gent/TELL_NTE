@@ -261,8 +261,6 @@ _tier_options = [
 ]
 
 nte_violet    = '#513773'
-nte_darkblue  = '#54639E'
-nte_lightblue = '#88C0E0'
 
 _base_style = {
     'fontFamily': 'Inter, sans-serif', 'maxWidth': '640px',

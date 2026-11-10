@@ -1,8 +1,7 @@
 # gunicorn_conf.py
 # Nginx handles SSL. Gunicorn serves plain HTTP on localhost:8050.
-import multiprocessing
 
-bind         = '127.0.0.1:8050'
+bind        = '127.0.0.1:8050'
 # Small fixed worker count: this droplet has ~1 GB RAM and each worker holds
 # the full dataset + Plotly in memory. cpu_count()*2+1 spawned too many workers
 # and triggered OOM kills. With gthread + threads, 2 workers give ample
