@@ -151,6 +151,9 @@ aside label.chk.zero{color:#aaa}
 .r-title a{color:var(--link);text-decoration:none}
 .r-title a:hover{text-decoration:underline}
 .r-title a:visited{color:#6a3d8f}
+/* The result's number, styled like the summary's citation chips */
+.r-n{display:inline-block;min-width:22px;margin-right:7px;padding:0 5px;border-radius:4px;background:#f1edf7;color:var(--violet);
+  font-size:12px;font-weight:700;line-height:1.6;text-align:center;vertical-align:2px;font-variant-numeric:tabular-nums}
 .r-meta{font-size:13px;color:var(--meta);margin-bottom:4px;line-height:1.45}
 .r-meta button{border:0;background:none;padding:0;color:var(--meta);cursor:pointer;font:inherit;text-decoration:underline;text-decoration-color:rgba(47,122,61,.35);text-underline-offset:2px}
 .r-meta button:hover{text-decoration-color:var(--meta)}
@@ -224,7 +227,7 @@ footer a{color:var(--blue);text-decoration:none}
     <img src="https://newtexeco.nl/wp-content/uploads/2023/12/logo_2x.png" alt="NewTexEco">
   </a>
   <h1 class="tell-page-title">Journal articles</h1>
-  <a class="tell-home" href="../"><span aria-hidden="true">←</span> Back to Home</a>
+  <a class="tell-home" href="../network/" title="Back to the research network"><span aria-hidden="true">←</span> Back</a>
   <a class="tell-deep" href="./" aria-current="page" title="Search the articles of open-access textile journals">Deep dive</a>
 </header>
 
@@ -750,14 +753,15 @@ function metaLine(a, Q){
   return `${authHtml||'<i>no authors listed</i>'} - <button type="button" data-journal="${esc(a.journal)}" title="Only ${esc(a.journal)}">${esc(a.journal)}</button>${a.year?', '+a.year:''}${h?' - '+esc(h):''}`;
 }
 
-function resultHtml(a, Q, saved){
+// n: the result's number in the whole list, the number a summary cites it by
+function resultHtml(a, Q, saved, n){
   const url=articleUrl(a);
   const h=a.kind==='report_summary' ? 'cordis.europa.eu' : a.kind==='deliverable' ? 'ec.europa.eu' : host(a);
   const tRegs=regsFor(Q,['any','title']);
   const fmt=a.kind==='deliverable' ? 'PDF' : a.kind==='report_summary' ? 'HTML' : isPdf(a) ? 'PDF' : 'HTML';
   return `<article class="r" data-id="${esc(a.id)}">
     ${a.oa?`<div class="r-side"><a href="${esc(a.oa)}" target="_blank" rel="noopener" data-open="oa"><span class="fmt">[${fmt}]</span>${esc(h||'open access')}</a></div>`:''}
-    <h3 class="r-title">${url?`<a href="${esc(url)}" target="_blank" rel="noopener" data-open="title">${marked(a.title, ranges(a.fTitle,tRegs))}</a>`:marked(a.title, ranges(a.fTitle,tRegs))}</h3>
+    <h3 class="r-title"><span class="r-n" title="Result ${n}">${n}</span>${url?`<a href="${esc(url)}" target="_blank" rel="noopener" data-open="title">${marked(a.title, ranges(a.fTitle,tRegs))}</a>`:marked(a.title, ranges(a.fTitle,tRegs))}</h3>
     <div class="r-meta">${metaLine(a,Q)}</div>
     <div class="r-snip">${snippet(a,Q)}</div>
     <div class="r-acts">
@@ -823,7 +827,7 @@ function render(){
       ${filtersOn()?'<li>Widen the filters: <button type="button" class="linkish" data-clear="filters">clear the date, journal and open-access filters</button>.</li>':''}
       <li>Use <code>OR</code> for alternatives: <code>wool OR cashmere</code>.</li></ul></div>`;
   } else {
-    box.innerHTML=page.map(r=>resultHtml(r.a, Q, saved.has(r.a.id))).join('');
+    box.innerHTML=page.map((r,i)=>resultHtml(r.a, Q, saved.has(r.a.id), from+i+1)).join('');
   }
   renderPager(n);
 }
