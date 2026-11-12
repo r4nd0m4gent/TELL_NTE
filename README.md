@@ -73,6 +73,16 @@ table by `db/mysql/import_articles.py --apply`, which also writes the page's dat
   Vancouver plus BibTeX/RIS download, related articles, the full abstract, and
   a personal library saved in the browser.
 - Searches are in the URL, so they can be shared and the back button works.
+- **Summarize these results**: Claude Haiku writes a short overview of the
+  top 20 results from their abstracts, citing them by number. A click on a
+  number goes to that article. The page posts to `/dashboard/summarize`
+  ([article_summary.py](article_summary.py)), which reads the abstracts from
+  `journal_articles` and streams the text back. It needs `ANTHROPIC_API_KEY`
+  in the environment or in `db/mysql/.env`; without one the page says the
+  summary is not available. Each visitor gets 10 summaries an hour, each
+  worker writes at most 300 a day, and a repeated search is answered from a
+  cache. These limits are per process, so also set a spend limit in the
+  Anthropic Console.
 
 ### Usage tracking
 
@@ -84,7 +94,8 @@ be told apart from real visitors.
 ## Repository layout
 
 ```
-textile_companies_NL.py     Dashboard (Dash app); also serves the tracking endpoint
+textile_companies_NL.py     Dashboard (Dash app); also serves the tracking and summary endpoints
+article_summary.py          "Summarize these results" for the articles page (Claude Haiku)
 contribution_form.py        Contribution form (Dash app)
 wsgi.py                     Mounts both apps for Gunicorn (form at /contribute)
 classification.py           Custom-classification feature of the dashboard

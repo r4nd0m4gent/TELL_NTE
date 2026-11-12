@@ -15,6 +15,7 @@ import plotly.io as pio
 import pandas as pd
 import pgeocode
 import classification
+import article_summary
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 nte_violet   = '#513773'
@@ -1613,6 +1614,8 @@ TRACK_EVENTS = {
         'cite',              # the citation dialog opened
         'cite_download',     # BibTeX / RIS downloaded
         'save',              # saved to / removed from the library
+        'summary_cite',      # an [n] in the summary clicked (the summary itself
+                             # is logged by the server as 'summary')
     },
 }
 TRACK_DETAILS_MAX = 2000      # characters of JSON per event
@@ -1637,6 +1640,14 @@ def track_static_page():
         details = {**details, **_request_meta()}
     log_event(session_id, event_type, details, page=page)
     return '', 204
+
+
+# ── "Summarize these results" for the journal articles page ──────────────────
+# Also posted to from a static page (site/articles/index.html); see
+# article_summary.py. Logged as event 'summary' on page 'articles'.
+article_summary.register(server, app.config.requests_pathname_prefix + 'summarize',
+                         get_engine=_get_track_engine, client_ip=_client_ip,
+                         log_event=log_event, env_path=ENV_PATH)
 
 
 # ── Clickable category labels ─────────────────────────────────────────────────

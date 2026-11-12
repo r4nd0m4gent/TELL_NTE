@@ -118,6 +118,30 @@ aside label.chk.zero{color:#aaa}
 .notice{background:#fff;border:1px solid var(--line);border-left:3px solid var(--violet);border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px;color:#444}
 .notice button{border:0;background:none;color:var(--link);cursor:pointer;padding:0;font-size:13px;text-decoration:underline}
 
+/* Summary of the top results, written by Claude (article_summary.py) */
+.sum-btn{display:inline-flex;align-items:center;gap:6px;margin:0 0 16px;border:1px solid var(--violet);background:#fff;color:var(--violet);
+  border-radius:999px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer}
+.sum-btn:hover,.sum-btn:focus-visible{background:#f1edf7}
+.sum{background:#fff;border:1px solid var(--line);border-left:3px solid var(--violet);border-radius:8px;padding:12px 16px 10px;margin-bottom:20px}
+.sum-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sum-head h2{margin:0;font-size:14px;color:var(--violet)}
+.sum-head button{border:0;background:none;font-size:19px;line-height:1;color:var(--muted);cursor:pointer;padding:2px 4px}
+.sum-head button:hover{color:var(--violet)}
+.sum-body{font-size:14px;line-height:1.6;color:#333;margin-top:6px}
+.sum-body p{margin:0 0 8px}
+.sum-body ul{margin:0 0 8px;padding-left:20px}
+.sum-body li{margin-bottom:4px}
+.sum-cite{border:0;background:#f1edf7;color:var(--violet);border-radius:4px;padding:0 5px;margin:0 1px;font:inherit;font-size:12px;font-weight:700;line-height:1.5;cursor:pointer;vertical-align:1px}
+.sum-cite:hover,.sum-cite:focus-visible{background:var(--violet);color:#fff}
+.sum-wait{color:var(--muted);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.45}}
+.sum-err{color:#8a2d2d}
+.sum-err button{border:0;background:none;color:var(--link);cursor:pointer;padding:0;font:inherit;text-decoration:underline}
+.sum-foot{margin:6px 0 0;font-size:11.5px;color:var(--muted);line-height:1.45}
+.r.flash{animation:flash 1.8s ease-out}
+@keyframes flash{0%,30%{background:var(--hl);box-shadow:0 0 0 8px var(--hl)}100%{background:transparent;box-shadow:0 0 0 8px transparent}}
+@media (prefers-reduced-motion:reduce){.sum-wait,.r.flash{animation:none}}
+
 .r{position:relative;padding:0 150px 18px 0;margin-bottom:6px}
 .r-side{position:absolute;right:0;top:2px;width:138px;font-size:13px}
 .r-side a{text-decoration:none;color:var(--link);display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -282,6 +306,7 @@ footer a{color:var(--blue);text-decoration:none}
     <section aria-label="Results">
       <div id="stats" aria-live="polite"></div>
       <div id="notice"></div>
+      <div id="summary"></div>
       <div id="results"><div class="loading">Loading the articles…</div></div>
       <nav class="pager" id="pager" aria-label="Result pages"></nav>
     </section>
@@ -719,9 +744,10 @@ function render(){
   placeSearch(home);
   document.getElementById('q').value=state.q;
   renderSide();
-  if(home){ document.title='Journal articles – TELL'; return; }
+  if(home){ document.title='Journal articles – TELL'; renderSummary(0); return; }
   const {res, byJournal, Q, target, ms}=compute();
   renderJournals(byJournal);
+  renderSummary(res.length);
   document.title=`${state.q || (state.lib?'My library':'Articles')} – Journal articles – TELL`;
 
   const n=res.length;
@@ -1007,6 +1033,131 @@ qEl.addEventListener('keydown',e=>{
 });
 sugEl.addEventListener('mousedown',e=>{ const li=e.target.closest('li'); if(li){ e.preventDefault(); pickSuggest(li.dataset.v); } });
 qEl.addEventListener('blur',()=>setTimeout(hideSuggest,150));
+
+// ══════════════════════════════════════════════════════════════════════════
+// SUMMARY
+// ══════════════════════════════════════════════════════════════════════════
+// "Summarize these results": the IDs of the top SUM_N results, most relevant
+// first, go to the dashboard server (article_summary.py), where Claude Haiku
+// writes a short overview from their abstracts. The text streams in as it is
+// written; [n] in it cites the n-th result, and a click on one goes there.
+// The summary belongs to one set of results: a new search or filter puts the
+// button back, while turning the page keeps it.
+const SUMMARY_URL='../dashboard/summarize';
+const SUM_N=20;
+const sum={key:null, top:[], ctrl:null, busy:false};
+
+// What the results are, in words, for the model: the search and the filters
+function searchDescription(Q, target){
+  const parts=[];
+  if(Q.related) parts.push(target ? `articles related to "${target.title}"` : 'related articles');
+  else if(state.q) parts.push(`"${state.q}"`);
+  else parts.push(state.lib ? "the articles saved in the reader's library" : 'no search terms, all articles');
+  if(state.lib && (state.q || Q.related)) parts.push("within the reader's saved articles");
+  if(state.ylo || state.yhi) parts.push(`published ${state.ylo||'…'}–${state.yhi||'…'}`);
+  if(state.journals.size) parts.push(`in ${[...state.journals].join(', ')}`);
+  if(state.oa) parts.push('with an open-access copy');
+  if(state.sort==='date' || (!Q.groups.length && !Q.related)) parts.push('newest first');
+  return parts.join('; ');
+}
+
+function resetSummary(){
+  if(sum.ctrl) sum.ctrl.abort();
+  Object.assign(sum, {key:null, top:[], ctrl:null, busy:false});
+}
+
+function renderSummary(n){
+  const box=document.getElementById('summary');
+  if(sum.key && sum.key===cache.key && n) return;          // same results: keep the summary
+  resetSummary();
+  const k=Math.min(SUM_N, n);
+  box.innerHTML=!n ? '' : `<button type="button" class="sum-btn" data-sum="start"
+      title="A short overview of what these articles say, written by AI from their abstracts">✦ Summarize ${
+      k<n ? `the top ${k} results` : n===1 ? 'this result' : `these ${n} results`}</button>`;
+}
+
+// The model's plain text as HTML: paragraphs, "- " bullets, **bold** and [n]
+function summaryHtml(text, top){
+  const cite=n=>`<button type="button" class="sum-cite" data-n="${n}" title="${esc(top[n-1].title)}">${n}</button>`;
+  // [3], [3][7], [2, 4] and [1-3] become chips; a number that is not a result stays text
+  const inline=s=>esc(s)
+    .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
+    .replace(/\[(\d+(?:\s*[,–-]\s*\d+)*)\]/g,(m,list)=>{
+      const ns=list.split(/\s*,\s*/).flatMap(p=>{
+        const [lo,hi]=p.split(/\s*[–-]\s*/).map(Number);
+        return hi>lo && hi-lo<10 ? Array.from({length:hi-lo+1},(_,i)=>lo+i) : [lo];
+      });
+      return ns.every(n=>top[n-1]) ? ns.map(cite).join('') : m;
+    });
+  let h='', list=false;
+  for(const raw of text.split('\n')){
+    const line=raw.trim();
+    const item=line.match(/^(?:[-*•]|\d+\.)\s+(.*)/);
+    if(item){ if(!list){ h+='<ul>'; list=true; } h+=`<li>${inline(item[1])}</li>`; continue; }
+    if(list){ h+='</ul>'; list=false; }
+    if(line) h+=`<p>${inline(line.replace(/^#+\s*/,''))}</p>`;
+  }
+  return h+(list?'</ul>':'');
+}
+
+async function startSummary(){
+  const {res, Q, target, key}=compute();
+  if(!res.length) return;
+  resetSummary();
+  const top=res.slice(0, SUM_N).map(r=>r.a);
+  const ctrl=new AbortController();
+  Object.assign(sum, {key, top, ctrl, busy:true});
+  const box=document.getElementById('summary');
+  box.innerHTML=`<section class="sum" aria-labelledby="sumTitle">
+      <div class="sum-head"><h2 id="sumTitle">Summary of ${top.length<res.length ? `the top ${top.length} results` : top.length===1 ? 'this result' : `these ${top.length} results`}</h2>
+        <button type="button" data-sum="close" aria-label="Close the summary" title="Close">×</button></div>
+      <div class="sum-body" aria-live="polite" aria-busy="true"><p class="sum-wait">Reading the abstracts…</p></div>
+      <p class="sum-foot">Written by AI (Claude Haiku) from the abstracts of these articles only, so it can be wrong or miss things: check the articles it cites.
+        To write it, your search and these abstracts are sent to Anthropic.</p>
+    </section>`;
+  const body=box.querySelector('.sum-body');
+  let text='';
+  try{
+    const r=await fetch(SUMMARY_URL,{method:'POST', signal:ctrl.signal, headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sid:trackSid, search:searchDescription(Q, target), total:res.length, ids:top.map(a=>a.id)})});
+    if(!r.ok){
+      let msg='';
+      try{ msg=(await r.json()).error||''; }catch(e){}
+      throw Object.assign(new Error(msg), {shown:!!msg});
+    }
+    const reader=r.body.getReader(), dec=new TextDecoder();
+    for(;;){
+      const {done, value}=await reader.read();
+      if(done) break;
+      text+=dec.decode(value, {stream:true});
+      if(text.trim()) body.innerHTML=summaryHtml(text, top);
+    }
+    text+=dec.decode();
+    if(!text.trim()) throw Object.assign(new Error('No summary came back.'), {shown:true});
+    body.innerHTML=summaryHtml(text, top);
+  }catch(e){
+    if(ctrl.signal.aborted) return;                          // a new search, or closed
+    body.innerHTML=`<p class="sum-err">${esc(e.shown ? e.message : 'The summary could not be written right now.')}
+      <button type="button" data-sum="start">Try again</button></p>`;
+  }finally{
+    if(sum.ctrl===ctrl){ sum.busy=false; body.setAttribute('aria-busy','false'); }
+  }
+}
+
+document.getElementById('summary').addEventListener('click',e=>{
+  const b=e.target.closest('[data-sum],[data-n]'); if(!b) return;
+  if(b.dataset.sum==='start'){ startSummary(); return; }
+  if(b.dataset.sum==='close'){ resetSummary(); renderSummary(compute().res.length); return; }
+  // A citation: to the cited result, on its page
+  const n=+b.dataset.n, a=sum.top[n-1]; if(!a) return;
+  track('summary_cite',{id:a.id, n, query:state.q.slice(0,200)});
+  const page=Math.floor((n-1)/PAGE_SIZE)*PAGE_SIZE;
+  if(page!==state.start){ state.start=page; writeUrl(); render(); }
+  const el=document.querySelector(`#results .r[data-id="${CSS.escape(a.id)}"]`);
+  if(!el) return;
+  el.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth', block:'center'});
+  el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+});
 
 // ══════════════════════════════════════════════════════════════════════════
 // CITE

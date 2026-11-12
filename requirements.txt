@@ -10,6 +10,8 @@ gunicorn==23.0.0
 SQLAlchemy==2.0.36
 PyMySQL==1.1.1
 python-dotenv==1.0.1
+# "Summarize these results" on the journal articles page (article_summary.py)
+anthropic==2.8.0
 
 # Semantic classification (semantic_classifier.py) — heavy: pulls in torch.
 scikit-learn
