@@ -161,6 +161,7 @@ aside label.chk.zero{color:#aaa}
 .r-acts button:hover,.r-acts a:hover{color:var(--violet);text-decoration:underline}
 .r-acts .saved{color:var(--violet);font-weight:600}
 .r-more{margin-top:8px;padding:10px 14px;background:#fff;border:1px solid var(--line);border-radius:8px;font-size:13.5px;line-height:1.6;color:#333}
+.r-more p{margin:0 0 8px}
 .r-more .kv{margin-top:8px;font-size:12.5px;color:#555}
 .r-more .kv span{color:var(--muted);font-weight:600}
 
@@ -244,7 +245,7 @@ footer a{color:var(--blue);text-decoration:none}
       <tr><td><code>denim -cotton</code></td><td>without a word</td></tr>
       <tr><td><code>author:"Ali"</code></td><td>by an author</td></tr>
       <tr><td><code>intitle:nonwoven</code></td><td>a word in the title; <code>allintitle:</code> puts every word there</td></tr>
-      <tr><td><code>source:fibers</code></td><td>in one journal</td></tr>
+      <tr><td><code>source:fibers</code></td><td>in one journal; <code>source:ecosystex</code> for the reports of ECOSYSTEX projects</td></tr>
     </table>
   </details>
 
@@ -293,7 +294,7 @@ footer a{color:var(--blue);text-decoration:none}
         <button class="opt" data-sort="date">Sort by date</button>
       </div>
       <div class="grp journals">
-        <h3>Journals</h3>
+        <h3>Sources</h3>
         <div id="journalOpts"></div>
       </div>
       <div class="grp">
@@ -320,7 +321,7 @@ footer a{color:var(--blue);text-decoration:none}
 </dialog>
 
 <footer>
-  Articles and their metadata from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> (CC0).
+  Articles and their metadata from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> (CC0); ECOSYSTEX project reports from <a href="https://cordis.europa.eu" target="_blank" rel="noopener">CORDIS</a>.
   Keywords and topics are assigned by OpenAlex, not by the authors. Links open the publisher's copy.
 </footer>
 
@@ -387,19 +388,44 @@ function fold(s){
 const words=s=>fold(s).split(/[^a-z0-9]+/).filter(Boolean);
 const split=s=>String(s||'').split(';').map(x=>x.trim()).filter(Boolean);
 
-async function load(){
+// data/project_reports.json: the reports of the ECOSYSTEX projects from CORDIS,
+// written by db/mysql/import_project_reports.py --apply, in the same shape plus
+// `kind` (report_summary | deliverable) and `project`. They are one more source
+// next to the journals. If the file is missing, the page has the articles only.
+const REPORTS_SOURCE='ECOSYSTEX project reports';
+const isReport=a=>a.kind!=='article';
+
+async function getData(url, optional){
   try{
-    const r=await fetch('data/journal_articles.json');
+    const r=await fetch(url);
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
     const d=await r.json();
     const ix=Object.fromEntries(d.fields.map((f,i)=>[f,i]));
+    return d.rows.map(row=>Object.fromEntries(d.fields.map(f=>[f,row[ix[f]]])));
+  }catch(e){
+    if(optional){ console.warn(`${url} could not be loaded:`,e); return []; }
+    throw e;
+  }
+}
+
+async function load(){
+  try{
+    const [articles, reports]=await Promise.all([getData('data/journal_articles.json'),
+                                                 getData('data/project_reports.json', true)]);
     const jc=new Map();
-    A=d.rows.map((row,i)=>{
-      const a={i, id:row[ix.id], doi:row[ix.doi]||'', journal:row[ix.journal]||'', year:row[ix.year]||null,
-               title:row[ix.title]||'', authors:split(row[ix.authors]), abstract:row[ix.abstract]||'',
-               keywords:split(row[ix.keywords]), topics:split(row[ix.topics]), oa:row[ix.oa_url]||''};
+    A=[...articles,...reports].map((row,i)=>{
+      // Report keywords are the project's, separated by commas
+      const kws=row.kind ? String(row.keywords||'').split(',').map(x=>x.trim()).filter(Boolean) : split(row.keywords);
+      const a={i, id:row.id, doi:row.doi||'', journal:row.journal||'', year:row.year||null,
+               title:row.title||'', authors:split(row.authors), abstract:row.abstract||'',
+               keywords:kws, topics:split(row.topics), oa:row.oa_url||'',
+               kind:row.kind||'article', project:row.project||''};
       a.fTitle=fold(a.title); a.fAbs=fold(a.abstract); a.fAuth=fold(a.authors.join('; '));
-      a.fKw=fold([...a.keywords,...a.topics].join('; ')); a.fJournal=fold(a.journal);
+      // A report is found by its project's name too ('SCIRT', 'Horizon Europe').
+      // A deliverable has only a title of its own: its project's keywords would
+      // make every deliverable of the project match them, so they are not
+      // searched (they still count for "Related results").
+      a.fKw=fold([...(a.kind==='deliverable'?[]:a.keywords),...a.topics,a.project].join('; ')); a.fJournal=fold(a.journal);
       a.kwF=a.keywords.map(fold); a.topF=a.topics.map(fold);
       a.tw=new Set(words(a.title).filter(w=>w.length>=4 && !STOP.has(w)));
       a.kwF.forEach(k=>KW_DF.set(k,(KW_DF.get(k)||0)+1));
@@ -429,12 +455,16 @@ async function load(){
 }
 
 function setupStatic(){
+  const nArt=A.filter(a=>!isReport(a)).length, nRep=A.length-nArt;
+  const ys=A.filter(a=>!isReport(a) && a.year).map(a=>a.year);
   document.getElementById('heroText').textContent=
-    `${A.length.toLocaleString('en')} open-access articles, ${minYear}–${maxYear}, from ${JOURNALS.map(j=>j.name).join(', ').replace(/, ([^,]*)$/,' and $1')}.`;
+    `${nArt.toLocaleString('en')} open-access articles, ${Math.min(...ys)}–${Math.max(...ys)}, from ${JOURNALS.filter(j=>j.name!==REPORTS_SOURCE).map(j=>j.name).join(', ').replace(/, ([^,]*)$/,' and $1')}`
+    +(nRep ? `, and ${nRep.toLocaleString('en')} reports of ECOSYSTEX projects (EU-funded textile projects).` : '.');
   const sel=document.getElementById('advJournal');
   JOURNALS.forEach(j=>sel.insertAdjacentHTML('beforeend',`<option>${esc(j.name)}</option>`));
   const tl=document.getElementById('tryList');
   ['textile recycling','"fast fashion" consumer','natural dye','wearable sensor','intitle:nonwoven','"digital product passport"']
+    .concat(A.some(isReport) ? ['source:ecosystex sorting'] : [])
     .forEach(t=>{ const b=document.createElement('button'); b.type='button'; b.textContent=t;
       b.addEventListener('click',()=>{ track('example',{query:t}); search({q:t}); }); tl.appendChild(b); });
 }
@@ -658,7 +688,9 @@ const regsFor=(Q, fields)=>Q ? Q.groups.flat().filter(it=>fields.includes(it.fie
 // The part of the abstract with the most matches, about 300 characters
 function snippet(a, Q){
   const text=a.abstract;
-  if(!text) return '<i>No abstract available.</i>';
+  if(!text) return a.kind==='deliverable'
+    ? '<i>A public deliverable of the project. Its text is not searched here: open the document to read it.</i>'
+    : '<i>No abstract available.</i>';
   const W=300;
   const rs=ranges(a.fAbs, regsFor(Q,['any']));
   let start=0;
@@ -700,6 +732,13 @@ const initials=(given,dot=true,sep=' ')=>given.map(g=>g.split('-').map(p=>p[0] ?
 const shortName=full=>{ const n=nameParts(full); return (n.given.length?initials(n.given,false,'')+' ':'')+n.family; };
 
 function metaLine(a, Q){
+  if(isReport(a)){
+    // 'Deliverable · SCIRT (Horizon 2020)': the project instead of the authors
+    const [label, proj]=a.project.split(' · ');
+    const acr=(proj||'').replace(/\s*\(.*$/,'');
+    return `${esc(label||'Report')} · <button type="button" data-project="${esc(acr)}" title="Everything from ${esc(acr)}">${esc(proj||'')}</button>`
+      +` - <button type="button" data-journal="${esc(a.journal)}" title="Only ${esc(a.journal)}">${esc(a.journal)}</button>${a.year?', '+a.year:''}`;
+  }
   const shown=a.authors.slice(0,3);
   const authRegs=regsFor(Q,['any','author']);
   const authHtml=shown.map(n=>{
@@ -712,18 +751,20 @@ function metaLine(a, Q){
 }
 
 function resultHtml(a, Q, saved){
-  const url=articleUrl(a), h=host(a);
+  const url=articleUrl(a);
+  const h=a.kind==='report_summary' ? 'cordis.europa.eu' : a.kind==='deliverable' ? 'ec.europa.eu' : host(a);
   const tRegs=regsFor(Q,['any','title']);
+  const fmt=a.kind==='deliverable' ? 'PDF' : a.kind==='report_summary' ? 'HTML' : isPdf(a) ? 'PDF' : 'HTML';
   return `<article class="r" data-id="${esc(a.id)}">
-    ${a.oa?`<div class="r-side"><a href="${esc(a.oa)}" target="_blank" rel="noopener" data-open="oa"><span class="fmt">[${isPdf(a)?'PDF':'HTML'}]</span>${esc(h||'open access')}</a></div>`:''}
+    ${a.oa?`<div class="r-side"><a href="${esc(a.oa)}" target="_blank" rel="noopener" data-open="oa"><span class="fmt">[${fmt}]</span>${esc(h||'open access')}</a></div>`:''}
     <h3 class="r-title">${url?`<a href="${esc(url)}" target="_blank" rel="noopener" data-open="title">${marked(a.title, ranges(a.fTitle,tRegs))}</a>`:marked(a.title, ranges(a.fTitle,tRegs))}</h3>
     <div class="r-meta">${metaLine(a,Q)}</div>
     <div class="r-snip">${snippet(a,Q)}</div>
     <div class="r-acts">
       <button type="button" data-act="save" class="${saved?'saved':''}" aria-pressed="${saved}">${saved?'★ Saved':'☆ Save'}</button>
-      <button type="button" data-act="cite">❝ Cite</button>
-      <button type="button" data-act="related">Related articles</button>
-      ${a.abstract?`<button type="button" data-act="abstract" aria-expanded="false">Abstract ▾</button>`:''}
+      ${isReport(a)?'':`<button type="button" data-act="cite">❝ Cite</button>`}
+      <button type="button" data-act="related">Related ${isReport(a)?'results':'articles'}</button>
+      ${a.abstract?`<button type="button" data-act="abstract" aria-expanded="false">${isReport(a)?'Report':'Abstract'} ▾</button>`:''}
       ${a.doi?`<a href="https://doi.org/${esc(a.doi)}" target="_blank" rel="noopener" data-open="doi">DOI</a>`:''}
     </div>
     <div class="r-more" hidden></div>
@@ -731,6 +772,17 @@ function resultHtml(a, Q, saved){
 }
 
 function moreHtml(a, Q){
+  if(isReport(a)){
+    // Report text: paragraphs (objectives, results, work performed)
+    const rs=ranges(a.fAbs, regsFor(Q,['any']));
+    let from=0, h='';
+    for(const part of a.abstract.split('\n\n')){
+      h+=`<p>${marked(a.abstract, rs, from, from+part.length)}</p>`;
+      from+=part.length+2;
+    }
+    return h+`${a.keywords.length?`<div class="kv"><span>Project keywords:</span> ${a.keywords.map(esc).join(' · ')}</div>`:''}
+      <div class="kv"><span>Source:</span> CORDIS, the EU's record of the projects it funds</div>`;
+  }
   return `${marked(a.abstract, ranges(a.fAbs, regsFor(Q,['any'])))}
     ${a.keywords.length?`<div class="kv"><span>Keywords:</span> ${a.keywords.map(esc).join(' · ')}</div>`:''}
     ${a.topics.length?`<div class="kv"><span>Topics:</span> ${a.topics.map(esc).join(' · ')}</div>`:''}
@@ -918,6 +970,8 @@ document.getElementById('results').addEventListener('click',e=>{
   const a=byId.get(r.dataset.id), rank=state.start+[...r.parentElement.children].indexOf(r)+1;
   const au=e.target.closest('[data-author]');
   if(au){ search({q:`author:"${au.dataset.author}"`, lib:false}); return; }
+  const pj=e.target.closest('[data-project]');
+  if(pj){ search({q:`source:ecosystex "${pj.dataset.project}"`, lib:false}); return; }
   const jb=e.target.closest('[data-journal]');
   if(jb){ search({journals:new Set([jb.dataset.journal])},'filter_change'); return; }
   const link=e.target.closest('[data-open]');
@@ -1037,23 +1091,28 @@ qEl.addEventListener('blur',()=>setTimeout(hideSuggest,150));
 // ══════════════════════════════════════════════════════════════════════════
 // SUMMARY
 // ══════════════════════════════════════════════════════════════════════════
-// "Summarize these results": the IDs of the top SUM_N results, most relevant
-// first, go to the dashboard server (article_summary.py), where Claude Haiku
-// writes a short overview from their abstracts. The text streams in as it is
-// written; [n] in it cites the n-th result, and a click on one goes there.
+// "Summarize these results": the IDs of the results (up to SUM_N), most
+// relevant first, go to the dashboard server (article_summary.py), where
+// Claude Haiku writes an overview of them all: it reads the text of the top
+// SUM_FULL, the titles of the rest, and counts by year, source and keyword.
+// The text streams in as it is written; [n] in it cites the n-th result, and a
+// click on one goes there, on whatever page it is.
 // The summary belongs to one set of results: a new search or filter puts the
 // button back, while turning the page keeps it.
 const SUMMARY_URL='../dashboard/summarize';
-const SUM_N=20;
+const SUM_N=1000, SUM_FULL=50;      // as MAX_RESULTS and FULL_TEXT in article_summary.py
 const sum={key:null, top:[], ctrl:null, busy:false};
+const nf=n=>n.toLocaleString('en');
+// 'all 202 results', 'the top 1,000 of 3,456 results', 'this result'
+const sumScope=(k,n)=>k<n ? `the top ${nf(k)} of ${nf(n)} results` : n===1 ? 'this result' : `all ${nf(n)} results`;
 
 // What the results are, in words, for the model: the search and the filters
 function searchDescription(Q, target){
   const parts=[];
-  if(Q.related) parts.push(target ? `articles related to "${target.title}"` : 'related articles');
+  if(Q.related) parts.push(target ? `results related to "${target.title}"` : 'related results');
   else if(state.q) parts.push(`"${state.q}"`);
-  else parts.push(state.lib ? "the articles saved in the reader's library" : 'no search terms, all articles');
-  if(state.lib && (state.q || Q.related)) parts.push("within the reader's saved articles");
+  else parts.push(state.lib ? "the results saved in the reader's library" : 'no search terms, the whole collection');
+  if(state.lib && (state.q || Q.related)) parts.push("within the reader's saved results");
   if(state.ylo || state.yhi) parts.push(`published ${state.ylo||'…'}–${state.yhi||'…'}`);
   if(state.journals.size) parts.push(`in ${[...state.journals].join(', ')}`);
   if(state.oa) parts.push('with an open-access copy');
@@ -1070,10 +1129,8 @@ function renderSummary(n){
   const box=document.getElementById('summary');
   if(sum.key && sum.key===cache.key && n) return;          // same results: keep the summary
   resetSummary();
-  const k=Math.min(SUM_N, n);
   box.innerHTML=!n ? '' : `<button type="button" class="sum-btn" data-sum="start"
-      title="A short overview of what these articles say, written by AI from their abstracts">✦ Summarize ${
-      k<n ? `the top ${k} results` : n===1 ? 'this result' : `these ${n} results`}</button>`;
+      title="An overview of what these results say, written by AI">✦ Summarize ${sumScope(Math.min(SUM_N, n), n)}</button>`;
 }
 
 // The model's plain text as HTML: paragraphs, "- " bullets, **bold** and [n]
@@ -1108,12 +1165,15 @@ async function startSummary(){
   const ctrl=new AbortController();
   Object.assign(sum, {key, top, ctrl, busy:true});
   const box=document.getElementById('summary');
+  const read=top.length>SUM_FULL
+    ? `the abstracts and report texts of the top ${SUM_FULL} results and the titles of the other ${nf(top.length-SUM_FULL)}`
+    : 'the abstracts and report texts of these results';
   box.innerHTML=`<section class="sum" aria-labelledby="sumTitle">
-      <div class="sum-head"><h2 id="sumTitle">Summary of ${top.length<res.length ? `the top ${top.length} results` : top.length===1 ? 'this result' : `these ${top.length} results`}</h2>
+      <div class="sum-head"><h2 id="sumTitle">Summary of ${sumScope(top.length, res.length)}</h2>
         <button type="button" data-sum="close" aria-label="Close the summary" title="Close">×</button></div>
-      <div class="sum-body" aria-live="polite" aria-busy="true"><p class="sum-wait">Reading the abstracts…</p></div>
-      <p class="sum-foot">Written by AI (Claude Haiku) from the abstracts of these articles only, so it can be wrong or miss things: check the articles it cites.
-        To write it, your search and these abstracts are sent to Anthropic.</p>
+      <div class="sum-body" aria-live="polite" aria-busy="true"><p class="sum-wait">Reading the results…</p></div>
+      <p class="sum-foot">Written by AI (Claude Haiku) from ${read} only, so it can be wrong or miss things: check the results it cites.
+        To write it, your search and these texts are sent to Anthropic.</p>
     </section>`;
   const body=box.querySelector('.sum-body');
   let text='';

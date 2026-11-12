@@ -63,26 +63,36 @@ Journal of Engineered Fibers and Fabrics, collected from OpenAlex by
 `new_tell_scraper/fetch_textile_oa.py`. It is stored in the `journal_articles`
 table by `db/mysql/import_articles.py --apply`, which also writes the page's data.
 
+It also searches the public reports of the ECOSYSTEX member projects, collected
+from CORDIS by `db/mysql/import_project_reports.py --apply` into the
+`project_reports` table and the page's `data/project_reports.json`. That covers
+the Horizon Europe and Horizon 2020 projects (CORDIS does not hold the other
+programmes): the full text of their periodic and final report summaries, and
+their public report deliverables by title, with a link to the document. On the
+page they are one more source, "ECOSYSTEX project reports" (`source:ecosystex`).
+
 - **Search like Google Scholar**: results ranked by relevance (title first,
   then authors, keywords and abstract), with the matching words highlighted.
   Supports `"phrases"`, `OR`, `-word`, `author:`, `intitle:`, `allintitle:` and
   `source:` (journal), an advanced-search form, and keyword suggestions.
 - **Filters**: date (presets or a custom range), sort by relevance or date,
-  journals (with counts), and open-access copy only.
+  sources (journals and project reports, with counts), and open-access copy only.
 - **Per article**: PDF/HTML link, citations in APA, MLA, Chicago, Harvard and
   Vancouver plus BibTeX/RIS download, related articles, the full abstract, and
   a personal library saved in the browser.
 - Searches are in the URL, so they can be shared and the back button works.
-- **Summarize these results**: Claude Haiku writes a short overview of the
-  top 20 results from their abstracts, citing them by number. A click on a
-  number goes to that article. The page posts to `/dashboard/summarize`
-  ([article_summary.py](article_summary.py)), which reads the abstracts from
-  `journal_articles` and streams the text back. It needs `ANTHROPIC_API_KEY`
-  in the environment or in `db/mysql/.env`; without one the page says the
-  summary is not available. Each visitor gets 10 summaries an hour, each
-  worker writes at most 300 a day, and a repeated search is answered from a
-  cache. These limits are per process, so also set a spend limit in the
-  Anthropic Console.
+- **Summarize these results**: Claude Haiku writes an overview of the whole
+  result set (up to 1,000 results), citing them by number; a click on a number
+  goes to that result. It reads the abstracts and report texts of the top 50,
+  the titles of the rest, and exact counts by year, source and keyword. The
+  page posts the result IDs to `/dashboard/summarize`
+  ([article_summary.py](article_summary.py)), which reads the texts from
+  `journal_articles` and `project_reports` and streams the summary back. It
+  needs `ANTHROPIC_API_KEY` in the environment or in `db/mysql/.env`; without
+  one the page says the summary is not available. Each visitor gets 8
+  summaries an hour, each worker writes at most 200 a day, and a repeated
+  search is answered from a cache. These limits are per process, so also set a
+  spend limit in the Anthropic Console.
 
 ### Usage tracking
 
